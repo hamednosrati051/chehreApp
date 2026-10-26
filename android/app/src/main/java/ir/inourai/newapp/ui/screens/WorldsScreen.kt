@@ -1,17 +1,18 @@
 package ir.inourai.newapp.ui.screens
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,8 +21,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Category
 import ir.inourai.newapp.data.World
@@ -50,15 +51,25 @@ fun WorldsScreen(onWorld: (Long) -> Unit) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                AssistChip(
+                FilterChip(
+                    selected = selectedCategory == null,
                     onClick = { selectedCategory = null },
                     label = { Text("پیشنهادی") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.secondary,
+                        selectedLabelColor = Color.White,
+                    ),
                 )
             }
             items(categories) { c ->
-                AssistChip(
+                FilterChip(
+                    selected = selectedCategory == c.id,
                     onClick = { selectedCategory = c.id },
                     label = { Text(c.name) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.secondary,
+                        selectedLabelColor = Color.White,
+                    ),
                 )
             }
         }
@@ -66,19 +77,15 @@ fun WorldsScreen(onWorld: (Long) -> Unit) {
             columns = GridCells.Fixed(2),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(top = 12.dp),
         ) {
-            items(shown) { w ->
-                Card(
-                    modifier = Modifier.clickable { onWorld(w.id) },
-                ) {
-                    AsyncImage(model = w.sample_image_url, contentDescription = w.name)
-                    Text(w.name, modifier = Modifier.padding(8.dp))
-                    Text(
-                        "${w.coin_price} سکه",
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                            .padding(bottom = 8.dp),
-                    )
+            if (shown.isEmpty()) {
+                item(span = { GridItemSpan(2) }) {
+                    Text("در این بخش هنوز دنیایی نیست.", color = Color.Gray)
                 }
+            }
+            items(shown) { w ->
+                WorldCard(w, { onWorld(w.id) })
             }
         }
     }

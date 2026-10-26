@@ -12,7 +12,8 @@ android {
         applicationId = "ir.inourai.newapp"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
+        // v3: آیکون برند + اسپلش + طراحی جدید (کارت‌های تصویری، تم آبی/طلایی).
+        versionCode = 3
         versionName = "1.0"
     }
 
@@ -81,4 +82,40 @@ dependencies {
 
     // اسپلش اول اپ (انیمیشن Lottie با نهایی‌شدن برند اضافه می‌شود).
     implementation("com.airbnb.android:lottie-compose:6.5.0")
+
+    // پین lifecycle روی 2.8.3 — فیکس کرش لانچ:
+    // navigation-compose 2.8.0 در NavHost از viewModel()‎ با CreationExtras
+    // استفاده می‌کند (از 2.7.0 اضافه شده) ولی resolution نسخه‌ی 2.6.2 را
+    // می‌آورد که آن overload را ندارد → NoSuchMethodError موقع باز شدن اپ.
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.3")
+
+    // تست لانچ با Robolectric (بدون نیاز به گوشی/امیولاتور):
+    // MainActivity را در JVM بالا می‌آورد تا کرش موقع باز شدن بازتولید شود.
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("junit:junit:4.13.2")
+}
+
+android {
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+}
+
+tasks.withType<Test>().configureEach {
+    // ورکر تست JVM جداست و Robolectric حافظه‌ی زیادی می‌خواهد؛
+    // هیپ پیش‌فرض (۵۱۲ مگ) ورکر را می‌کشد.
+    maxHeapSize = "2g"
+}
+
+// موقت برای اجرای دستی تست بیرون از ورکر Gradle (ورکر در این VM می‌میرد):
+// classpath کامل تست را در فایل می‌نویسد.
+tasks.register("printTestCp") {
+    doLast {
+        val cp = configurations["debugUnitTestRuntimeClasspath"].files
+            .joinToString(":")
+        file("build/test-cp.txt").writeText(cp)
+        println("wrote build/test-cp.txt (${configurations["debugUnitTestRuntimeClasspath"].files.size} files)")
+    }
 }

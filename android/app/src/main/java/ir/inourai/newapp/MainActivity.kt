@@ -17,7 +17,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
@@ -32,8 +35,10 @@ import ir.inourai.newapp.ui.screens.LoginScreen
 import ir.inourai.newapp.ui.screens.MyMediaScreen
 import ir.inourai.newapp.ui.screens.ProfileScreen
 import ir.inourai.newapp.ui.screens.SearchScreen
+import ir.inourai.newapp.ui.screens.SplashScreen
 import ir.inourai.newapp.ui.screens.WorldsScreen
 import ir.inourai.newapp.ui.theme.AppTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // نسخه‌ی اول فقط تصویر است؛ بخش صدا پارک شده و هیچ صفحه/آیتم صدایی ندارد.
@@ -60,9 +65,16 @@ fun App() {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
-    val showNav = route != Dest.LOGIN
+    var showSplash by rememberSaveable { mutableStateOf(true) }
+    val showNav = route != Dest.LOGIN && !showSplash
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    // اسپلش اول اپ: ۲ ثانیه، یا با ضربه رد می‌شود.
+    LaunchedEffect(Unit) {
+        delay(2000)
+        showSplash = false
+    }
 
     // بازیابی خریدهای ناتمام موقع شروع اپ (فقط وقتی لاگین کرده باشد):
     // خریدهای owned بازار دوباره به سرور فرستاده و (یک‌بار) شارژ و consume می‌شوند.
@@ -78,6 +90,9 @@ fun App() {
     }
 
     AppTheme {
+        if (showSplash) {
+            SplashScreen(onSkip = { showSplash = false })
+        } else {
         Scaffold(
             bottomBar = {
                 if (showNav) {
@@ -150,6 +165,7 @@ fun App() {
                     LoginScreen(onDone = { nav.navigate(Dest.HOME) })
                 }
             }
+        }
         }
     }
 }

@@ -13,6 +13,8 @@
     <!-- TEST-ONLY: cleartext to the test backend IP. The release build MUST remove this (HTTPS + domain). -->
     <application
         android:label="چهره‌ساز"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="true"
         android:usesCleartextTraffic="true"
         android:supportsRtl="true"

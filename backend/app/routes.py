@@ -869,3 +869,121 @@ def admin_test_grant_coins():
             "balance": coins_svc.get_balance(user),
         }
     )
+
+
+# ---------------- admin: categories ----------------
+
+
+def _category_admin(c):
+    return {
+        "id": c.id,
+        "name": c.name,
+        "slug": c.slug,
+        "sort_order": c.sort_order,
+        "is_active": bool(c.is_active),
+    }
+
+
+@admin_bp.get("/admin/categories")
+@require_admin
+def admin_list_categories():
+    cats = AppCategory.query.order_by(AppCategory.sort_order, AppCategory.id).all()
+    return jsonify([_category_admin(c) for c in cats])
+
+
+@admin_bp.post("/admin/categories")
+@require_admin
+def admin_create_category():
+    body = request.json or {}
+    if not body.get("name") or not body.get("slug"):
+        return jsonify({"error": "name and slug required"}), 400
+    if AppCategory.query.filter_by(slug=body["slug"]).first():
+        return jsonify({"error": "slug exists"}), 409
+    c = AppCategory(
+        name=body["name"],
+        slug=body["slug"],
+        sort_order=body.get("sort_order", 0),
+        is_active=bool(body.get("is_active", True)),
+    )
+    db.session.add(c)
+    db.session.commit()
+    return jsonify(_category_admin(c)), 201
+
+
+@admin_bp.patch("/admin/categories/<int:category_id>")
+@require_admin
+def admin_update_category(category_id):
+    c = AppCategory.query.get(category_id)
+    if not c:
+        return jsonify({"error": "category not found"}), 404
+    body = request.json or {}
+    for field in ("name", "slug", "sort_order"):
+        if field in body:
+            setattr(c, field, body[field])
+    if "is_active" in body:
+        c.is_active = bool(body["is_active"])
+    db.session.commit()
+    return jsonify(_category_admin(c))
+
+
+@admin_bp.delete("/admin/categories/<int:category_id>")
+@require_admin
+def admin_delete_category(category_id):
+    c = AppCategory.query.get(category_id)
+    if not c:
+        return jsonify({"error": "category not found"}), 404
+    if AppWorld.query.filter_by(category_id=category_id).first():
+        return jsonify({"error": "category in use by worlds"}), 409
+    db.session.delete(c)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ---------------- admin: settings ----------------
+
+
+@admin_bp.get("/admin/settings")
+@require_admin
+def admin_list_settings():
+    rows = AppSetting.query.order_by(AppSetting.key).all()
+    return jsonify([{"key": r.key, "value": r.value} for r in rows])
+
+
+@admin_bp.patch("/admin/settings")
+@require_admin
+def admin_update_settings():
+    body = request.json or {}
+    if not body.get("key") or body.get("value") is None:
+        return jsonify({"error": "key and value required"}), 400
+    row = AppSetting.query.get(body["key"])
+    if row:
+        row.value = str(body["value"])
+    else:
+        row = AppSetting(key=body["key"], value=str(body["value"]))
+        db.session.add(row)
+    db.session.commit()
+    return jsonify({"key": row.key, "value": row.value})
+
+
+# ---------------- admin: users ----------------
+
+
+@admin_bp.get("/admin/users")
+@require_admin
+def admin_list_users():
+    users = AppUser.query.order_by(AppUser.id.desc()).limit(200).all()
+    out = []
+    for u in users:
+        out.append(
+            {
+                "id": u.id,
+                "mobile": u.mobile,
+                "name": u.name,
+                "status": u.status,
+                "free_image_credits": u.free_image_credits,
+                "free_voice_credits": u.free_voice_credits,
+                "balance": coins_svc.get_balance(u),
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+            }
+        )
+    return jsonify(out)

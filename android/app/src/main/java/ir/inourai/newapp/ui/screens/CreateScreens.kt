@@ -6,8 +6,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -79,10 +84,22 @@ fun CreateImageScreen(worldId: Long) {
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Button(onClick = { picker.launch("image/*") }) {
+        Button(
+            onClick = { picker.launch("image/*") },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Text("انتخاب سلفی")
         }
-        picked?.let { AsyncImage(model = it, contentDescription = null) }
+        picked?.let {
+            AsyncImage(
+                model = it,
+                contentDescription = null,
+                modifier = Modifier.fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(16.dp)),
+                contentScale = ContentScale.Crop,
+            )
+        }
         Button(
             onClick = {
                 scope.launch {
@@ -104,6 +121,7 @@ fun CreateImageScreen(worldId: Long) {
                 }
             },
             enabled = picked != null && jobId == null,
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Text("بساز")
         }
@@ -111,7 +129,14 @@ fun CreateImageScreen(worldId: Long) {
             GenerationLoading()
         }
         resultUrl?.let {
-            AsyncImage(model = it, contentDescription = null)
+            AsyncImage(
+                model = it,
+                contentDescription = null,
+                modifier = Modifier.fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(16.dp)),
+                contentScale = ContentScale.Crop,
+            )
             if (!submitted) {
                 Button(
                     onClick = {
@@ -126,6 +151,7 @@ fun CreateImageScreen(worldId: Long) {
                             }
                         }
                     },
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("ارسال به گالری")
                 }
