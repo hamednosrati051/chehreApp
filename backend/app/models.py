@@ -205,3 +205,18 @@ class AppGallery(db.Model):
     )
     published_in_app = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+
+class AppAdminUser(db.Model):
+    """کاربر ادمین خود اپ (ورود یوزر/پسورد به ادمین وب).
+
+    توکن env همچنان راه ورود اصلی می‌ماند (ساخت اولین ادمین با همان
+    توکن انجام می‌شود)؛ این جدول برای استفاده‌ی روزمره است.
+    """
+
+    __tablename__ = "app_admin_users"
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)

@@ -9,9 +9,9 @@
   header{background:#0B3D91; color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px;}
   header h1{font-size:20px; margin:0;}
   header span{color:#E8B84B;}
+  header .who{margin-right:auto; font-size:13px; color:#cfe0ff;}
+  header .who button{margin-right:10px;}
   main{max-width:960px; margin:0 auto; padding:16px;}
-  #tokenbar{background:#fff; border:1px solid #ddd; border-radius:12px; padding:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
-  #tokenbar input{flex:1; min-width:200px;}
   input, select, textarea{padding:8px 10px; border:1px solid #ccc; border-radius:8px; font-family:inherit; font-size:14px;}
   textarea{width:100%; box-sizing:border-box; min-height:80px;}
   button{background:#1D6FE0; color:#fff; border:0; border-radius:8px; padding:8px 16px; cursor:pointer; font-family:inherit;}
@@ -32,26 +32,43 @@
   #msg{color:#c0392b; min-height:20px; margin:8px 0;}
   #msg.ok{color:#1e7d32;}
   .muted{color:#666; font-size:13px;}
+  .card{background:#fff; border:1px solid #ddd; border-radius:12px; padding:20px; max-width:420px; margin:40px auto;}
+  .card h2{margin-top:0; color:#0B3D91;}
+  .card input{display:block; width:100%; box-sizing:border-box; margin-bottom:10px;}
+  .search{width:100%; box-sizing:border-box; margin-bottom:10px;}
 </style>
 </head>
 <body>
-<header><h1>🎭 ادمین <span>چهره‌ساز</span></h1></header>
+<header><h1>🎭 ادمین <span>چهره‌ساز</span></h1><span class="who" id="who"></span></header>
 <main>
-  <div id="tokenbar">
-    <label>توکن ادمین:</label>
-    <input type="password" id="token" placeholder="APP_ADMIN_TOKEN">
-    <button onclick="saveToken()">ورود</button>
-    <button class="gold" onclick="logout()">خروج</button>
-    <span id="tokstate" class="muted"></span>
+  <div id="loginview" class="card">
+    <h2>ورود ادمین</h2>
+    <form onsubmit="login(event)">
+      <input id="l-user" placeholder="نام کاربری" required autocomplete="username">
+      <input id="l-pass" type="password" placeholder="رمز عبور" required autocomplete="current-password">
+      <button>ورود</button>
+    </form>
+    <p class="muted">اولین بار: با توکن ادمین وارد شوید و از تب «ادمین‌ها» کاربر بسازید.</p>
+    <hr>
+    <form onsubmit="loginToken(event)">
+      <input id="l-token" type="password" placeholder="توکن ادمین (APP_ADMIN_TOKEN)">
+      <button class="gold">ورود با توکن</button>
+    </form>
   </div>
+
+  <div id="mainview" style="display:none;">
   <div id="msg"></div>
   <div id="tabs">
     <button data-tab="worlds" class="on" onclick="showTab('worlds')">دنیاها</button>
     <button data-tab="cats" onclick="showTab('cats')">دسته‌ها</button>
     <button data-tab="packs" onclick="showTab('packs')">پک‌ها</button>
     <button data-tab="models" onclick="showTab('models')">مدل‌ها</button>
+    <button data-tab="pricing" onclick="showTab('pricing')">تعرفه‌ها</button>
+    <button data-tab="purchases" onclick="showTab('purchases')">پرداخت‌ها</button>
     <button data-tab="gallery" onclick="showTab('gallery')">گالری در انتظار</button>
+    <button data-tab="ghist" onclick="showTab('ghist')">تاریخچه گالری</button>
     <button data-tab="users" onclick="showTab('users')">کاربران</button>
+    <button data-tab="admins" onclick="showTab('admins')">ادمین‌ها</button>
     <button data-tab="settings" onclick="showTab('settings')">تنظیمات</button>
     <button data-tab="grant" onclick="showTab('grant')">تست سکه</button>
   </div>
@@ -64,12 +81,14 @@
       <select id="w-cat"><option value="">بدون دسته</option></select>
       <select id="w-model"></select>
       <input id="w-img" placeholder="لینک عکس نمونه" class="full">
+      <label class="full">آپلود عکس نمونه (به‌جای لینک): <input id="w-file" type="file" accept=".jpg,.jpeg,.png,.webp"></label>
       <textarea id="w-prompt" placeholder="پرامپت مخفی (انگلیسی، برای مدل تصویر)" class="full" required></textarea>
       <input id="w-price" type="number" value="5" placeholder="قیمت (سکه)">
       <label><input id="w-feat" type="checkbox"> پیشنهادی</label>
       <label><input id="w-act" type="checkbox" checked> فعال</label>
       <span><button>ذخیره دنیا</button> <button type="button" class="gold" onclick="resetWorldForm()">فرم جدید</button></span>
     </form>
+    <input id="w-search" class="search" placeholder="جستجو در دنیاها…">
     <div id="w-list"></div>
   </section>
 
@@ -95,6 +114,7 @@
       <input id="p-sort" type="number" value="0" placeholder="ترتیب">
       <span><button>ذخیره پک</button> <button type="button" class="gold" onclick="resetPackForm()">فرم جدید</button></span>
     </form>
+    <input id="p-search" class="search" placeholder="جستجو در پک‌ها…">
     <div id="p-list"></div>
     <p class="muted">قیمت پنل بازار باید به ریال باشد (تومان × ۱۰) و دقیقاً با همین قیمت یکی باشد.</p>
   </section>
@@ -103,12 +123,39 @@
     <h2>مدل‌ها</h2>
     <p class="muted">کلید هرگز نمایش داده نمی‌شود؛ فقط بودنش اعلام می‌شود. برای تغییر کلید، مقدار جدید را بنویسید؛ خالی بماند یعنی بدون تغییر.</p>
     <form class="grid" onsubmit="saveModel(event)">
+      <input id="m-name" placeholder="نام مدل (مثلا gpt-image-2.5-sunburst)" class="full" required>
+      <input id="m-provider" placeholder="provider (مثلا avalai)" required>
+      <select id="m-kind"><option value="image">تصویر</option><option value="voice">صدا</option></select>
+      <input id="m-cap" placeholder="قابلیت (مثلا generate_image یا edit_image)" required>
       <input id="m-base" placeholder="base_url (مثلا https://api.avalai.ir/v1)" class="full">
-      <input id="m-key" type="password" placeholder="کلید جدید (خالی = بدون تغییر)" class="full">
+      <input id="m-key" type="password" placeholder="کلید (خالی = بدون تغییر)" class="full">
       <label><input id="m-act" type="checkbox" checked> فعال</label>
-      <button>ذخیره مدل</button>
+      <span><button>ذخیره مدل</button> <button type="button" class="gold" onclick="resetModelForm()">فرم جدید</button></span>
     </form>
     <div id="m-list"></div>
+  </section>
+
+  <section id="pricing">
+    <h2>تعرفه‌ها</h2>
+    <p class="muted">قیمت immutable است؛ تغییر قیمت یعنی نسخه‌ی جدید (نسخه به‌صورت خودکار یکی بیشتر از قبلی می‌شود). فقط فعال/غیرفعال قابل تغییر است.</p>
+    <form class="grid" onsubmit="savePricing(event)">
+      <select id="pr-model"></select>
+      <input id="pr-unit" placeholder="واحد (مثلا image_count)" required>
+      <input id="pr-size" type="number" value="1" placeholder="اندازه واحد">
+      <input id="pr-price" type="number" step="0.000001" placeholder="قیمت واحد (دلار)" required>
+      <label>از تاریخ: <input id="pr-from" type="datetime-local"></label>
+      <label>تا تاریخ: <input id="pr-until" type="datetime-local"></label>
+      <button>ثبت نسخه‌ی جدید</button>
+    </form>
+    <input id="pr-search" class="search" placeholder="جستجو در تعرفه‌ها…">
+    <div id="pr-list"></div>
+  </section>
+
+  <section id="purchases">
+    <h2>پرداخت‌های بازار</h2>
+    <p class="muted">توکن کامل خرید نمایش داده نمی‌شود (فقط ۶ کاراکتر آخر).</p>
+    <input id="pu-search" class="search" placeholder="جستجو در پرداخت‌ها…">
+    <div id="pu-list"></div>
   </section>
 
   <section id="gallery">
@@ -116,9 +163,28 @@
     <div id="g-list"></div>
   </section>
 
+  <section id="ghist">
+    <h2>تاریخچه گالری</h2>
+    <input id="gh-search" class="search" placeholder="جستجو در تاریخچه…">
+    <div id="gh-list"></div>
+  </section>
+
   <section id="users">
     <h2>کاربران</h2>
+    <input id="u-search" class="search" placeholder="جستجو در کاربران…">
     <div id="u-list"></div>
+  </section>
+
+  <section id="admins">
+    <h2>کاربران ادمین</h2>
+    <form class="grid" onsubmit="saveAdmin(event)">
+      <input id="a-user" placeholder="نام کاربری" required>
+      <input id="a-pass" type="password" placeholder="رمز عبور (حداقل ۶ کاراکتر)" required>
+      <label><input id="a-act" type="checkbox" checked> فعال</label>
+      <button>ساخت ادمین</button>
+    </form>
+    <input id="a-search" class="search" placeholder="جستجو در ادمین‌ها…">
+    <div id="a-list"></div>
   </section>
 
   <section id="settings">
@@ -142,14 +208,24 @@
     </form>
     <div id="grant-res"></div>
   </section>
+  </div>
 </main>
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function token(){ return localStorage.getItem('chehre_admin_token') || ''; }
-function saveToken(){ const t = $('token').value.trim(); if(!t) return; localStorage.setItem('chehre_admin_token', t); setMsg('توکن ذخیره شد.', true); setTokState(); loadWorlds(); }
-function logout(){ localStorage.removeItem('chehre_admin_token'); $('token').value=''; setTokState(); setMsg('خارج شدید.'); }
-function setTokState(){ $('tokstate').textContent = token() ? 'وارد شده‌اید' : 'وارد نشده‌اید'; }
+function who(){ return localStorage.getItem('chehre_admin_user') || ''; }
+function showLogin(){ $('loginview').style.display = 'block'; $('mainview').style.display = 'none'; $('who').innerHTML = ''; }
+function showMain(){ $('loginview').style.display = 'none'; $('mainview').style.display = 'block';
+  $('who').innerHTML = (who() ? 'وارد شده‌اید: ' + esc(who()) : 'وارد شده‌اید (توکن)') + '<button class="gold small" onclick="logout()">خروج</button>';
+  loadWorlds(); }
+async function login(e){ e.preventDefault();
+  try { const r = await api('/admin/auth/login', 'POST', {username: $('l-user').value.trim(), password: $('l-pass').value});
+    localStorage.setItem('chehre_admin_token', r.token); localStorage.setItem('chehre_admin_user', r.username); showMain();
+  } catch(err){ alert('ورود ناموفق: ' + err.message); } }
+function loginToken(e){ e.preventDefault(); const t = $('l-token').value.trim(); if(!t) return;
+  localStorage.setItem('chehre_admin_token', t); localStorage.removeItem('chehre_admin_user'); showMain(); }
+function logout(){ localStorage.removeItem('chehre_admin_token'); localStorage.removeItem('chehre_admin_user'); showLogin(); }
 function setMsg(m, ok){ const el = $('msg'); el.textContent = m || ''; el.className = ok ? 'ok' : ''; }
 async function api(path, method, body){
   const r = await fetch('/api/v1' + path, { method: method || 'GET',
@@ -160,11 +236,23 @@ async function api(path, method, body){
   if(!r.ok) throw new Error((j && j.error) || ('خطا ' + r.status));
   return j;
 }
+async function apiUpload(path, file){
+  const fd = new FormData(); fd.append('file', file);
+  const r = await fetch('/api/v1' + path, { method: 'POST', headers: {'X-Admin-Token': token()}, body: fd });
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(j.error || ('خطا ' + r.status));
+  return j;
+}
+const queries = {};
+function bindSearch(inp, listEl){ $(inp).addEventListener('input', e => { queries[listEl] = e.target.value.trim(); applyFilter(listEl); }); }
+function applyFilter(listEl){ const q = queries[listEl] || '';
+  document.querySelectorAll('#' + listEl + ' table tr').forEach((tr, i) => { if(i === 0) return; tr.style.display = (!q || tr.textContent.includes(q)) ? '' : 'none'; }); }
 function showTab(tab){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === tab));
-  ({worlds: loadWorlds, cats: loadCats, packs: loadPacks, models: loadModels,
-    gallery: loadGallery, users: loadUsers, settings: loadSettings})[tab]?.().catch(e => setMsg(e.message));
+  ({worlds: loadWorlds, cats: loadCats, packs: loadPacks, models: loadModels, pricing: loadPricing,
+    purchases: loadPurchases, gallery: loadGallery, ghist: loadGhist, users: loadUsers, admins: loadAdmins,
+    settings: loadSettings})[tab]?.().catch(e => setMsg(e.message));
 }
 
 let cats = [], models = [], editingWorld = null, editingPack = null, editingCat = null, editingModel = null;
@@ -177,11 +265,16 @@ async function loadWorlds(){
   $('w-list').innerHTML = ws.length ? `<table><tr><th>عکس</th><th>نام</th><th>دسته</th><th>سکه</th><th>پیشنهادی</th><th>فعال</th><th></th></tr>` +
     ws.map(w => `<tr><td>${w.sample_image_url ? `<img class="thumb" src="${esc(w.sample_image_url)}">` : '—'}</td><td>${esc(w.name)}<br><span class="muted">${esc(w.slug)}</span></td><td>${esc(catName(w.category_id))}</td><td>${w.coin_price}</td><td>${w.is_featured ? '✓' : '—'}</td><td>${w.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editWorld(${JSON.stringify(w).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delWorld(${w.id})">حذف</button></td></tr>`).join('') + '</table>'
     : '<p class="muted">دنیایی نیست.</p>';
+  applyFilter('w-list');
 }
 function editWorld(w){ editingWorld = w.id; $('w-name').value = w.name; $('w-slug').value = w.slug; $('w-cat').value = w.category_id || ''; $('w-model').value = w.model_id; $('w-img').value = w.sample_image_url || ''; $('w-prompt').value = w.hidden_prompt || ''; $('w-price').value = w.coin_price; $('w-feat').checked = w.is_featured; $('w-act').checked = w.is_active; window.scrollTo(0, 0); }
-function resetWorldForm(){ editingWorld = null; ['w-name','w-slug','w-img','w-prompt'].forEach(i => $(i).value = ''); $('w-price').value = 5; $('w-feat').checked = false; $('w-act').checked = true; }
+function resetWorldForm(){ editingWorld = null; ['w-name','w-slug','w-img','w-prompt'].forEach(i => $(i).value = ''); $('w-file').value = ''; $('w-price').value = 5; $('w-feat').checked = false; $('w-act').checked = true; }
 async function saveWorld(e){ e.preventDefault(); const body = {name: $('w-name').value.trim(), slug: $('w-slug').value.trim(), category_id: $('w-cat').value ? +$('w-cat').value : null, sample_image_url: $('w-img').value.trim() || null, hidden_prompt: $('w-prompt').value.trim(), model_id: +$('w-model').value, coin_price: +$('w-price').value, is_featured: $('w-feat').checked, is_active: $('w-act').checked};
-  try { editingWorld ? await api('/admin/worlds/' + editingWorld, 'PATCH', body) : await api('/admin/worlds', 'POST', body); setMsg('دنیا ذخیره شد.', true); resetWorldForm(); loadWorlds(); } catch(err){ setMsg(err.message); } }
+  try { const saved = editingWorld ? await api('/admin/worlds/' + editingWorld, 'PATCH', body) : await api('/admin/worlds', 'POST', body);
+    const file = $('w-file').files[0];
+    if(file){ const up = await apiUpload('/admin/worlds/' + saved.id + '/sample', file);
+      await api('/admin/worlds/' + saved.id, 'PATCH', {sample_image_url: up.sample_image_url}); }
+    setMsg('دنیا ذخیره شد.', true); resetWorldForm(); loadWorlds(); } catch(err){ setMsg(err.message); } }
 async function delWorld(id){ if(!confirm('دنیا حذف شود؟')) return; try { await api('/admin/worlds/' + id, 'DELETE'); loadWorlds(); } catch(err){ setMsg(err.message); } }
 
 async function loadCats(){ cats = await api('/admin/categories');
@@ -194,7 +287,8 @@ async function delCat(id){ if(!confirm('دسته حذف شود؟ (اگر دنی�
 
 async function loadPacks(){ const ps = await api('/admin/packs');
   $('p-list').innerHTML = ps.length ? `<table><tr><th>نام</th><th>سکه</th><th>تومان</th><th>SKU</th><th>بج</th><th>فعال</th><th></th></tr>` +
-    ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>'; }
+    ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>';
+  applyFilter('p-list'); }
 function editPack(p){ editingPack = p.id; $('p-name').value = p.name; $('p-coins').value = p.coins; $('p-price').value = p.price_toman; $('p-sku').value = p.bazaar_sku; $('p-badge').value = p.badge || ''; $('p-sort').value = p.sort_order; }
 function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-sku','p-badge'].forEach(i => $(i).value = ''); }
 async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').value.trim(), coins: +$('p-coins').value, price_toman: +$('p-price').value, bazaar_sku: $('p-sku').value.trim(), badge: $('p-badge').value.trim() || null, sort_order: +$('p-sort').value};
@@ -202,19 +296,54 @@ async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').
 async function delPack(id){ if(!confirm('پک حذف شود؟')) return; try { await api('/admin/packs/' + id, 'DELETE'); loadPacks(); } catch(err){ setMsg(err.message); } }
 
 async function loadModels(){ models = await api('/admin/models');
-  $('m-list').innerHTML = models.length ? `<table><tr><th>نام</th><th>provider</th><th>base_url</th><th>قابلیت</th><th>کلید</th><th>فعال</th><th></th></tr>` +
-    models.map(m => `<tr><td>${esc(m.name)}</td><td>${esc(m.provider)}</td><td class="muted">${esc(m.base_url)}</td><td>${esc(m.capability)}</td><td>${m.has_credentials ? '✓ دارد' : '✗ ندارد'}</td><td>${m.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editModel(${JSON.stringify(m).replace(/'/g, "&#39;")})'>ویرایش</button></td></tr>`).join('') + '</table>' : '<p class="muted">مدلی نیست.</p>'; }
-function editModel(m){ editingModel = m.id; $('m-base').value = m.base_url || ''; $('m-key').value = ''; $('m-act').checked = m.is_active; }
-async function saveModel(e){ e.preventDefault(); if(!editingModel){ setMsg('اول یک مدل را برای ویرایش انتخاب کنید.'); return; } const body = {base_url: $('m-base').value.trim(), is_active: $('m-act').checked}; const k = $('m-key').value.trim(); if(k) body.config_json = {api_key: k};
-  try { await api('/admin/models/' + editingModel, 'PATCH', body); setMsg('مدل ذخیره شد.', true); $('m-key').value = ''; loadModels(); } catch(err){ setMsg(err.message); } }
+  $('m-list').innerHTML = models.length ? `<table><tr><th>نام</th><th>نوع</th><th>provider</th><th>base_url</th><th>قابلیت</th><th>کلید</th><th>فعال</th><th></th></tr>` +
+    models.map(m => `<tr><td>${esc(m.name)}</td><td>${esc(m.kind || '')}</td><td>${esc(m.provider)}</td><td class="muted">${esc(m.base_url)}</td><td>${esc(m.capability)}</td><td>${m.has_credentials ? '✓ دارد' : '✗ ندارد'}</td><td>${m.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editModel(${JSON.stringify(m).replace(/'/g, "&#39;")})'>ویرایش</button></td></tr>`).join('') + '</table>' : '<p class="muted">مدلی نیست.</p>'; }
+function editModel(m){ editingModel = m.id; $('m-name').value = m.name; $('m-provider').value = m.provider; $('m-kind').value = m.kind || 'image'; $('m-cap').value = m.capability; $('m-base').value = m.base_url || ''; $('m-key').value = ''; $('m-act').checked = m.is_active; window.scrollTo(0, 0); }
+function resetModelForm(){ editingModel = null; ['m-name','m-provider','m-cap','m-base','m-key'].forEach(i => $(i).value = ''); $('m-kind').value = 'image'; $('m-act').checked = true; }
+async function saveModel(e){ e.preventDefault(); const body = {name: $('m-name').value.trim(), provider: $('m-provider').value.trim(), kind: $('m-kind').value, capability: $('m-cap').value.trim(), base_url: $('m-base').value.trim() || null, is_active: $('m-act').checked}; const k = $('m-key').value.trim(); if(k) body.api_key = k;
+  try { if(editingModel){ if(k) body.config_json = {api_key: k}; delete body.api_key; await api('/admin/models/' + editingModel, 'PATCH', body); }
+    else { await api('/admin/models', 'POST', body); }
+    setMsg('مدل ذخیره شد.', true); resetModelForm(); loadModels(); } catch(err){ setMsg(err.message); } }
+
+async function loadPricing(){ models = await api('/admin/models');
+  $('pr-model').innerHTML = models.map(m => `<option value="${m.id}">${esc(m.name)} (${esc(m.capability)})</option>`).join('');
+  const rows = await api('/admin/pricing');
+  $('pr-list').innerHTML = rows.length ? `<table><tr><th>مدل</th><th>واحد</th><th>اندازه</th><th>قیمت (دلار)</th><th>نسخه</th><th>فعال</th><th></th></tr>` +
+    rows.map(r => `<tr><td>${esc(r.model_name)}</td><td>${esc(r.billing_unit)}</td><td>${r.unit_size}</td><td>${r.unit_price_usd}</td><td>${r.version}</td><td>${r.is_active ? '✓' : '—'}</td><td><button class="small" onclick="pricingToggle(${r.id}, ${!r.is_active})">${r.is_active ? 'غیرفعال' : 'فعال'}</button></td></tr>`).join('') + '</table>' : '<p class="muted">تعرفه‌ای نیست.</p>';
+  applyFilter('pr-list'); }
+async function savePricing(e){ e.preventDefault(); const body = {model_id: +$('pr-model').value, billing_unit: $('pr-unit').value.trim(), unit_size: +$('pr-size').value, unit_price_usd: +$('pr-price').value, valid_from: $('pr-from').value || null, valid_until: $('pr-until').value || null};
+  try { await api('/admin/pricing', 'POST', body); setMsg('نسخه‌ی جدید تعرفه ثبت شد.', true); e.target.reset(); loadPricing(); } catch(err){ setMsg(err.message); } }
+async function pricingToggle(id, on){ try { await api('/admin/pricing/' + id, 'PATCH', {is_active: on}); loadPricing(); } catch(err){ setMsg(err.message); } }
+
+const purchaseFa = {pending: 'در انتظار', verified: 'تأییدشده', consumed: 'مصرف‌شده'};
+async function loadPurchases(){ const rows = await api('/admin/purchases');
+  $('pu-list').innerHTML = rows.length ? `<table><tr><th>id</th><th>موبایل</th><th>پک</th><th>مبلغ (ریال)</th><th>وضعیت</th><th>توکن</th><th>تاریخ</th></tr>` +
+    rows.map(r => `<tr><td>${r.id}</td><td>${esc(r.mobile)}</td><td>${esc(r.pack_name)}</td><td>${r.amount_irr.toLocaleString('fa-IR')}</td><td>${purchaseFa[r.status] || esc(r.status)}</td><td class="muted">${esc(r.token_tail)}</td><td class="muted">${esc(r.created_at)}</td></tr>`).join('') + '</table>' : '<p class="muted">پرداختی نیست.</p>';
+  applyFilter('pu-list'); }
 
 async function loadGallery(){ const rows = await api('/admin/gallery/pending');
   $('g-list').innerHTML = rows.length ? rows.map(r => `<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;"><img class="thumb" src="${esc(r.image_url)}"><div>موبایل: ${esc(r.mobile)}<br><span class="muted">generation: ${r.generation_id}</span></div><button class="small gold" onclick="galleryAct(${r.id},'approve')">تأیید</button><button class="small danger" onclick="galleryAct(${r.id},'reject')">رد</button></div>`).join('') : '<p class="muted">عکس در انتظاری نیست.</p>'; }
 async function galleryAct(id, act){ try { await api('/admin/gallery/' + id + '/' + act, 'POST'); loadGallery(); } catch(err){ setMsg(err.message); } }
 
+const galleryFa = {pending: 'در انتظار', approved: 'تأییدشده', rejected: 'ردشده'};
+async function loadGhist(){ const rows = await api('/admin/gallery');
+  $('gh-list').innerHTML = rows.length ? `<table><tr><th>عکس</th><th>موبایل</th><th>وضعیت</th><th>در گالری اپ</th><th>تاریخ</th></tr>` +
+    rows.map(r => `<tr><td><img class="thumb" src="${esc(r.image_url)}"></td><td>${esc(r.mobile)}</td><td>${galleryFa[r.status] || esc(r.status)}</td><td>${r.published_in_app ? '✓' : '—'}</td><td class="muted">${esc(r.created_at)}</td></tr>`).join('') + '</table>' : '<p class="muted">عکسی نیست.</p>';
+  applyFilter('gh-list'); }
+
 async function loadUsers(){ const us = await api('/admin/users');
-  $('u-list').innerHTML = us.length ? `<table><tr><th>id</th><th>موبایل</th><th>نام</th><th>وضعیت</th><th>اعتبار رایگان</th><th>موجودی سکه</th><th>ساخته‌شده</th></tr>` +
-    us.map(u => `<tr><td>${u.id}</td><td>${esc(u.mobile)}</td><td>${esc(u.name)}</td><td>${esc(u.status)}</td><td>${u.free_image_credits}</td><td>${u.balance}</td><td class="muted">${esc(u.created_at)}</td></tr>`).join('') + '</table>' : '<p class="muted">کاربری نیست.</p>'; }
+  $('u-list').innerHTML = us.length ? `<table><tr><th>id</th><th>موبایل</th><th>نام</th><th>وضعیت</th><th>اعتبار رایگان</th><th>موجودی سکه</th><th>ساخته‌شده</th><th></th></tr>` +
+    us.map(u => `<tr><td>${u.id}</td><td>${esc(u.mobile)}</td><td>${esc(u.name)}</td><td>${esc(u.status)}</td><td>${u.free_image_credits}</td><td>${u.balance}</td><td class="muted">${esc(u.created_at)}</td><td>${u.status === 'blocked' ? `<button class="small gold" onclick="userStatus(${u.id},'active')">رفع مسدود</button>` : `<button class="small danger" onclick="userStatus(${u.id},'blocked')">مسدود</button>`}</td></tr>`).join('') + '</table>' : '<p class="muted">کاربری نیست.</p>';
+  applyFilter('u-list'); }
+async function userStatus(id, st){ try { await api('/admin/users/' + id, 'PATCH', {status: st}); loadUsers(); } catch(err){ setMsg(err.message); } }
+
+async function loadAdmins(){ const rows = await api('/admin/admin-users');
+  $('a-list').innerHTML = rows.length ? `<table><tr><th>نام کاربری</th><th>فعال</th><th>ساخته‌شده</th><th></th></tr>` +
+    rows.map(a => `<tr><td>${esc(a.username)}</td><td>${a.is_active ? '✓' : '—'}</td><td class="muted">${esc(a.created_at)}</td><td><button class="small" onclick="adminToggle(${a.id}, ${!a.is_active})">${a.is_active ? 'غیرفعال' : 'فعال'}</button> <button class="small danger" onclick="delAdmin(${a.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">ادمینی نیست؛ با توکن وارد شوید و بسازید.</p>';
+  applyFilter('a-list'); }
+async function saveAdmin(e){ e.preventDefault(); try { await api('/admin/admin-users', 'POST', {username: $('a-user').value.trim(), password: $('a-pass').value, is_active: $('a-act').checked}); setMsg('ادمین ساخته شد.', true); e.target.reset(); loadAdmins(); } catch(err){ setMsg(err.message); } }
+async function adminToggle(id, on){ try { await api('/admin/admin-users/' + id, 'PATCH', {is_active: on}); loadAdmins(); } catch(err){ setMsg(err.message); } }
+async function delAdmin(id){ if(!confirm('ادمین حذف شود؟')) return; try { await api('/admin/admin-users/' + id, 'DELETE'); loadAdmins(); } catch(err){ setMsg(err.message); } }
 
 async function loadSettings(){ const ss = await api('/admin/settings');
   $('s-list').innerHTML = ss.length ? `<table><tr><th>کلید</th><th>مقدار</th></tr>` + ss.map(s => `<tr><td>${esc(s.key)}</td><td>${esc(s.value)}</td></tr>`).join('') + '</table>' : '<p class="muted">تنظیمی نیست.</p>'; }
@@ -222,8 +351,10 @@ async function saveSetting(e){ e.preventDefault(); try { await api('/admin/setti
 
 async function grantCoins(e){ e.preventDefault(); try { const r = await api('/admin/test/grant-coins', 'POST', {user_id: +$('g-user').value, coins: +$('g-coins').value}); $('grant-res').innerHTML = `<p>موجودی جدید کاربر ${r.user_id}: <b>${r.balance}</b> سکه</p>`; setMsg('شارژ تستی انجام شد.', true); } catch(err){ setMsg(err.message); } }
 
-$('token').value = token(); setTokState();
-if(token()) loadWorlds();
+bindSearch('w-search', 'w-list'); bindSearch('p-search', 'p-list'); bindSearch('pr-search', 'pr-list');
+bindSearch('pu-search', 'pu-list'); bindSearch('gh-search', 'gh-list'); bindSearch('u-search', 'u-list');
+bindSearch('a-search', 'a-list');
+if(token()) showMain(); else showLogin();
 </script>
 </body>
 </html>

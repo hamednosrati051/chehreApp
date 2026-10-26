@@ -1,15 +1,18 @@
 """روت‌های API اپ: auth / محتوا / تولید / سکه / گالری."""
 
 import datetime
+import os
 import random
 from functools import wraps
 
 import jwt
 from flask import Blueprint, current_app, g, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 
 from .extensions import db
 from .models import (
+    AppAdminUser,
     AppCategory,
     AppCoinLedger,
     AppCoinPack,
@@ -17,6 +20,7 @@ from .models import (
     AppGeneration,
     AppModel,
     AppOtpCode,
+    AppPricing,
     AppPurchase,
     AppSetting,
     AppSinger,
@@ -81,6 +85,17 @@ def require_auth(f):
     return wrapper
 
 
+def _admin_jwt_ok(tok):
+    """توکن JWT ادمین (صادرشده از لاگین یوزر/پسورد) معتبر است؟"""
+    try:
+        payload = jwt.decode(
+            tok, current_app.config["SECRET_KEY"], algorithms=["HS256"]
+        )
+        return bool(payload.get("admin"))
+    except Exception:
+        return False
+
+
 def require_admin(f):
     """ادمین خود اپ با توکن env (X-Admin-Token).
 
@@ -91,7 +106,10 @@ def require_admin(f):
         token = current_app.config.get("ADMIN_TOKEN") or ""
         if not token:
             return jsonify({"error": "admin not configured"}), 503
-        if request.headers.get("X-Admin-Token", "") != token:
+        tok = request.headers.get("X-Admin-Token", "")
+        if tok and _admin_jwt_ok(tok):
+            return f(*args, **kwargs)
+        if tok != token:
             return jsonify({"error": "forbidden"}), 403
         return f(*args, **kwargs)
 
@@ -987,3 +1005,317 @@ def admin_list_users():
             }
         )
     return jsonify(out)
+
+
+@admin_bp.patch("/admin/users/<int:user_id>")
+@require_admin
+def admin_update_user(user_id):
+    """مسدود/رفع مسدود کاربر."""
+    u = AppUser.query.get(user_id)
+    if not u:
+        return jsonify({"error": "user not found"}), 404
+    body = request.json or {}
+    if "status" in body:
+        if body["status"] not in ("active", "blocked"):
+            return jsonify({"error": "status must be active or blocked"}), 400
+        u.status = body["status"]
+    db.session.commit()
+    return jsonify({"id": u.id, "status": u.status})
+
+
+# ---------------- admin: auth (ورود یوزر/پسورد) ----------------
+# توکن env همچنان راه ورود اصلی می‌ماند (ساخت اولین ادمین با همان توکن
+# انجام می‌شود)؛ لاگین یوزر/پسورد برای استفاده‌ی روزمره است.
+
+ADMIN_JWT_DAYS = 7
+
+
+def _admin_jwt_for(admin_user):
+    payload = {
+        "admin": True,
+        "admin_user": admin_user.username,
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(days=ADMIN_JWT_DAYS),
+    }
+    return jwt.encode(payload, current_app.config["SECRET_KEY"], algorithm="HS256")
+
+
+@admin_bp.post("/admin/auth/login")
+def admin_login():
+    body = request.json or {}
+    username = (body.get("username") or "").strip()
+    password = body.get("password") or ""
+    if not username or not password:
+        return jsonify({"error": "username and password required"}), 400
+    user = AppAdminUser.query.filter_by(username=username).first()
+    if (
+        not user
+        or not user.is_active
+        or not check_password_hash(user.password_hash, password)
+    ):
+        return jsonify({"error": "invalid credentials"}), 401
+    return jsonify({"token": _admin_jwt_for(user), "username": user.username})
+
+
+def _admin_user_admin(u):
+    return {
+        "id": u.id,
+        "username": u.username,
+        "is_active": bool(u.is_active),
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+    }
+
+
+@admin_bp.get("/admin/admin-users")
+@require_admin
+def admin_list_admin_users():
+    rows = AppAdminUser.query.order_by(AppAdminUser.id).all()
+    return jsonify([_admin_user_admin(u) for u in rows])
+
+
+@admin_bp.post("/admin/admin-users")
+@require_admin
+def admin_create_admin_user():
+    body = request.json or {}
+    username = (body.get("username") or "").strip()
+    password = body.get("password") or ""
+    if not username or len(password) < 6:
+        return jsonify({"error": "username required and password min 6 chars"}), 400
+    if AppAdminUser.query.filter_by(username=username).first():
+        return jsonify({"error": "username exists"}), 409
+    u = AppAdminUser(
+        username=username,
+        password_hash=generate_password_hash(password),
+        is_active=bool(body.get("is_active", True)),
+    )
+    db.session.add(u)
+    db.session.commit()
+    return jsonify(_admin_user_admin(u)), 201
+
+
+@admin_bp.patch("/admin/admin-users/<int:admin_user_id>")
+@require_admin
+def admin_update_admin_user(admin_user_id):
+    u = AppAdminUser.query.get(admin_user_id)
+    if not u:
+        return jsonify({"error": "admin user not found"}), 404
+    body = request.json or {}
+    if body.get("password"):
+        if len(body["password"]) < 6:
+            return jsonify({"error": "password min 6 chars"}), 400
+        u.password_hash = generate_password_hash(body["password"])
+    if "is_active" in body:
+        u.is_active = bool(body["is_active"])
+    db.session.commit()
+    return jsonify(_admin_user_admin(u))
+
+
+@admin_bp.delete("/admin/admin-users/<int:admin_user_id>")
+@require_admin
+def admin_delete_admin_user(admin_user_id):
+    u = AppAdminUser.query.get(admin_user_id)
+    if not u:
+        return jsonify({"error": "admin user not found"}), 404
+    if AppAdminUser.query.count() <= 1:
+        return jsonify({"error": "cannot delete the last admin user"}), 409
+    db.session.delete(u)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ---------------- admin: pricing (تعرفه؛ قیمت immutable مثل نورا) ----------------
+
+
+def _pricing_admin(r, model_name):
+    return {
+        "id": r.id,
+        "model_id": r.model_id,
+        "model_name": model_name,
+        "billing_unit": r.billing_unit,
+        "unit_size": r.unit_size,
+        "unit_price_usd": float(r.unit_price_usd),
+        "version": r.version,
+        "valid_from": r.valid_from.isoformat() if r.valid_from else None,
+        "valid_until": r.valid_until.isoformat() if r.valid_until else None,
+        "is_active": bool(r.is_active),
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    }
+
+
+@admin_bp.get("/admin/pricing")
+@require_admin
+def admin_list_pricing():
+    rows = AppPricing.query.order_by(
+        AppPricing.model_id, AppPricing.version.desc()
+    ).all()
+    models = {m.id: m.name for m in AppModel.query.all()}
+    return jsonify([_pricing_admin(r, models.get(r.model_id)) for r in rows])
+
+
+@admin_bp.post("/admin/pricing")
+@require_admin
+def admin_create_pricing():
+    body = request.json or {}
+    model = AppModel.query.get(body.get("model_id"))
+    if not model:
+        return jsonify({"error": "model not found"}), 400
+    if not body.get("billing_unit") or body.get("unit_price_usd") is None:
+        return jsonify({"error": "billing_unit and unit_price_usd required"}), 400
+    try:
+        price = float(body["unit_price_usd"])
+        unit_size = int(body.get("unit_size", 1))
+    except (TypeError, ValueError):
+        return jsonify({"error": "invalid numbers"}), 400
+    if price <= 0 or unit_size < 1:
+        return jsonify({"error": "price must be > 0 and unit_size >= 1"}), 400
+    last = (
+        AppPricing.query.filter_by(
+            model_id=model.id, billing_unit=body["billing_unit"]
+        )
+        .order_by(AppPricing.version.desc())
+        .first()
+    )
+    r = AppPricing(
+        model_id=model.id,
+        billing_unit=body["billing_unit"],
+        unit_size=unit_size,
+        unit_price_usd=price,
+        version=(last.version + 1) if last else 1,
+        is_active=True,
+    )
+    for field in ("valid_from", "valid_until"):
+        if body.get(field):
+            try:
+                setattr(r, field, datetime.datetime.fromisoformat(body[field]))
+            except ValueError:
+                return jsonify({"error": f"invalid {field}"}), 400
+    db.session.add(r)
+    db.session.commit()
+    return jsonify(_pricing_admin(r, model.name)), 201
+
+
+@admin_bp.patch("/admin/pricing/<int:pricing_id>")
+@require_admin
+def admin_update_pricing(pricing_id):
+    """فقط فعال/غیرفعال قابل تغییر است؛ قیمت immutable است (مثل نورا)."""
+    r = AppPricing.query.get(pricing_id)
+    if not r:
+        return jsonify({"error": "pricing not found"}), 404
+    body = request.json or {}
+    if "is_active" in body:
+        r.is_active = bool(body["is_active"])
+    db.session.commit()
+    model = AppModel.query.get(r.model_id)
+    return jsonify(_pricing_admin(r, model.name if model else None))
+
+
+# ---------------- admin: purchases (پرداخت‌های بازار) ----------------
+
+
+@admin_bp.get("/admin/purchases")
+@require_admin
+def admin_list_purchases():
+    rows = AppPurchase.query.order_by(AppPurchase.id.desc()).limit(200).all()
+    users = {u.id: u.mobile for u in AppUser.query.all()}
+    packs = {p.id: p.name for p in AppCoinPack.query.all()}
+    out = []
+    for r in rows:
+        tok = r.bazaar_purchase_token or ""
+        out.append(
+            {
+                "id": r.id,
+                "user_id": r.user_id,
+                "mobile": users.get(r.user_id),
+                "pack_name": packs.get(r.pack_id),
+                "amount_irr": r.amount_irr,
+                "status": r.status,
+                # توکن کامل خرید هرگز در ادمین نمایش داده نمی‌شود.
+                "token_tail": ("…" + tok[-6:]) if len(tok) > 6 else tok,
+                "verified_at": r.verified_at.isoformat() if r.verified_at else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+        )
+    return jsonify(out)
+
+
+# ---------------- admin: models (ساخت مدل جدید) ----------------
+# ویرایش مدل از قبل بود؛ ساخت مدل جدید اضافه شد.
+
+
+@admin_bp.post("/admin/models")
+@require_admin
+def admin_create_model():
+    body = request.json or {}
+    for field in ("name", "provider", "capability"):
+        if not body.get(field):
+            return jsonify({"error": f"{field} required"}), 400
+    if body.get("kind") not in (None, "image", "voice"):
+        return jsonify({"error": "kind must be image or voice"}), 400
+    m = AppModel(
+        kind=body.get("kind", "image"),
+        name=body["name"],
+        provider=body["provider"],
+        base_url=body.get("base_url"),
+        config_json={"api_key": body["api_key"]} if body.get("api_key") else None,
+        capability=body["capability"],
+        is_active=bool(body.get("is_active", True)),
+    )
+    db.session.add(m)
+    db.session.commit()
+    return jsonify(_model_public(m)), 201
+
+
+# ---------------- admin: gallery (همه، برای تاریخچه) ----------------
+
+
+@admin_bp.get("/admin/gallery")
+@require_admin
+def admin_gallery_all():
+    rows = AppGallery.query.order_by(AppGallery.id.desc()).limit(200).all()
+    users = {u.id: u.mobile for u in AppUser.query.all()}
+    return jsonify(
+        [
+            {
+                "id": r.id,
+                "user_id": r.user_id,
+                "mobile": users.get(r.user_id),
+                "generation_id": r.generation_id,
+                "image_url": r.image_url,
+                "status": r.status,
+                "published_in_app": bool(r.published_in_app),
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ]
+    )
+
+
+# ---------------- admin: world sample upload ----------------
+
+SAMPLE_EXTS = {"jpg", "jpeg", "png", "webp"}
+SAMPLE_MAX_BYTES = 5 * 1024 * 1024
+
+
+@admin_bp.post("/admin/worlds/<int:world_id>/sample")
+@require_admin
+def admin_upload_world_sample(world_id):
+    """فایل نمونه را ذخیره می‌کند و URL را برمی‌گرداند؛ خود دنیا با PATCH
+    جداگانه به‌روز می‌شود (مثل ویرایش دستی لینک)."""
+    w = AppWorld.query.get(world_id)
+    if not w:
+        return jsonify({"error": "world not found"}), 404
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": "file required"}), 400
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext not in SAMPLE_EXTS:
+        return jsonify({"error": "only jpg/png/webp allowed"}), 400
+    data = f.read()
+    if len(data) > SAMPLE_MAX_BYTES:
+        return jsonify({"error": "file too large (max 5MB)"}), 413
+    filename = secure_filename(f"{w.slug}.{ext}")
+    dest_dir = os.path.join(current_app.static_folder, "worlds")
+    os.makedirs(dest_dir, exist_ok=True)
+    with open(os.path.join(dest_dir, filename), "wb") as fh:
+        fh.write(data)
+    url = request.host_url.rstrip("/") + "/static/worlds/" + filename
+    return jsonify({"sample_image_url": url})

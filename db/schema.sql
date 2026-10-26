@@ -197,3 +197,12 @@ CREATE TABLE app_gallery (
   FOREIGN KEY (user_id) REFERENCES app_users(id),
   FOREIGN KEY (generation_id) REFERENCES app_generations(id)
 ) ENGINE=InnoDB;
+
+-- کاربران ادمین خود اپ (ورود یوزر/پسورد به ادمین وب).
+CREATE TABLE app_admin_users (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(100) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
