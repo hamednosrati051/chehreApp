@@ -39,10 +39,20 @@ CREATE TABLE app_models (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   kind ENUM('image','voice') NOT NULL,
   name VARCHAR(100) NOT NULL,
-  provider VARCHAR(50) NOT NULL,              -- مثل avalai برای تصویر؛ route صدا بعد از انتخاب
+  slug VARCHAR(100) NOT NULL UNIQUE,
+  provider VARCHAR(50) NOT NULL,              -- مثل avalai برای تصویر؛ نقش provider_key نورا
+  provider_type VARCHAR(32) NOT NULL DEFAULT 'openai_compat',
+  provider_model_name VARCHAR(128) NULL,
   base_url VARCHAR(255) NULL,
   config_json JSON NULL,
   capability VARCHAR(50) NOT NULL,            -- generate_image | edit_image | voice_convert
+  pricing_type VARCHAR(32) NOT NULL DEFAULT 'image_count',
+  tokenizer_encoding VARCHAR(64) NULL,
+  description TEXT NULL,
+  default_max_output_tokens INT NULL,
+  max_prompt_chars INT NULL,
+  max_history_messages INT NULL,
+  max_history_tokens INT NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -55,9 +65,15 @@ CREATE TABLE app_pricing (
   unit_size INT NOT NULL DEFAULT 1,
   unit_price_usd DECIMAL(10,6) NOT NULL,
   version INT NOT NULL DEFAULT 1,
+  dimension_key VARCHAR(64) NULL,
+  quality_key VARCHAR(64) NULL,
+  minimum_charge_irr BIGINT NULL,
+  maximum_charge_irr BIGINT NULL,
+  rounding_mode VARCHAR(16) NOT NULL DEFAULT 'up',
   valid_from TIMESTAMP NULL,
   valid_until TIMESTAMP NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_by_admin_id BIGINT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (model_id) REFERENCES app_models(id)
 ) ENGINE=InnoDB;
@@ -193,6 +209,9 @@ CREATE TABLE app_gallery (
   image_url VARCHAR(500) NOT NULL,
   status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   published_in_app TINYINT(1) NOT NULL DEFAULT 0,
+  reviewed_by_admin_id BIGINT NULL,
+  reviewed_at TIMESTAMP NULL,
+  rejection_reason TEXT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES app_users(id),
   FOREIGN KEY (generation_id) REFERENCES app_generations(id)

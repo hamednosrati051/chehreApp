@@ -7,6 +7,7 @@ from functools import wraps
 
 import jwt
 from flask import Blueprint, current_app, g, jsonify, request
+from sqlalchemy import or_
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -589,17 +590,92 @@ def coin_ledger():
 
 def _model_public(m):
     cfg = m.config_json or {}
+    prov = cfg.get("__provider__") or {}
     return {
         "id": m.id,
         "kind": m.kind,
         "name": m.name,
+        "slug": m.slug,
         "provider": m.provider,
-        "base_url": m.base_url,
+        "provider_type": m.provider_type,
+        "provider_model_name": m.provider_model_name,
+        # base_url مثل نورا از __provider__ می‌آید؛ ستون fallback است.
+        "base_url": prov.get("base_url") or m.base_url,
         "capability": m.capability,
+        "pricing_type": m.pricing_type,
+        "tokenizer_encoding": m.tokenizer_encoding,
+        "description": m.description,
+        "default_max_output_tokens": m.default_max_output_tokens,
+        "max_prompt_chars": m.max_prompt_chars,
+        "max_history_messages": m.max_history_messages,
+        "max_history_tokens": m.max_history_tokens,
         "is_active": bool(m.is_active),
         # کلید هرگز برگردانده نمی‌شود؛ فقط بودنش اعلام می‌شود.
-        "has_credentials": bool(cfg.get("api_key")),
+        "has_credentials": bool(prov.get("api_key") or cfg.get("api_key")),
     }
+
+
+# Reserved config_json key holding form-provided provider credentials (Nourai).
+_PROVIDER_CREDS_KEY = "__provider__"
+
+
+def _extract_provider_creds(config_json):
+    """(base_url, api_key) stored on the model via the admin form."""
+    creds = (config_json or {}).get(_PROVIDER_CREDS_KEY) or {}
+    return (creds.get("base_url") or "", creds.get("api_key") or "")
+
+
+def _store_provider_creds(config_json, base_url, api_key):
+    """Merge form-provided credentials into config_json (write path only).
+
+    The reserved __provider__ key can only be written through the dedicated
+    base_url/api_key fields, never via raw config_json (Nourai's rule).
+    """
+    cfg = dict(config_json or {})
+    creds = dict(cfg.get(_PROVIDER_CREDS_KEY) or {})
+    if base_url is not None:
+        creds["base_url"] = base_url
+    if api_key:
+        creds["api_key"] = api_key
+    cfg[_PROVIDER_CREDS_KEY] = creds
+    return cfg
+
+
+def _slugify(text):
+    out = []
+    for ch in (text or "").lower():
+        out.append(ch if ch.isalnum() else "-")
+    return "".join(out).strip("-") or "model"
+
+
+def _current_admin_id():
+    """id کاربر ادمین فعلی از روی JWT لاگین؛ برای لاگین توکنی None."""
+    tok = request.headers.get("X-Admin-Token", "")
+    try:
+        payload = jwt.decode(
+            tok, current_app.config["SECRET_KEY"], algorithms=["HS256"]
+        )
+        if payload.get("admin") and payload.get("admin_user"):
+            u = AppAdminUser.query.filter_by(username=payload["admin_user"]).first()
+            return u.id if u else None
+    except Exception:
+        pass
+    return None
+
+
+def _paginate(query, default_size=50):
+    """صفحه‌بندی مثل نورا: ?page=&page_size= (سقف ۲۰۰)."""
+    try:
+        page = max(int(request.args.get("page", 1)), 1)
+    except ValueError:
+        page = 1
+    try:
+        page_size = min(max(int(request.args.get("page_size", default_size)), 1), 200)
+    except ValueError:
+        page_size = default_size
+    total = query.count()
+    items = query.offset((page - 1) * page_size).limit(page_size).all()
+    return items, {"total": total, "page": page, "page_size": page_size}
 
 
 @admin_bp.get("/admin/models")
@@ -612,21 +688,45 @@ def admin_list_models():
 @admin_bp.patch("/admin/models/<int:model_id>")
 @require_admin
 def admin_update_model(model_id):
-    """فرم مدل ادمین خود اپ: کلید write-only است؛ اگر api_key فرستاده
-    نشود، مقدار قبلی می‌ماند (الگوی نورا)."""
+    """فرم مدل ادمین خود اپ، مثل نورا: کلید write-only است؛ اگر api_key
+    فرستاده نشود، مقدار قبلی می‌ماند. __provider__ فقط از راه فیلدهای
+    base_url/api_key نوشته می‌شود، هرگز از راه config_json خام."""
     m = AppModel.query.get(model_id)
     if not m:
         return jsonify({"error": "model not found"}), 404
     body = request.json or {}
-    for field in ("name", "provider", "base_url", "capability"):
+    for field in (
+        "name",
+        "provider",
+        "provider_type",
+        "provider_model_name",
+        "pricing_type",
+        "tokenizer_encoding",
+        "description",
+        "default_max_output_tokens",
+        "max_prompt_chars",
+        "max_history_messages",
+        "max_history_tokens",
+    ):
         if field in body:
             setattr(m, field, body[field])
+    if body.get("capability") in ("generate_image", "edit_image", "image"):
+        m.capability = body["capability"]
     if "is_active" in body:
         m.is_active = bool(body["is_active"])
     if "config_json" in body and isinstance(body["config_json"], dict):
+        incoming = {
+            k: v for k, v in body["config_json"].items() if k != _PROVIDER_CREDS_KEY
+        }
         cfg = dict(m.config_json or {})
-        cfg.update(body["config_json"])
+        cfg.update(incoming)
         m.config_json = cfg
+    if body.get("base_url") is not None or body.get("api_key"):
+        m.config_json = _store_provider_creds(
+            m.config_json, body.get("base_url"), body.get("api_key")
+        )
+        if body.get("base_url") is not None:
+            m.base_url = body["base_url"]
     db.session.commit()
     return jsonify(_model_public(m))
 
@@ -834,6 +934,9 @@ def admin_gallery_approve(row_id):
     r.status = "approved"
     r.published_in_app = True
     # گالری کاملاً جداست: هیچ کپی‌ای در نورا نوشته نمی‌شود.
+    r.reviewed_by_admin_id = _current_admin_id()
+    r.reviewed_at = datetime.datetime.utcnow()
+    r.rejection_reason = None
     db.session.commit()
     return jsonify({"id": r.id, "status": r.status, "published_in_app": True})
 
@@ -846,10 +949,43 @@ def admin_gallery_reject(row_id):
         return jsonify({"error": "not found"}), 404
     if r.status != "pending":
         return jsonify({"error": "not pending"}), 409
+    body = request.json or {}
     r.status = "rejected"
     r.published_in_app = False
+    r.reviewed_by_admin_id = _current_admin_id()
+    r.reviewed_at = datetime.datetime.utcnow()
+    r.rejection_reason = (body.get("reason") or "").strip() or None
     db.session.commit()
     return jsonify({"id": r.id, "status": r.status})
+
+
+@admin_bp.post("/admin/gallery/<int:row_id>/requeue")
+@require_admin
+def admin_gallery_requeue(row_id):
+    """بازگردانی به صف انتظار (لغو تصمیم قبلی)."""
+    r = AppGallery.query.get(row_id)
+    if not r:
+        return jsonify({"error": "not found"}), 404
+    if r.status == "pending":
+        return jsonify({"error": "already pending"}), 409
+    r.status = "pending"
+    r.published_in_app = False
+    r.reviewed_by_admin_id = None
+    r.reviewed_at = None
+    r.rejection_reason = None
+    db.session.commit()
+    return jsonify({"id": r.id, "status": r.status})
+
+
+@admin_bp.delete("/admin/gallery/<int:row_id>")
+@require_admin
+def admin_gallery_delete(row_id):
+    r = AppGallery.query.get(row_id)
+    if not r:
+        return jsonify({"error": "not found"}), 404
+    db.session.delete(r)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 # ---------------------------------------------------------------------------
@@ -986,25 +1122,132 @@ def admin_update_settings():
 # ---------------- admin: users ----------------
 
 
+def _user_admin(u):
+    return {
+        "id": u.id,
+        "mobile": u.mobile,
+        "name": u.name,
+        "status": u.status,
+        "free_image_credits": u.free_image_credits,
+        "free_voice_credits": u.free_voice_credits,
+        "balance": coins_svc.get_balance(u),
+        "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+    }
+
+
 @admin_bp.get("/admin/users")
 @require_admin
 def admin_list_users():
-    users = AppUser.query.order_by(AppUser.id.desc()).limit(200).all()
-    out = []
-    for u in users:
-        out.append(
-            {
-                "id": u.id,
-                "mobile": u.mobile,
-                "name": u.name,
-                "status": u.status,
-                "free_image_credits": u.free_image_credits,
-                "free_voice_credits": u.free_voice_credits,
-                "balance": coins_svc.get_balance(u),
-                "created_at": u.created_at.isoformat() if u.created_at else None,
-            }
-        )
-    return jsonify(out)
+    query = AppUser.query
+    search = (request.args.get("search") or "").strip()
+    if search:
+        if search.isdigit():
+            query = query.filter(
+                or_(
+                    AppUser.mobile.like(f"%{search}%"),
+                    AppUser.id == int(search),
+                )
+            )
+        else:
+            query = query.filter(AppUser.mobile.like(f"%{search}%"))
+    is_active = request.args.get("is_active")
+    if is_active == "true":
+        query = query.filter_by(status="active")
+    elif is_active == "false":
+        query = query.filter_by(status="blocked")
+    query = query.order_by(AppUser.id.desc())
+    users, meta = _paginate(query)
+    return jsonify({"items": [_user_admin(u) for u in users], **meta})
+
+
+@admin_bp.get("/admin/users/<int:user_id>")
+@require_admin
+def admin_get_user(user_id):
+    """جزئیات کاربر، مثل نورا: تولیدها + دفتر سکه + گالری."""
+    u = AppUser.query.get(user_id)
+    if not u:
+        return jsonify({"error": "user not found"}), 404
+    worlds = {w.id: w.name for w in AppWorld.query.all()}
+    models = {m.id: m.name for m in AppModel.query.all()}
+    gens = (
+        AppGeneration.query.filter_by(user_id=u.id)
+        .order_by(AppGeneration.id.desc())
+        .limit(20)
+        .all()
+    )
+    ledger = (
+        AppCoinLedger.query.filter_by(user_id=u.id)
+        .order_by(AppCoinLedger.id.desc())
+        .limit(20)
+        .all()
+    )
+    gallery = (
+        AppGallery.query.filter_by(user_id=u.id)
+        .order_by(AppGallery.id.desc())
+        .limit(20)
+        .all()
+    )
+    return jsonify(
+        {
+            **_user_admin(u),
+            "generations": [
+                {
+                    "id": g.id,
+                    "kind": g.kind,
+                    "world": worlds.get(g.world_id),
+                    "model": models.get(g.model_id),
+                    "status": g.status,
+                    "coin_cost": g.coin_cost,
+                    "charged": bool(g.charged),
+                    "output_url": g.output_url,
+                    "created_at": g.created_at.isoformat() if g.created_at else None,
+                }
+                for g in gens
+            ],
+            "ledger": [
+                {
+                    "id": r.id,
+                    "delta": r.delta,
+                    "reason": r.reason,
+                    "ref_type": r.ref_type,
+                    "ref_id": r.ref_id,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in ledger
+            ],
+            "gallery": [
+                {
+                    "id": r.id,
+                    "image_url": r.image_url,
+                    "status": r.status,
+                    "published_in_app": bool(r.published_in_app),
+                }
+                for r in gallery
+            ],
+        }
+    )
+
+
+@admin_bp.post("/admin/users/<int:user_id>/coin-adjust")
+@require_admin
+def admin_user_coin_adjust(user_id):
+    """تعدیل دستی سکه، مثل wallet-adjustment نورا."""
+    u = AppUser.query.get(user_id)
+    if not u:
+        return jsonify({"error": "user not found"}), 404
+    body = request.json or {}
+    try:
+        delta = int(body.get("delta"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "delta (int) required"}), 400
+    if delta == 0 or abs(delta) > 100000:
+        return jsonify({"error": "delta must be non-zero and within 100000"}), 400
+    try:
+        balance = coins_svc.adjust_coins(u, delta, reason="admin")
+    except ValueError:
+        return jsonify({"error": "insufficient balance"}), 400
+    return jsonify({"id": u.id, "balance": balance})
 
 
 @admin_bp.patch("/admin/users/<int:user_id>")
@@ -1125,7 +1368,7 @@ def admin_delete_admin_user(admin_user_id):
 # ---------------- admin: pricing (تعرفه؛ قیمت immutable مثل نورا) ----------------
 
 
-def _pricing_admin(r, model_name):
+def _pricing_admin(r, model_name, is_in_use=False):
     return {
         "id": r.id,
         "model_id": r.model_id,
@@ -1134,21 +1377,59 @@ def _pricing_admin(r, model_name):
         "unit_size": r.unit_size,
         "unit_price_usd": float(r.unit_price_usd),
         "version": r.version,
+        "dimension_key": r.dimension_key,
+        "quality_key": r.quality_key,
+        "minimum_charge_irr": r.minimum_charge_irr,
+        "maximum_charge_irr": r.maximum_charge_irr,
+        "rounding_mode": r.rounding_mode,
         "valid_from": r.valid_from.isoformat() if r.valid_from else None,
         "valid_until": r.valid_until.isoformat() if r.valid_until else None,
         "is_active": bool(r.is_active),
+        "is_in_use": is_in_use,
+        "created_by_admin_id": r.created_by_admin_id,
         "created_at": r.created_at.isoformat() if r.created_at else None,
     }
+
+
+def _in_use_pricing_ids():
+    """IDs of the rules billing would currently select (Nourai's rule).
+
+    Per (model, billing unit, dimension, quality): the active rule in its
+    validity window with the highest version, restricted to active models.
+    The app bills in coins, so this badge marks the rule that WOULD apply.
+    """
+    now = datetime.datetime.utcnow()
+    active_model_ids = {
+        row[0]
+        for row in AppModel.query.filter_by(is_active=True)
+        .with_entities(AppModel.id)
+        .all()
+    }
+    groups = {}
+    for r in AppPricing.query.filter_by(is_active=True).all():
+        if r.model_id not in active_model_ids:
+            continue
+        if r.valid_from and r.valid_from > now:
+            continue
+        if r.valid_until and r.valid_until < now:
+            continue
+        key = (r.model_id, r.billing_unit, r.dimension_key, r.quality_key)
+        cur = groups.get(key)
+        if cur is None or r.version > cur.version:
+            groups[key] = r
+    return {r.id for r in groups.values()}
 
 
 @admin_bp.get("/admin/pricing")
 @require_admin
 def admin_list_pricing():
-    rows = AppPricing.query.order_by(
-        AppPricing.model_id, AppPricing.version.desc()
-    ).all()
+    in_use = _in_use_pricing_ids()
+    rows = AppPricing.query.all()
     models = {m.id: m.name for m in AppModel.query.all()}
-    return jsonify([_pricing_admin(r, models.get(r.model_id)) for r in rows])
+    out = [_pricing_admin(r, models.get(r.model_id), r.id in in_use) for r in rows]
+    # مثل نورا: در حال استفاده اول، بعد فعال، بعد جدیدترین.
+    out.sort(key=lambda x: (not x["is_in_use"], not x["is_active"], -x["id"]))
+    return jsonify(out)
 
 
 @admin_bp.post("/admin/pricing")
@@ -1167,9 +1448,14 @@ def admin_create_pricing():
         return jsonify({"error": "invalid numbers"}), 400
     if price <= 0 or unit_size < 1:
         return jsonify({"error": "price must be > 0 and unit_size >= 1"}), 400
+    if body.get("rounding_mode") not in (None, "up", "down", "nearest"):
+        return jsonify({"error": "rounding_mode must be up/down/nearest"}), 400
     last = (
         AppPricing.query.filter_by(
-            model_id=model.id, billing_unit=body["billing_unit"]
+            model_id=model.id,
+            billing_unit=body["billing_unit"],
+            dimension_key=body.get("dimension_key"),
+            quality_key=body.get("quality_key"),
         )
         .order_by(AppPricing.version.desc())
         .first()
@@ -1180,7 +1466,13 @@ def admin_create_pricing():
         unit_size=unit_size,
         unit_price_usd=price,
         version=(last.version + 1) if last else 1,
+        dimension_key=body.get("dimension_key"),
+        quality_key=body.get("quality_key"),
+        minimum_charge_irr=body.get("minimum_charge_irr"),
+        maximum_charge_irr=body.get("maximum_charge_irr"),
+        rounding_mode=body.get("rounding_mode") or "up",
         is_active=True,
+        created_by_admin_id=_current_admin_id(),
     )
     for field in ("valid_from", "valid_until"):
         if body.get(field):
@@ -1196,45 +1488,108 @@ def admin_create_pricing():
 @admin_bp.patch("/admin/pricing/<int:pricing_id>")
 @require_admin
 def admin_update_pricing(pricing_id):
-    """فقط فعال/غیرفعال قابل تغییر است؛ قیمت immutable است (مثل نورا)."""
+    """مثل نورا: قیمت/واحد/بعد/کیفیت immutable است؛ فقط فعال/غیرفعال،
+    سقف‌ها و بازه‌ی اعتبار قابل تغییر است."""
     r = AppPricing.query.get(pricing_id)
     if not r:
         return jsonify({"error": "pricing not found"}), 404
     body = request.json or {}
     if "is_active" in body:
         r.is_active = bool(body["is_active"])
+    for field in ("minimum_charge_irr", "maximum_charge_irr"):
+        if field in body:
+            setattr(r, field, body[field])
+    if body.get("rounding_mode") in ("up", "down", "nearest"):
+        r.rounding_mode = body["rounding_mode"]
+    for field in ("valid_from", "valid_until"):
+        if body.get(field):
+            try:
+                setattr(r, field, datetime.datetime.fromisoformat(body[field]))
+            except ValueError:
+                return jsonify({"error": f"invalid {field}"}), 400
     db.session.commit()
     model = AppModel.query.get(r.model_id)
-    return jsonify(_pricing_admin(r, model.name if model else None))
+    return jsonify(
+        _pricing_admin(r, model.name if model else None, r.id in _in_use_pricing_ids())
+    )
 
 
 # ---------------- admin: purchases (پرداخت‌های بازار) ----------------
 
 
+def _purchase_admin(r, mobile, pack_name, pack_coins):
+    tok = r.bazaar_purchase_token or ""
+    return {
+        "id": r.id,
+        "user_id": r.user_id,
+        "mobile": mobile,
+        "pack_name": pack_name,
+        "pack_coins": pack_coins,
+        "amount_irr": r.amount_irr,
+        "status": r.status,
+        # توکن کامل خرید هرگز در ادمین نمایش داده نمی‌شود.
+        "token_tail": ("…" + tok[-6:]) if len(tok) > 6 else tok,
+        "verified_at": r.verified_at.isoformat() if r.verified_at else None,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    }
+
+
 @admin_bp.get("/admin/purchases")
 @require_admin
 def admin_list_purchases():
-    rows = AppPurchase.query.order_by(AppPurchase.id.desc()).limit(200).all()
+    query = AppPurchase.query
+    status = request.args.get("status")
+    if status:
+        query = query.filter_by(status=status)
+    mobile = (request.args.get("mobile") or "").strip()
+    if mobile:
+        digits = "".join(c for c in mobile if c.isdigit())
+        if digits:
+            query = query.join(
+                AppUser, AppPurchase.user_id == AppUser.id
+            ).filter(AppUser.mobile.like(f"%{digits}%"))
+        else:
+            query = query.filter(False)
+    for arg, col in (("date_from", None), ("date_to", None)):
+        val = request.args.get(arg)
+        if val:
+            try:
+                dt = datetime.datetime.strptime(val, "%Y-%m-%d")
+            except ValueError:
+                continue
+            if arg == "date_from":
+                query = query.filter(AppPurchase.created_at >= dt)
+            else:
+                query = query.filter(
+                    AppPurchase.created_at < dt + datetime.timedelta(days=1)
+                )
+    query = query.order_by(AppPurchase.id.desc())
+    rows, meta = _paginate(query)
     users = {u.id: u.mobile for u in AppUser.query.all()}
-    packs = {p.id: p.name for p in AppCoinPack.query.all()}
+    packs = {p.id: (p.name, p.coins) for p in AppCoinPack.query.all()}
     out = []
     for r in rows:
-        tok = r.bazaar_purchase_token or ""
-        out.append(
-            {
-                "id": r.id,
-                "user_id": r.user_id,
-                "mobile": users.get(r.user_id),
-                "pack_name": packs.get(r.pack_id),
-                "amount_irr": r.amount_irr,
-                "status": r.status,
-                # توکن کامل خرید هرگز در ادمین نمایش داده نمی‌شود.
-                "token_tail": ("…" + tok[-6:]) if len(tok) > 6 else tok,
-                "verified_at": r.verified_at.isoformat() if r.verified_at else None,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-            }
+        name, coins = packs.get(r.pack_id, (None, None))
+        out.append(_purchase_admin(r, users.get(r.user_id), name, coins))
+    return jsonify({"items": out, **meta})
+
+
+@admin_bp.get("/admin/purchases/<int:purchase_id>")
+@require_admin
+def admin_get_purchase(purchase_id):
+    r = AppPurchase.query.get(purchase_id)
+    if not r:
+        return jsonify({"error": "purchase not found"}), 404
+    user = AppUser.query.get(r.user_id)
+    pack = AppCoinPack.query.get(r.pack_id)
+    return jsonify(
+        _purchase_admin(
+            r,
+            user.mobile if user else None,
+            pack.name if pack else None,
+            pack.coins if pack else None,
         )
-    return jsonify(out)
+    )
 
 
 # ---------------- admin: models (ساخت مدل جدید) ----------------
@@ -1245,18 +1600,35 @@ def admin_list_purchases():
 @require_admin
 def admin_create_model():
     body = request.json or {}
-    for field in ("name", "provider", "capability"):
+    for field in ("name", "capability"):
         if not body.get(field):
             return jsonify({"error": f"{field} required"}), 400
-    if body.get("kind") not in (None, "image", "voice"):
-        return jsonify({"error": "kind must be image or voice"}), 400
+    if body["capability"] not in ("generate_image", "edit_image", "image"):
+        return jsonify({"error": "app models are image-only"}), 400
+    if body.get("kind") not in (None, "image"):
+        return jsonify({"error": "app models are image-only"}), 400
+    slug = (body.get("slug") or "").strip() or _slugify(body["name"])
+    if AppModel.query.filter_by(slug=slug).first():
+        return jsonify({"error": "slug exists"}), 409
     m = AppModel(
-        kind=body.get("kind", "image"),
+        kind="image",
         name=body["name"],
-        provider=body["provider"],
+        slug=slug,
+        provider=body.get("provider", ""),
+        provider_type=body.get("provider_type", "openai_compat"),
+        provider_model_name=body.get("provider_model_name") or body["name"],
         base_url=body.get("base_url"),
-        config_json={"api_key": body["api_key"]} if body.get("api_key") else None,
+        config_json=_store_provider_creds(
+            None, body.get("base_url"), body.get("api_key")
+        ),
         capability=body["capability"],
+        pricing_type=body.get("pricing_type", "image_count"),
+        tokenizer_encoding=body.get("tokenizer_encoding"),
+        description=body.get("description"),
+        default_max_output_tokens=body.get("default_max_output_tokens"),
+        max_prompt_chars=body.get("max_prompt_chars"),
+        max_history_messages=body.get("max_history_messages"),
+        max_history_tokens=body.get("max_history_tokens"),
         is_active=bool(body.get("is_active", True)),
     )
     db.session.add(m)
@@ -1270,10 +1642,17 @@ def admin_create_model():
 @admin_bp.get("/admin/gallery")
 @require_admin
 def admin_gallery_all():
-    rows = AppGallery.query.order_by(AppGallery.id.desc()).limit(200).all()
+    query = AppGallery.query
+    status = request.args.get("status")
+    if status:
+        query = query.filter_by(status=status)
+    query = query.order_by(AppGallery.id.desc())
+    rows, meta = _paginate(query)
     users = {u.id: u.mobile for u in AppUser.query.all()}
-    return jsonify(
-        [
+    admins = {a.id: a.username for a in AppAdminUser.query.all()}
+    out = []
+    for r in rows:
+        out.append(
             {
                 "id": r.id,
                 "user_id": r.user_id,
@@ -1282,11 +1661,13 @@ def admin_gallery_all():
                 "image_url": r.image_url,
                 "status": r.status,
                 "published_in_app": bool(r.published_in_app),
+                "reviewed_by": admins.get(r.reviewed_by_admin_id),
+                "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
+                "rejection_reason": r.rejection_reason,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
-            for r in rows
-        ]
-    )
+        )
+    return jsonify({"items": out, **meta})
 
 
 # ---------------- admin: world sample upload ----------------

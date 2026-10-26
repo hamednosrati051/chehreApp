@@ -34,10 +34,22 @@ class AppModel(db.Model):
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     kind = db.Column(db.Enum("image", "voice", name="model_kind"), nullable=False)
     name = db.Column(db.String(100), nullable=False)
+    # مثل نورا: slug یکتاست (خودکار از نام ساخته می‌شود اگر خالی باشد).
+    # ستون name نقش display_name نورا را دارد؛ provider نقش provider_key.
+    slug = db.Column(db.String(100), unique=True)
     provider = db.Column(db.String(50), nullable=False)
+    provider_type = db.Column(db.String(32), default="openai_compat", nullable=False)
+    provider_model_name = db.Column(db.String(128))
     base_url = db.Column(db.String(255))
     config_json = db.Column(db.JSON)
     capability = db.Column(db.String(50), nullable=False)
+    pricing_type = db.Column(db.String(32), default="image_count", nullable=False)
+    tokenizer_encoding = db.Column(db.String(64))
+    description = db.Column(db.Text)
+    default_max_output_tokens = db.Column(db.Integer)
+    max_prompt_chars = db.Column(db.Integer)
+    max_history_messages = db.Column(db.Integer)
+    max_history_tokens = db.Column(db.Integer)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
@@ -52,9 +64,16 @@ class AppPricing(db.Model):
     unit_size = db.Column(db.Integer, default=1, nullable=False)
     unit_price_usd = db.Column(db.Numeric(10, 6), nullable=False)
     version = db.Column(db.Integer, default=1, nullable=False)
+    # مثل نورا: تعرفه‌ی وابسته به بعد/کیفیت + سقف شارژ + حالت گردکردن.
+    dimension_key = db.Column(db.String(64))
+    quality_key = db.Column(db.String(64))
+    minimum_charge_irr = db.Column(db.BigInteger)
+    maximum_charge_irr = db.Column(db.BigInteger)
+    rounding_mode = db.Column(db.String(16), default="up", nullable=False)
     valid_from = db.Column(db.DateTime)
     valid_until = db.Column(db.DateTime)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_by_admin_id = db.Column(db.BigInteger)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
 
@@ -204,6 +223,10 @@ class AppGallery(db.Model):
         nullable=False,
     )
     published_in_app = db.Column(db.Boolean, default=False, nullable=False)
+    # مثل نورا: چه کسی، کی، و با چه دلیلی رد شد (دلیل فقط در ادمین است).
+    reviewed_by_admin_id = db.Column(db.BigInteger)
+    reviewed_at = db.Column(db.DateTime)
+    rejection_reason = db.Column(db.Text)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
 

@@ -32,6 +32,26 @@ def credit_coins(user, amount, reason="purchase", ref_type=None, ref_id=None):
     db.session.commit()
 
 
+def adjust_coins(user, delta, reason="admin", ref_type=None, ref_id=None):
+    """تعدیل دستی ادمین (مثل wallet-adjustment نورا): مثبت یا منفی.
+
+    منفی نباید موجودی را زیر صفر ببرد.
+    """
+    if delta == 0:
+        return get_balance(user)
+    row = AppCoinBalance.query.get(user.id)
+    balance = row.balance if row else 0
+    if balance + delta < 0:
+        raise ValueError("insufficient balance")
+    if row is None:
+        row = AppCoinBalance(user_id=user.id, balance=0)
+    row.balance += delta
+    db.session.add(row)
+    _ledger(user.id, delta, reason, ref_type, ref_id)
+    db.session.commit()
+    return row.balance
+
+
 def can_afford(user, kind, cost):
     """پیش‌بررسی موقع ثبت job: هدیه هست یا سکه کافی است؟"""
     if cost <= 0:
