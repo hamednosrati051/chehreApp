@@ -1,0 +1,11 @@
+# Build outputs, fetched deps, logs, caches, secrets — never pushed.
+android/local-repo/
+android/build/
+android/app/build/
+android/.gradle/
+.gradle/
+__pycache__/
+*.pyc
+*.log
+*.apk
+.env*
