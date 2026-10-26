@@ -43,7 +43,7 @@ admin_bp = Blueprint("admin", __name__)
 OTP_TTL_MINUTES = 2
 OTP_MAX_PER_HOUR = 5
 TOKEN_DAYS = 30
-DEFAULT_IMAGE_COINS = 5
+DEFAULT_IMAGE_COINS = 8
 
 
 def _default_image_coins():
@@ -368,6 +368,7 @@ def coin_packs():
                 "price_toman": p.price_toman,
                 "bazaar_sku": p.bazaar_sku,
                 "badge": p.badge,
+                "pack_type": p.pack_type,
                 "sort_order": p.sort_order,
             }
             for p in packs
@@ -848,6 +849,7 @@ def _pack_admin(p):
         "price_toman": p.price_toman,
         "bazaar_sku": p.bazaar_sku,
         "badge": p.badge,
+        "pack_type": p.pack_type,
         "sort_order": p.sort_order,
         "is_active": bool(p.is_active),
     }
@@ -875,6 +877,7 @@ def admin_create_pack():
         price_toman=body["price_toman"],
         bazaar_sku=body["bazaar_sku"],
         badge=body.get("badge"),
+        pack_type=body.get("pack_type"),
         sort_order=body.get("sort_order", 0),
         is_active=bool(body.get("is_active", True)),
     )
@@ -894,7 +897,7 @@ def admin_update_pack(pack_id):
         clash = AppCoinPack.query.filter_by(bazaar_sku=body["bazaar_sku"]).first()
         if clash and clash.id != pack_id:
             return jsonify({"error": "sku exists"}), 409
-    for field in ("name", "coins", "price_toman", "bazaar_sku", "badge", "sort_order"):
+    for field in ("name", "coins", "price_toman", "bazaar_sku", "badge", "pack_type", "sort_order"):
         if field in body:
             setattr(p, field, body[field])
     if "is_active" in body:
@@ -1387,155 +1390,6 @@ def admin_delete_admin_user(admin_user_id):
     db.session.delete(u)
     db.session.commit()
     return jsonify({"ok": True})
-
-
-# ---------------- admin: pricing (تعرفه؛ قیمت immutable مثل نورا) ----------------
-
-
-def _pricing_admin(r, model_name, is_in_use=False):
-    return {
-        "id": r.id,
-        "model_id": r.model_id,
-        "model_name": model_name,
-        "billing_unit": r.billing_unit,
-        "unit_size": r.unit_size,
-        "unit_price_usd": float(r.unit_price_usd),
-        "version": r.version,
-        "dimension_key": r.dimension_key,
-        "quality_key": r.quality_key,
-        "minimum_charge_irr": r.minimum_charge_irr,
-        "maximum_charge_irr": r.maximum_charge_irr,
-        "rounding_mode": r.rounding_mode,
-        "valid_from": r.valid_from.isoformat() if r.valid_from else None,
-        "valid_until": r.valid_until.isoformat() if r.valid_until else None,
-        "is_active": bool(r.is_active),
-        "is_in_use": is_in_use,
-        "created_by_admin_id": r.created_by_admin_id,
-        "created_at": r.created_at.isoformat() if r.created_at else None,
-    }
-
-
-def _in_use_pricing_ids():
-    """IDs of the rules billing would currently select (Nourai's rule).
-
-    Per (model, billing unit, dimension, quality): the active rule in its
-    validity window with the highest version, restricted to active models.
-    The app bills in coins, so this badge marks the rule that WOULD apply.
-    """
-    now = datetime.datetime.utcnow()
-    active_model_ids = {
-        row[0]
-        for row in AppModel.query.filter_by(is_active=True)
-        .with_entities(AppModel.id)
-        .all()
-    }
-    groups = {}
-    for r in AppPricing.query.filter_by(is_active=True).all():
-        if r.model_id not in active_model_ids:
-            continue
-        if r.valid_from and r.valid_from > now:
-            continue
-        if r.valid_until and r.valid_until < now:
-            continue
-        key = (r.model_id, r.billing_unit, r.dimension_key, r.quality_key)
-        cur = groups.get(key)
-        if cur is None or r.version > cur.version:
-            groups[key] = r
-    return {r.id for r in groups.values()}
-
-
-@admin_bp.get("/admin/pricing")
-@require_admin
-def admin_list_pricing():
-    in_use = _in_use_pricing_ids()
-    rows = AppPricing.query.all()
-    models = {m.id: m.name for m in AppModel.query.all()}
-    out = [_pricing_admin(r, models.get(r.model_id), r.id in in_use) for r in rows]
-    # مثل نورا: در حال استفاده اول، بعد فعال، بعد جدیدترین.
-    out.sort(key=lambda x: (not x["is_in_use"], not x["is_active"], -x["id"]))
-    return jsonify(out)
-
-
-@admin_bp.post("/admin/pricing")
-@require_admin
-def admin_create_pricing():
-    body = request.json or {}
-    model = AppModel.query.get(body.get("model_id"))
-    if not model:
-        return jsonify({"error": "model not found"}), 400
-    if not body.get("billing_unit") or body.get("unit_price_usd") is None:
-        return jsonify({"error": "billing_unit and unit_price_usd required"}), 400
-    try:
-        price = float(body["unit_price_usd"])
-        unit_size = int(body.get("unit_size", 1))
-    except (TypeError, ValueError):
-        return jsonify({"error": "invalid numbers"}), 400
-    if price <= 0 or unit_size < 1:
-        return jsonify({"error": "price must be > 0 and unit_size >= 1"}), 400
-    if body.get("rounding_mode") not in (None, "up", "down", "nearest"):
-        return jsonify({"error": "rounding_mode must be up/down/nearest"}), 400
-    last = (
-        AppPricing.query.filter_by(
-            model_id=model.id,
-            billing_unit=body["billing_unit"],
-            dimension_key=body.get("dimension_key"),
-            quality_key=body.get("quality_key"),
-        )
-        .order_by(AppPricing.version.desc())
-        .first()
-    )
-    r = AppPricing(
-        model_id=model.id,
-        billing_unit=body["billing_unit"],
-        unit_size=unit_size,
-        unit_price_usd=price,
-        version=(last.version + 1) if last else 1,
-        dimension_key=body.get("dimension_key"),
-        quality_key=body.get("quality_key"),
-        minimum_charge_irr=body.get("minimum_charge_irr"),
-        maximum_charge_irr=body.get("maximum_charge_irr"),
-        rounding_mode=body.get("rounding_mode") or "up",
-        is_active=True,
-        created_by_admin_id=_current_admin_id(),
-    )
-    for field in ("valid_from", "valid_until"):
-        if body.get(field):
-            try:
-                setattr(r, field, datetime.datetime.fromisoformat(body[field]))
-            except ValueError:
-                return jsonify({"error": f"invalid {field}"}), 400
-    db.session.add(r)
-    db.session.commit()
-    return jsonify(_pricing_admin(r, model.name)), 201
-
-
-@admin_bp.patch("/admin/pricing/<int:pricing_id>")
-@require_admin
-def admin_update_pricing(pricing_id):
-    """مثل نورا: قیمت/واحد/بعد/کیفیت immutable است؛ فقط فعال/غیرفعال،
-    سقف‌ها و بازه‌ی اعتبار قابل تغییر است."""
-    r = AppPricing.query.get(pricing_id)
-    if not r:
-        return jsonify({"error": "pricing not found"}), 404
-    body = request.json or {}
-    if "is_active" in body:
-        r.is_active = bool(body["is_active"])
-    for field in ("minimum_charge_irr", "maximum_charge_irr"):
-        if field in body:
-            setattr(r, field, body[field])
-    if body.get("rounding_mode") in ("up", "down", "nearest"):
-        r.rounding_mode = body["rounding_mode"]
-    for field in ("valid_from", "valid_until"):
-        if body.get(field):
-            try:
-                setattr(r, field, datetime.datetime.fromisoformat(body[field]))
-            except ValueError:
-                return jsonify({"error": f"invalid {field}"}), 400
-    db.session.commit()
-    model = AppModel.query.get(r.model_id)
-    return jsonify(
-        _pricing_admin(r, model.name if model else None, r.id in _in_use_pricing_ids())
-    )
 
 
 # ---------------- admin: purchases (پرداخت‌های بازار) ----------------

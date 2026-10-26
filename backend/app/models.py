@@ -163,6 +163,7 @@ class AppCoinPack(db.Model):
     price_toman = db.Column(db.Integer, nullable=False)
     bazaar_sku = db.Column(db.String(100), unique=True, nullable=False)
     badge = db.Column(db.String(50))
+    pack_type = db.Column(db.String(50))
     sort_order = db.Column(db.Integer, default=0, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 

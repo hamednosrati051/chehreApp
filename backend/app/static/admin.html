@@ -27,6 +27,7 @@
   form.grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;}
   form.grid .full{grid-column:1 / -1;}
   div[id$="-list"]{overflow-x:auto;}
+  #pu-detail, #u-detail{overflow-x:auto;}
   table{width:100%; border-collapse:collapse; font-size:14px; min-width:520px;}
   th, td{border-bottom:1px solid #334155; padding:8px; text-align:right; vertical-align:top;}
   th{color:#93c5fd;}
@@ -44,7 +45,8 @@
     form.grid{grid-template-columns:1fr;}
     form.grid .full{grid-column:auto;}
     input, select, textarea{font-size:16px; width:100%; box-sizing:border-box;}
-    label{display:flex; align-items:center; gap:8px;}
+    input[type=file]{max-width:100%;}
+    label{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
     label input{width:auto;}
     button{padding:10px 18px;}
     section{padding:12px;}
@@ -77,7 +79,6 @@
     <button data-tab="cats" onclick="showTab('cats')">دسته‌ها</button>
     <button data-tab="packs" onclick="showTab('packs')">پک‌ها</button>
     <button data-tab="models" onclick="showTab('models')">مدل‌ها</button>
-    <button data-tab="pricing" onclick="showTab('pricing')">تعرفه‌ها</button>
     <button data-tab="purchases" onclick="showTab('purchases')">پرداخت‌ها</button>
     <button data-tab="gallery" onclick="showTab('gallery')">گالری در انتظار</button>
     <button data-tab="ghist" onclick="showTab('ghist')">تاریخچه گالری</button>
@@ -97,7 +98,7 @@
       <input id="w-img" placeholder="لینک عکس نمونه" class="full">
       <label class="full">آپلود عکس نمونه (به‌جای لینک): <input id="w-file" type="file" accept=".jpg,.jpeg,.png,.webp"></label>
       <textarea id="w-prompt" placeholder="پرامپت مخفی (انگلیسی، برای مدل تصویر)" class="full" required></textarea>
-      <input id="w-price" type="number" value="10" placeholder="قیمت (سکه)">
+      <input id="w-price" type="number" value="8" placeholder="قیمت (سکه)">
       <label><input id="w-feat" type="checkbox"> پیشنهادی</label>
       <label><input id="w-act" type="checkbox" checked> فعال</label>
       <span><button>ذخیره دنیا</button> <button type="button" class="gold" onclick="resetWorldForm()">فرم جدید</button></span>
@@ -125,6 +126,7 @@
       <input id="p-price" type="number" placeholder="قیمت (تومان)" required>
       <input id="p-sku" placeholder="SKU بازار (مثلا pack_starter)" required>
       <input id="p-badge" placeholder="بج (مثلا محبوب‌ترین)">
+      <input id="p-type" placeholder="نوع پک (مثلا اقتصادی)">
       <input id="p-sort" type="number" value="0" placeholder="ترتیب">
       <span><button>ذخیره پک</button> <button type="button" class="gold" onclick="resetPackForm()">فرم جدید</button></span>
     </form>
@@ -156,27 +158,6 @@
       <span><button>ذخیره مدل</button> <button type="button" class="gold" onclick="resetModelForm()">فرم جدید</button></span>
     </form>
     <div id="m-list"></div>
-  </section>
-
-  <section id="pricing">
-    <h2>تعرفه‌ها</h2>
-    <p class="muted">قیمت immutable است؛ تغییر قیمت یعنی نسخه‌ی جدید (نسخه به‌صورت خودکار یکی بیشتر از قبلی می‌شود). فقط فعال/غیرفعال قابل تغییر است.</p>
-    <form class="grid" onsubmit="savePricing(event)">
-      <select id="pr-model"></select>
-      <input id="pr-unit" placeholder="واحد (مثلا image_count)" required>
-      <input id="pr-size" type="number" value="1" placeholder="اندازه واحد" required>
-      <input id="pr-price" type="number" step="0.000001" placeholder="قیمت واحد (دلار)" required>
-      <input id="pr-dim" placeholder="dimension_key (مثلا 1024x1024، خالی = همه)">
-      <input id="pr-quality" placeholder="quality_key (مثلا medium، خالی = همه)">
-      <input id="pr-min" type="number" placeholder="حداقل شارژ (ریال)">
-      <input id="pr-max" type="number" placeholder="حداکثر شارژ (ریال)">
-      <select id="pr-round"><option value="up">up</option><option value="down">down</option><option value="nearest">nearest</option></select>
-      <label>از تاریخ: <input id="pr-from" type="datetime-local"></label>
-      <label>تا تاریخ: <input id="pr-until" type="datetime-local"></label>
-      <button>ثبت نسخه‌ی جدید</button>
-    </form>
-    <input id="pr-search" class="search" placeholder="جستجو در تعرفه‌ها…">
-    <div id="pr-list"></div>
   </section>
 
   <section id="purchases">
@@ -237,7 +218,7 @@
     <h2>تنظیمات</h2>
     <form class="grid" onsubmit="saveSetting(event)">
       <input id="s-key" placeholder="کلید (مثلا image_coin_price)" required>
-      <input id="s-val" placeholder="مقدار (مثلا 10)" required>
+      <input id="s-val" placeholder="مقدار (مثلا 8)" required>
       <button>ذخیره تنظیم</button>
     </form>
     <div id="s-list"></div>
@@ -296,7 +277,7 @@ function applyFilter(listEl){ const q = queries[listEl] || '';
 function showTab(tab){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === tab));
-  ({worlds: loadWorlds, cats: loadCats, packs: loadPacks, models: loadModels, pricing: loadPricing,
+  ({worlds: loadWorlds, cats: loadCats, packs: loadPacks, models: loadModels,
     purchases: loadPurchases, gallery: loadGallery, ghist: loadGhist, users: loadUsers, admins: loadAdmins,
     settings: loadSettings})[tab]?.().catch(e => setMsg(e.message));
 }
@@ -314,7 +295,7 @@ async function loadWorlds(){
   applyFilter('w-list');
 }
 function editWorld(w){ editingWorld = w.id; $('w-name').value = w.name; $('w-slug').value = w.slug; $('w-cat').value = w.category_id || ''; $('w-model').value = w.model_id; $('w-img').value = w.sample_image_url || ''; $('w-prompt').value = w.hidden_prompt || ''; $('w-price').value = w.coin_price; $('w-feat').checked = w.is_featured; $('w-act').checked = w.is_active; window.scrollTo(0, 0); }
-function resetWorldForm(){ editingWorld = null; ['w-name','w-slug','w-img','w-prompt'].forEach(i => $(i).value = ''); $('w-file').value = ''; $('w-cat').value = ''; if($('w-model').options.length) $('w-model').selectedIndex = 0; $('w-price').value = 10; $('w-feat').checked = false; $('w-act').checked = true; }
+function resetWorldForm(){ editingWorld = null; ['w-name','w-slug','w-img','w-prompt'].forEach(i => $(i).value = ''); $('w-file').value = ''; $('w-cat').value = ''; if($('w-model').options.length) $('w-model').selectedIndex = 0; $('w-price').value = 8; $('w-feat').checked = false; $('w-act').checked = true; }
 async function saveWorld(e){ e.preventDefault(); const body = {name: $('w-name').value.trim(), slug: $('w-slug').value.trim(), category_id: $('w-cat').value ? +$('w-cat').value : null, sample_image_url: $('w-img').value.trim() || null, hidden_prompt: $('w-prompt').value.trim(), model_id: +$('w-model').value, coin_price: +$('w-price').value, is_featured: $('w-feat').checked, is_active: $('w-act').checked};
   try { const saved = editingWorld ? await api('/admin/worlds/' + editingWorld, 'PATCH', body) : await api('/admin/worlds', 'POST', body);
     const file = $('w-file').files[0];
@@ -332,12 +313,12 @@ async function saveCat(e){ e.preventDefault(); const body = {name: $('c-name').v
 async function delCat(id){ if(!confirm('دسته حذف شود؟ (اگر دنیا داشته باشد رد می‌شود)')) return; try { await api('/admin/categories/' + id, 'DELETE'); loadCats(); } catch(err){ setMsg(err.message); } }
 
 async function loadPacks(){ const ps = await api('/admin/packs');
-  $('p-list').innerHTML = ps.length ? `<table><tr><th>نام</th><th>سکه</th><th>تومان</th><th>SKU</th><th>بج</th><th>فعال</th><th></th></tr>` +
-    ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>';
+  $('p-list').innerHTML = ps.length ? `<table><tr><th>نام</th><th>سکه</th><th>تومان</th><th>SKU</th><th>بج</th><th>نوع</th><th>فعال</th><th></th></tr>` +
+    ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${esc(p.pack_type)}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>';
   applyFilter('p-list'); }
-function editPack(p){ editingPack = p.id; $('p-name').value = p.name; $('p-coins').value = p.coins; $('p-price').value = p.price_toman; $('p-sku').value = p.bazaar_sku; $('p-badge').value = p.badge || ''; $('p-sort').value = p.sort_order; }
-function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-sku','p-badge'].forEach(i => $(i).value = ''); $('p-sort').value = 0; }
-async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').value.trim(), coins: +$('p-coins').value, price_toman: +$('p-price').value, bazaar_sku: $('p-sku').value.trim(), badge: $('p-badge').value.trim() || null, sort_order: +$('p-sort').value};
+function editPack(p){ editingPack = p.id; $('p-name').value = p.name; $('p-coins').value = p.coins; $('p-price').value = p.price_toman; $('p-sku').value = p.bazaar_sku; $('p-badge').value = p.badge || ''; $('p-type').value = p.pack_type || ''; $('p-sort').value = p.sort_order; }
+function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-sku','p-badge','p-type'].forEach(i => $(i).value = ''); $('p-sort').value = 0; }
+async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').value.trim(), coins: +$('p-coins').value, price_toman: +$('p-price').value, bazaar_sku: $('p-sku').value.trim(), badge: $('p-badge').value.trim() || null, pack_type: $('p-type').value.trim() || null, sort_order: +$('p-sort').value};
   try { editingPack ? await api('/admin/packs/' + editingPack, 'PATCH', body) : await api('/admin/packs', 'POST', body); setMsg('پک ذخیره شد.', true); resetPackForm(); loadPacks(); } catch(err){ setMsg(err.message); } }
 async function delPack(id){ if(!confirm('پک حذف شود؟')) return; try { await api('/admin/packs/' + id, 'DELETE'); loadPacks(); } catch(err){ setMsg(err.message); } }
 
@@ -353,15 +334,6 @@ async function saveModel(e){ e.preventDefault(); const body = {name: $('m-name')
   try { editingModel ? await api('/admin/models/' + editingModel, 'PATCH', body) : await api('/admin/models', 'POST', body);
     setMsg('مدل ذخیره شد.', true); resetModelForm(); loadModels(); } catch(err){ setMsg(err.message); } }
 
-async function loadPricing(){ models = await api('/admin/models');
-  $('pr-model').innerHTML = models.map(m => `<option value="${m.id}">${esc(m.name)} (${esc(m.capability)})</option>`).join('');
-  const rows = await api('/admin/pricing');
-  $('pr-list').innerHTML = rows.length ? `<table><tr><th>مدل</th><th>واحد</th><th>اندازه</th><th>قیمت (دلار)</th><th>نسخه</th><th>بعد/کیفیت</th><th>سقف (ریال)</th><th>گردکردن</th><th>وضعیت</th><th></th></tr>` +
-    rows.map(r => `<tr><td>${esc(r.model_name)}</td><td>${esc(r.billing_unit)}</td><td>${r.unit_size}</td><td>${r.unit_price_usd}</td><td>${r.version}</td><td>${esc(r.dimension_key)} / ${esc(r.quality_key)}</td><td>${r.minimum_charge_irr ?? '—'} / ${r.maximum_charge_irr ?? '—'}</td><td>${esc(r.rounding_mode)}</td><td>${r.is_in_use ? '⭐ در حال استفاده' : (r.is_active ? '✓ فعال' : '— غیرفعال')}</td><td><button class="small" onclick="pricingToggle(${r.id}, ${!r.is_active})">${r.is_active ? 'غیرفعال' : 'فعال'}</button></td></tr>`).join('') + '</table>' : '<p class="muted">تعرفه‌ای نیست.</p>';
-  applyFilter('pr-list'); }
-async function savePricing(e){ e.preventDefault(); const body = {model_id: +$('pr-model').value, billing_unit: $('pr-unit').value.trim(), unit_size: +$('pr-size').value, unit_price_usd: +$('pr-price').value, dimension_key: $('pr-dim').value.trim() || null, quality_key: $('pr-quality').value.trim() || null, minimum_charge_irr: _numOrNull('pr-min'), maximum_charge_irr: _numOrNull('pr-max'), rounding_mode: $('pr-round').value, valid_from: $('pr-from').value || null, valid_until: $('pr-until').value || null};
-  try { await api('/admin/pricing', 'POST', body); setMsg('نسخه‌ی جدید تعرفه ثبت شد.', true); e.target.reset(); loadPricing(); } catch(err){ setMsg(err.message); } }
-async function pricingToggle(id, on){ try { await api('/admin/pricing/' + id, 'PATCH', {is_active: on}); loadPricing(); } catch(err){ setMsg(err.message); } }
 
 let puPageNo = 1;
 function puPage(n){ if(n < 1) return; puPageNo = n; loadPurchases(); }
@@ -394,7 +366,7 @@ async function galleryDelete(id){ if(!confirm('ردیف گالری حذف شود
 
 let uPageNo = 1;
 function pagerHTML(prefix, meta){ const pages = Math.max(1, Math.ceil(meta.total / meta.page_size));
-  return `<div style="display:flex;gap:8px;align-items:center;margin-top:10px;"><button class="small" onclick="${prefix}Page(${meta.page - 1})" ${meta.page <= 1 ? 'disabled' : ''}>قبلی</button><span class="muted">صفحه ${meta.page} از ${pages} (مجموع ${meta.total})</span><button class="small" onclick="${prefix}Page(${meta.page + 1})" ${meta.page >= pages ? 'disabled' : ''}>بعدی</button></div>`; }
+  return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;"><button class="small" onclick="${prefix}Page(${meta.page - 1})" ${meta.page <= 1 ? 'disabled' : ''}>قبلی</button><span class="muted">صفحه ${meta.page} از ${pages} (مجموع ${meta.total})</span><button class="small" onclick="${prefix}Page(${meta.page + 1})" ${meta.page >= pages ? 'disabled' : ''}>بعدی</button></div>`; }
 function uPage(n){ if(n < 1) return; uPageNo = n; loadUsers(); }
 function applyUserFilter(e){ e.preventDefault(); uPageNo = 1; loadUsers(); }
 async function loadUsers(){ const q = new URLSearchParams({search: $('u-search').value.trim(), is_active: $('u-status').value, page: uPageNo});
@@ -426,7 +398,7 @@ async function saveSetting(e){ e.preventDefault(); try { await api('/admin/setti
 
 async function grantCoins(e){ e.preventDefault(); try { const r = await api('/admin/test/grant-coins', 'POST', {user_id: +$('g-user').value, coins: +$('g-coins').value}); $('grant-res').innerHTML = `<p>موجودی جدید کاربر ${r.user_id}: <b>${r.balance}</b> سکه</p>`; setMsg('شارژ تستی انجام شد.', true); } catch(err){ setMsg(err.message); } }
 
-bindSearch('w-search', 'w-list'); bindSearch('p-search', 'p-list'); bindSearch('pr-search', 'pr-list');
+bindSearch('w-search', 'w-list'); bindSearch('p-search', 'p-list');
 bindSearch('a-search', 'a-list');
 if(token()) showMain(); else showLogin();
 </script>
