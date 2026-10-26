@@ -1,0 +1,4 @@
+{
+  "text": "{\"error_format_version\":1,\"error\":{\"code\":\"video_not_available\",\"retryable\":false,\"detail\":\"Video generation isn't available in your country or region.\",\"next_steps\":\"Video generation is not available for this account in its country or region. This is a lasting restriction, not an outage: retrying will not help, and any scheduled or recurring task that asks for video will keep failing. Do not request video for this account again, whether by retrying, scheduling a retry, or using another tool. Tell the user plainly that video generation isn't available in their country or region, and offer to make an image instead when that fits.\",\"downstream_status\":403,\"attempt_id\":\"e1902283-8aa5-4740-9ea0-a5ada990c4b7\",\"origin_stage\":\"request_validation\",\"root_cause_known\":true,\"fallback_emitted\":true,\"source_error_code\":\"video_not_available\",\"failure_kind\":\"capability_unavailable\"}}",
+  "attachments": []
+}

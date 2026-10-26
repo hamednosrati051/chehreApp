@@ -24,6 +24,7 @@ private const val BASE_URL = "http://171.22.25.152:5001/api/v1/"
 
 data class OtpRequest(val mobile: String)
 data class OtpVerify(val mobile: String, val code: String)
+data class TestLoginRequest(val mobile: String)
 data class TokenResponse(val token: String)
 data class Category(val id: Long, val name: String, val slug: String)
 data class World(
@@ -92,6 +93,9 @@ interface ApiService {
 
     @POST("auth/otp/verify")
     suspend fun otpVerify(@Body b: OtpVerify): TokenResponse
+
+    @POST("auth/test/login")
+    suspend fun testLogin(@Body b: TestLoginRequest): TokenResponse
 
     @GET("categories")
     suspend fun categories(): List<Category>

@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
 /** تصاویر من: همه‌ی عکس‌های ساخته‌شده‌ی خود کاربر، مستقل از وضعیت گالری.
  *  هر عکس را می‌شود به صف تایید گالری خود اپ فرستاد. */
 @Composable
-fun MyMediaScreen() {
+fun MyMediaScreen(onCreate: () -> Unit) {
     var images by remember { mutableStateOf<List<GenerationStatus>>(emptyList()) }
     var submitted by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -46,8 +46,10 @@ fun MyMediaScreen() {
         }
     }
 
+    // دکمه‌ی ساخت عکس جدید، پایین صفحه (مثل طرح مرجع).
+    Column(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (images.isEmpty()) {
@@ -93,5 +95,12 @@ fun MyMediaScreen() {
             }
         }
         notice?.let { item { Text(it) } }
+    }
+    Button(
+        onClick = onCreate,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text("+ ساخت عکس جدید")
+    }
     }
 }

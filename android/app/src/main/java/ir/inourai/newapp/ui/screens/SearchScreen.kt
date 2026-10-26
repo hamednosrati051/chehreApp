@@ -1,14 +1,21 @@
 package ir.inourai.newapp.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,26 +26,35 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ir.inourai.newapp.data.Api
+import ir.inourai.newapp.data.Category
 import ir.inourai.newapp.data.World
 
+/** جستجو: فیلد متن + چیپ دسته‌ها + شبکه‌ی دنیا‌ها (مثل طرح مرجع). */
 @Composable
 fun SearchScreen(onWorld: (Long) -> Unit) {
     var query by remember { mutableStateOf("") }
     var worlds by remember { mutableStateOf<List<World>>(emptyList()) }
+    var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
+    var selected by remember { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(Unit) {
         try {
             worlds = Api.service.worlds()
         } catch (_: Exception) {
         }
+        try {
+            categories = Api.service.categories()
+        } catch (_: Exception) {
+        }
     }
 
-    val results = if (query.isBlank()) {
-        emptyList()
-    } else {
-        worlds.filter { it.name.contains(query) }
+    val shown = worlds.filter { w ->
+        (selected == null && w.is_featured || selected != null && w.category_id == selected) &&
+            (query.isBlank() || w.name.contains(query))
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -49,24 +65,51 @@ fun SearchScreen(onWorld: (Long) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 12.dp),
+        ) {
+            item {
+                SearchChip("پیشنهادی", selected == null) { selected = null }
+            }
+            items(categories) { c ->
+                SearchChip(c.name, selected == c.id) { selected = c.id }
+            }
+        }
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.padding(top = 12.dp),
         ) {
-            if (query.isBlank()) {
-                item(span = { GridItemSpan(2) }) {
-                    Text("نام دنیا را بنویس؛ مثلا قاجار یا انیمه.", color = Color.Gray)
-                }
-            } else if (results.isEmpty()) {
+            if (shown.isEmpty()) {
                 item(span = { GridItemSpan(2) }) {
                     Text("چیزی پیدا نشد.", color = Color.Gray)
                 }
             }
-            items(results) { w ->
+            items(shown) { w ->
                 WorldCard(w, { onWorld(w.id) })
             }
         }
+    }
+}
+
+@Composable
+private fun SearchChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary else Color(0xFFF1F3F5),
+                RoundedCornerShape(20.dp),
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Text(
+            label,
+            color = if (selected) Color.White else Color(0xFF334155),
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            fontSize = 14.sp,
+        )
     }
 }

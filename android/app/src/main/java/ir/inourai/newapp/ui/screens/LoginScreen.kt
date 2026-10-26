@@ -2,9 +2,12 @@ package ir.inourai.newapp.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +22,7 @@ import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.OtpRequest
 import ir.inourai.newapp.data.OtpVerify
 import ir.inourai.newapp.data.Session
+import ir.inourai.newapp.data.TestLoginRequest
 import kotlinx.coroutines.launch
 
 @Composable
@@ -39,20 +43,48 @@ fun LoginScreen(onDone: () -> Unit) {
             label = { Text("شماره موبایل") },
         )
         if (!sent) {
-            Button(
-                onClick = {
-                    scope.launch {
-                        try {
-                            val resp = Api.service.otpRequest(OtpRequest(mobile))
-                            if (resp.isSuccessful) sent = true
-                            else error = "ارسال کد ناموفق بود"
-                        } catch (e: Exception) {
-                            error = e.message
-                        }
-                    }
-                },
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("ارسال کد")
+                Button(
+                    onClick = {
+                        scope.launch {
+                            try {
+                                val resp = Api.service.otpRequest(OtpRequest(mobile))
+                                if (resp.isSuccessful) sent = true
+                                else error = "ارسال کد ناموفق بود"
+                            } catch (e: Exception) {
+                                error = e.message
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("ارسال کد")
+                }
+                // ورود تستی موقت (بدون پیامک) برای تست روی گوشی؛
+                // فقط وقتی حالت تست بک‌اند روشن است کار می‌کند.
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            if (mobile.isBlank()) {
+                                error = "شماره موبایل را بنویس"
+                                return@launch
+                            }
+                            try {
+                                val res = Api.service.testLogin(TestLoginRequest(mobile))
+                                Session.token = res.token
+                                onDone()
+                            } catch (e: Exception) {
+                                error = "ورود تستی ناموفق بود"
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("ورود تستی")
+                }
             }
         } else {
             OutlinedTextField(

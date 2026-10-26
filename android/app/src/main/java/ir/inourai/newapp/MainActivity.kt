@@ -15,6 +15,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +24,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -55,6 +58,9 @@ object Dest {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // رابط فارسی است؛ جهت را سراسری راست‌به‌چپ می‌کنیم تا نوار پایین و
+        // ردیف‌ها روی گوشی‌هایی با زبان سیستم چپ‌به‌راست هم برعکس نشوند.
+        window.decorView.layoutDirection = android.view.View.LAYOUT_DIRECTION_RTL
         Session.init(this)
         setContent { App() }
     }
@@ -89,6 +95,8 @@ fun App() {
         }
     }
 
+    // جهت راست‌به‌چپ برای کل ترکیب: خانه اول (راست) و پروفایل آخر (چپ).
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
     AppTheme {
         if (showSplash) {
             SplashScreen(onSkip = { showSplash = false })
@@ -136,6 +144,7 @@ fun App() {
                         onWorld = { worldId ->
                             nav.navigate("create_image/$worldId")
                         },
+                        onSettings = { nav.navigate(Dest.PROFILE) },
                     )
                 }
                 composable(Dest.SEARCH) {
@@ -145,7 +154,9 @@ fun App() {
                         },
                     )
                 }
-                composable(Dest.MY_MEDIA) { MyMediaScreen() }
+                composable(Dest.MY_MEDIA) {
+                    MyMediaScreen(onCreate = { nav.navigate(Dest.WORLDS) })
+                }
                 composable(Dest.PROFILE) {
                     ProfileScreen(onLogin = { nav.navigate(Dest.LOGIN) })
                 }
@@ -167,5 +178,6 @@ fun App() {
             }
         }
         }
+    }
     }
 }

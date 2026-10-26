@@ -179,6 +179,25 @@ def otp_verify():
     return jsonify({"token": _token_for(user)})
 
 
+@auth_bp.post("/auth/test/login")
+def test_login():
+    # ورود تستی موقت (بدون پیامک) برای تست روی گوشی؛ فقط وقتی
+    # APP_TEST_GRANTS_ENABLED=true است کار می‌کند (مثل تست سکه).
+    if not current_app.config.get("TEST_GRANTS_ENABLED", True):
+        return jsonify({"error": "test login disabled"}), 403
+    mobile = (request.json or {}).get("mobile", "").strip()
+    if not mobile:
+        return jsonify({"error": "mobile required"}), 400
+    user = AppUser.query.filter_by(mobile=mobile).first()
+    if user is None:
+        # هدیه‌ی ورود از defaultهای مدل می‌آید (مثل otp_verify).
+        user = AppUser(mobile=mobile)
+        db.session.add(user)
+    user.last_login_at = datetime.datetime.utcnow()
+    db.session.commit()
+    return jsonify({"token": _token_for(user)})
+
+
 # ---------------- content ----------------
 
 

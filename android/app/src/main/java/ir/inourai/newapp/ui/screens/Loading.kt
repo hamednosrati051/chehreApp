@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
@@ -66,53 +68,70 @@ fun GenerationLoading() {
     }
 }
 
-/** اسپلش اول اپ: آیکون برند + نام، با انیمیشن ورود؛ با ضربه رد می‌شود. */
+/** اسپلش اول اپ: تصویر متحرک تمام‌صفحه، بدون هیچ نوشته‌ای؛ با ضربه رد می‌شود.
+ *  (ساخت ویدیو برای این حساب در دسترس نیست، پس انیمیشن با همان تصویر برند
+ *  و جرقه‌های طلایی در خود کد ساخته شده.) */
 @Composable
 fun SplashScreen(onSkip: () -> Unit) {
-    var shown by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (shown) 1f else 0.85f,
-        animationSpec = tween(600),
-        label = "splashScale",
+    // زوم آرام روی تصویر در ۲ ثانیه‌ی اسپلش.
+    val zoom by animateFloatAsState(
+        targetValue = 1.12f,
+        animationSpec = tween(2000),
+        label = "splashZoom",
     )
-    val alpha by animateFloatAsState(
-        targetValue = if (shown) 1f else 0f,
-        animationSpec = tween(600),
-        label = "splashAlpha",
+    // چشمک جرقه‌های طلایی.
+    val sparkles = rememberInfiniteTransition(label = "sparkles")
+    val tw1 by sparkles.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "tw1",
     )
-    LaunchedEffect(Unit) { shown = true }
+    val tw2 by sparkles.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "tw2",
+    )
     Box(
         modifier = Modifier.fillMaxSize()
             .background(Color(0xFF0B3D91))
             .clickable { onSkip() },
-        contentAlignment = Alignment.Center,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale, alpha = alpha),
-        ) {
-            Image(
-                painter = painterResource(id = R.mipmap.ic_launcher),
-                contentDescription = null,
-                modifier = Modifier.size(140.dp).clip(RoundedCornerShape(32.dp)),
+        Image(
+            painter = painterResource(id = R.mipmap.ic_launcher),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize()
+                .graphicsLayer(scaleX = zoom, scaleY = zoom),
+            contentScale = ContentScale.Crop,
+        )
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val stars = listOf(
+                Triple(0.15f, 0.20f, 0),
+                Triple(0.85f, 0.15f, 1),
+                Triple(0.70f, 0.35f, 0),
+                Triple(0.25f, 0.55f, 1),
+                Triple(0.90f, 0.60f, 0),
+                Triple(0.10f, 0.75f, 1),
+                Triple(0.50f, 0.25f, 0),
+                Triple(0.40f, 0.85f, 1),
+                Triple(0.80f, 0.85f, 0),
+                Triple(0.30f, 0.40f, 1),
             )
-            Text(
-                "چهره‌ساز",
-                color = Color.White,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                "سلفی بده، یه چهره‌ی تازه بگیر",
-                color = Color(0xFFE8B84B),
-                fontSize = 16.sp,
-            )
-            Text(
-                "برای رد شدن ضربه بزن",
-                color = Color.White.copy(alpha = 0.6f),
-                fontSize = 13.sp,
-            )
+            for ((fx, fy, which) in stars) {
+                val alpha = if (which == 0) tw1 else tw2
+                drawCircle(
+                    color = Color(0xFFFFD97A).copy(alpha = alpha),
+                    radius = 8.dp.toPx(),
+                    center = Offset(size.width * fx, size.height * fy),
+                )
+            }
         }
     }
 }
