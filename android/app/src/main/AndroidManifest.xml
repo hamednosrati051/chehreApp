@@ -10,8 +10,11 @@
         <package android:name="com.farsitel.bazaar" />
     </queries>
 
+    <!-- TEST-ONLY: cleartext to the test backend IP. The release build MUST remove this (HTTPS + domain). -->
     <application
+        android:label="چهره‌ساز"
         android:allowBackup="true"
+        android:usesCleartextTraffic="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.App">
         <activity

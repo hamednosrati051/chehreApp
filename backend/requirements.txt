@@ -9,3 +9,4 @@ PyJWT>=2.8
 boto3>=1.34
 Werkzeug>=3.0
 cryptography>=42.0
+gunicorn>=21.0
