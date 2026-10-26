@@ -83,6 +83,8 @@ fun ProfileScreen(onLogin: () -> Unit) {
     var packs by remember { mutableStateOf<List<Pack>>(emptyList()) }
     var notice by remember { mutableStateOf<String?>(null) }
     var showPacks by remember { mutableStateOf(false) }
+    var showAccount by remember { mutableStateOf(false) }
+    var maskedMobile by remember { mutableStateOf<String?>(null) }
     var dialog by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val loggedIn = Session.token != null
@@ -179,8 +181,12 @@ fun ProfileScreen(onLogin: () -> Unit) {
                         )
                     }
                     Spacer(modifier = Modifier.height(12.dp))
+                    // مثل رقیب: با سکه، «معادل تولید N تصویر»؛ بدون سکه،
+                    // دعوت به اضافه‌کردن.
+                    val coins = balance?.coins ?: 0
                     Text(
-                        "برای ساخت تصویر جدید سکه اضافه کن.",
+                        if (coins >= 8) "معادل تولید ${coins / 8} تصویر"
+                        else "برای ساخت تصویر جدید سکه اضافه کن.",
                         color = Color.White,
                         fontSize = 14.sp,
                     )
@@ -220,39 +226,36 @@ fun ProfileScreen(onLogin: () -> Unit) {
                         icon = Icons.Filled.Person,
                         title = "حساب شما",
                         subtitle = "وارد شده‌اید",
-                        onClick = null,
+                        onClick = {
+                            showAccount = true
+                            scope.launch {
+                                try {
+                                    maskedMobile = Api.service.me().mobile_masked
+                                } catch (_: Exception) {
+                                }
+                            }
+                        },
                     )
                 }
             }
         }
         if (loggedIn) {
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = {
-                            Session.logout()
-                            onLogin()
-                        },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text("خروج")
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            scope.launch {
-                                try {
-                                    BazaarBilling.recoverPurchases(context)
-                                    refreshBalance()
-                                    notice = "بازیابی خریدها انجام شد"
-                                } catch (e: Exception) {
-                                    notice = e.message
-                                }
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            try {
+                                BazaarBilling.recoverPurchases(context)
+                                refreshBalance()
+                                notice = "بازیابی خریدها انجام شد"
+                            } catch (e: Exception) {
+                                notice = e.message
                             }
-                        },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text("بازیابی خریدها")
-                    }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("بازیابی خریدها")
                 }
             }
         }
@@ -305,6 +308,55 @@ fun ProfileScreen(onLogin: () -> Unit) {
         }
         notice?.let {
             item { Text(it) }
+        }
+    }
+
+    // شیت جزئیات حساب (مثل رقیب): موبایل ماسک‌شده، عضویت، سکه، خروج.
+    if (showAccount) {
+        ModalBottomSheet(
+            onDismissRequest = { showAccount = false },
+            sheetState = sheetState,
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("حساب کاربری", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("جزئیات حسابت", color = Color.Gray, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("شماره موبایل", color = Color.Gray)
+                    Text(maskedMobile ?: "—", fontWeight = FontWeight.Bold)
+                }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("عضویت", color = Color.Gray)
+                    Text("رایگان", fontWeight = FontWeight.Bold)
+                }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("سکه", color = Color.Gray)
+                    Text("${balance?.coins ?: 0}", fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = {
+                        showAccount = false
+                        Session.logout()
+                        onLogin()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("خروج")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
     }
 

@@ -225,3 +225,14 @@ CREATE TABLE app_admin_users (
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
+
+-- دنیاهای نشان‌شده با قلب (migration 005؛ ستون‌ها signed مثل بقیه‌ی جدول‌ها در DB واقعی).
+CREATE TABLE app_favorites (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  world_id BIGINT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_favorite_user_world (user_id, world_id),
+  FOREIGN KEY (user_id) REFERENCES app_users(id),
+  FOREIGN KEY (world_id) REFERENCES app_worlds(id)
+) ENGINE=InnoDB;

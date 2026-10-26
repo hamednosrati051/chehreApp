@@ -231,6 +231,28 @@ class AppGallery(db.Model):
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
 
+class AppFavorite(db.Model):
+    """دنیاهای نشان‌شده با قلب (علاقه‌مندی کاربر).
+
+    مثل رقیب: قلب بالای هر دنیا؛ تب «تصاویر من» یک سگمنت قلب دارد که
+    فقط دنیاهای نشان‌شده را نشان می‌دهد.
+    """
+
+    __tablename__ = "app_favorites"
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    user_id = db.Column(
+        db.BigInteger, db.ForeignKey("app_users.id"), nullable=False
+    )
+    world_id = db.Column(
+        db.BigInteger, db.ForeignKey("app_worlds.id"), nullable=False
+    )
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "world_id", name="uq_favorite_user_world"),
+    )
+
+
 class AppAdminUser(db.Model):
     """کاربر ادمین خود اپ (ورود یوزر/پسورد به ادمین وب).
 

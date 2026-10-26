@@ -31,6 +31,11 @@ class Config:
     S3_ACCESS_KEY = os.environ.get("APP_S3_ACCESS_KEY", "")
     S3_SECRET_KEY = os.environ.get("APP_S3_SECRET_KEY", "")
     S3_PUBLIC_BASE = os.environ.get("APP_S3_PUBLIC_BASE", "")
+    # پایه‌ی عمومی برای حالت دیسک-لوکال (وقتی S3 ست نیست)؛
+    # وقتی دامنه‌ی برند آمد، APP_PUBLIC_BASE همان دامنه می‌شود.
+    PUBLIC_BASE = os.environ.get(
+        "APP_PUBLIC_BASE", "http://171.22.25.152:5001"
+    )
 
     # کلید RSA عمومی خود اپ از پنل بازار خود اپ (برای تایید خرید).
     # فقط placeholder؛ مقدار واقعی را حامد در تنظیمات خود اپ می‌دهد.

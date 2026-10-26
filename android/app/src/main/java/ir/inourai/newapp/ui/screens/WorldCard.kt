@@ -7,10 +7,19 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -20,11 +29,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import ir.inourai.newapp.data.Favorites
+import ir.inourai.newapp.data.Session
 import ir.inourai.newapp.data.World
+import kotlinx.coroutines.launch
 
-/** کارت دنیا، هم‌شکل طرح مرجع: نام روی پایین عکس + نشان سکه روی عکس. */
+/** کارت دنیا، هم‌شکل طرح مرجع: نام روی پایین عکس + نشان سکه روی عکس
+ *  + قلب علاقه‌مندی (فقط وقتی لاگین است). */
 @Composable
 fun WorldCard(world: World, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val favIds by Favorites.ids
+    val scope = rememberCoroutineScope()
     Card(
         modifier = modifier.clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
@@ -71,6 +86,23 @@ fun WorldCard(world: World, onClick: () -> Unit, modifier: Modifier = Modifier) 
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
                 )
+            }
+            if (Session.token != null) {
+                IconButton(
+                    onClick = { scope.launch { Favorites.toggle(world.id) } },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(36.dp)
+                        .background(Color.Black.copy(alpha = 0.45f), CircleShape),
+                ) {
+                    Icon(
+                        if (world.id in favIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        contentDescription = null,
+                        tint = if (world.id in favIds) Color(0xFFFF5A5A) else Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         }
     }

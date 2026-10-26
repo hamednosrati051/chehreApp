@@ -1,5 +1,6 @@
 package ir.inourai.newapp.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,20 +16,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,29 +36,39 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Category
+import ir.inourai.newapp.data.Favorites
+import ir.inourai.newapp.data.Session
 import ir.inourai.newapp.data.World
 
-/** خانه، هم‌شکل طرح مرجع: سربرگ + چیپ دسته‌ها + بنر + دنیاهای محبوب. */
+/** خانه، هم‌شکل اپ مرجع: سربرگ برند + چیپ دسته‌ها + ردیف ترندها
+ *  (کاروسل با نقطه‌ها) + آواتارهای دایره‌ای + شبکه‌ی تازه‌ها. */
 @Composable
-fun HomeScreen(
-    onPhoto: () -> Unit,
-    onWorld: (Long) -> Unit,
-    onSettings: () -> Unit,
-) {
+fun HomeScreen(onWorld: (Long) -> Unit) {
+    val context = LocalContext.current
     var worlds by remember { mutableStateOf<List<World>>(emptyList()) }
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
     // null یعنی «پیشنهادی» (دنیاهای featured).
     var selected by remember { mutableStateOf<Long?>(null) }
 
+    // توست هدیه‌ی ورود (مثل رقیب) — فقط یک بار بعد از اولین ورود.
     LaunchedEffect(Unit) {
+        if (Session.justRegistered) {
+            Session.justRegistered = false
+            Toast.makeText(
+                context, "🎁 ۱ تصویر هدیه به حسابت اضافه شد", Toast.LENGTH_LONG
+            ).show()
+        }
         try {
             worlds = Api.service.worlds()
         } catch (_: Exception) {
@@ -68,6 +77,7 @@ fun HomeScreen(
             categories = Api.service.categories()
         } catch (_: Exception) {
         }
+        Favorites.refresh()
     }
 
     val shown = if (selected == null) {
@@ -75,25 +85,29 @@ fun HomeScreen(
     } else {
         worlds.filter { it.category_id == selected }
     }
-    val heroSamples = worlds.mapNotNull { it.sample_image_url }.take(3)
+    // «ترندهای ایرانی»: دنیاهای دسته‌ی تاریخی؛ اگر نبود، featuredها.
+    val tarikhiId = categories.firstOrNull { it.slug == "tarikhi" }?.id
+    val iranian = worlds.filter { it.category_id == tarikhiId }.ifEmpty {
+        worlds.filter { it.is_featured }
+    }
+    val trendState = rememberLazyListState()
+    val trendIndex by remember {
+        derivedStateOf {
+            trendState.firstVisibleItemIndex.coerceIn(0, (worlds.size - 1).coerceAtLeast(0))
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "✦ چهره‌ساز",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp,
-                    color = MaterialTheme.colorScheme.secondary,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = onSettings) {
-                    Icon(Icons.Filled.Settings, contentDescription = null)
-                }
-            }
+            Text(
+                "چهره‌ساز",
+                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp,
+                color = MaterialTheme.colorScheme.secondary,
+            )
         }
         item {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -105,63 +119,67 @@ fun HomeScreen(
                 }
             }
         }
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F0FE)),
-                shape = RoundedCornerShape(20.dp),
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "✨ چهره‌ساز!",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 24.sp,
-                                color = MaterialTheme.colorScheme.secondary,
-                            )
-                            Text(
-                                "با هوش مصنوعی به سبک‌های مختلف عکس بساز",
-                                fontSize = 14.sp,
-                                color = Color(0xFF44546A),
-                                modifier = Modifier.padding(top = 6.dp),
-                            )
-                        }
-                        // کولاژ سه نمونه، کمی چرخیده.
-                        Box(modifier = Modifier.width(110.dp).height(96.dp)) {
-                            val aligns = listOf(
-                                Alignment.CenterStart,
-                                Alignment.TopEnd,
-                                Alignment.BottomEnd,
-                            )
-                            for ((i, url) in heroSamples.withIndex()) {
-                                AsyncImage(
-                                    model = url,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .align(aligns[i])
-                                        .graphicsLayer(rotationZ = (i - 1) * 8f)
-                                        .clip(RoundedCornerShape(12.dp)),
-                                    contentScale = ContentScale.Crop,
-                                )
-                            }
-                        }
+        // ترندهای اینستاگرام: کاروسل افقی کارت‌های بلند + نقطه‌ها.
+        if (worlds.isNotEmpty()) {
+            item {
+                Text("ترندهای اینستاگرام", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
+            item {
+                LazyRow(
+                    state = trendState,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(worlds) { w ->
+                        WorldCard(w, { onWorld(w.id) }, Modifier.width(160.dp))
                     }
-                    // دکمه‌ی پیکان، سمت چپ بنر (مثل طرح مرجع).
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        contentAlignment = Alignment.CenterEnd,
-                    ) {
-                        IconButton(
-                            onClick = onPhoto,
+                }
+            }
+            item {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    repeat(worlds.size) { i ->
+                        Box(
                             modifier = Modifier
-                                .size(44.dp)
-                                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                                .size(if (i == trendIndex) 8.dp else 6.dp)
+                                .background(
+                                    if (i == trendIndex) MaterialTheme.colorScheme.primary
+                                    else Color.LightGray,
+                                    CircleShape,
+                                ),
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+        // ترندهای ایرانی: آواتارهای دایره‌ای.
+        if (iranian.isNotEmpty()) {
+            item {
+                Text("ترندهای ایرانی", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
+            item {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(iranian) { w ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(76.dp).clickable { onWorld(w.id) },
                         ) {
-                            Icon(
-                                Icons.Filled.ArrowForward,
-                                contentDescription = null,
-                                tint = Color.White,
+                            AsyncImage(
+                                model = w.sample_image_url,
+                                contentDescription = w.name,
+                                modifier = Modifier.size(72.dp).clip(CircleShape),
+                                contentScale = ContentScale.Crop,
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                w.name,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
                             )
                         }
                     }
@@ -169,20 +187,30 @@ fun HomeScreen(
             }
         }
         item {
-            Text("دنیاهای محبوب", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("تازه‌های هفته", fontWeight = FontWeight.Bold, fontSize = 18.sp)
         }
         if (shown.isEmpty()) {
             item {
                 Text("دنیایی اینجا نیست؛ دسته‌ی دیگری را انتخاب کن.", color = Color.Gray)
             }
         } else {
-            items(shown.chunked(2)) { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    row.forEach { w ->
-                        WorldCard(w, { onWorld(w.id) }, Modifier.weight(1f))
-                    }
-                    if (row.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
+            item {
+                // ارتفاع شبکه از روی نسبت ۳:۴ کارت حساب می‌شود تا اسکرول
+                // تودرتو پیش نیاید (کارت‌ها در سه ستون‌اند).
+                val screenW = LocalConfiguration.current.screenWidthDp.dp
+                val cardW = (screenW - 32.dp - 24.dp) / 3
+                val cardH = cardW * 4 / 3
+                val rows = (shown.size + 2) / 3
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.height(
+                        cardH * rows + 12.dp * (rows - 1).coerceAtLeast(0) + 8.dp
+                    ),
+                ) {
+                    items(shown) { w ->
+                        WorldCard(w, { onWorld(w.id) })
                     }
                 }
             }

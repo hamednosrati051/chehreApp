@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Category
+import ir.inourai.newapp.data.Favorites
 import ir.inourai.newapp.data.World
 
 /** جستجو: فیلد متن + چیپ دسته‌ها + شبکه‌ی دنیا‌ها (مثل طرح مرجع). */
@@ -50,6 +51,7 @@ fun SearchScreen(onWorld: (Long) -> Unit) {
             categories = Api.service.categories()
         } catch (_: Exception) {
         }
+        Favorites.refresh()
     }
 
     val shown = worlds.filter { w ->

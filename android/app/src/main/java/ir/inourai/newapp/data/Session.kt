@@ -20,4 +20,7 @@ object Session {
     fun logout() {
         prefs.edit().remove("token").apply()
     }
+
+    /** تازه ثبت‌نام کرده (برای توست هدیه‌ی ورود)؛ فقط در حافظه است. */
+    var justRegistered: Boolean = false
 }

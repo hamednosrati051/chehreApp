@@ -15,6 +15,7 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -25,7 +26,9 @@ private const val BASE_URL = "http://171.22.25.152:5001/api/v1/"
 data class OtpRequest(val mobile: String)
 data class OtpVerify(val mobile: String, val code: String)
 data class TestLoginRequest(val mobile: String)
-data class TokenResponse(val token: String)
+data class TokenResponse(val token: String, val is_new: Boolean? = null)
+data class MeResponse(val mobile_masked: String)
+data class FavoriteRequest(val world_id: Long)
 data class Category(val id: Long, val name: String, val slug: String)
 data class World(
     val id: Long,
@@ -49,6 +52,8 @@ data class GenerationStatus(
     val output_url: String?,
     val charged: Boolean? = null,
     val error: String? = null,
+    val world_id: Long? = null,
+    val world_name: String? = null,
 )
 data class Balance(
     val coins: Int,
@@ -97,11 +102,26 @@ interface ApiService {
     @POST("auth/test/login")
     suspend fun testLogin(@Body b: TestLoginRequest): TokenResponse
 
+    @GET("auth/me")
+    suspend fun me(): MeResponse
+
     @GET("categories")
     suspend fun categories(): List<Category>
 
     @GET("worlds")
     suspend fun worlds(): List<World>
+
+    @GET("worlds/{id}")
+    suspend fun world(@Path("id") id: Long): World
+
+    @GET("favorites")
+    suspend fun favorites(): List<World>
+
+    @POST("favorites")
+    suspend fun addFavorite(@Body b: FavoriteRequest): Response<Unit>
+
+    @DELETE("favorites/{worldId}")
+    suspend fun removeFavorite(@Path("worldId") worldId: Long): Response<Unit>
 
     @POST("generations")
     suspend fun createGeneration(@Body b: GenerationRequest): GenerationCreated

@@ -17,6 +17,7 @@ from .models import (
     AppCategory,
     AppCoinLedger,
     AppCoinPack,
+    AppFavorite,
     AppGallery,
     AppGeneration,
     AppModel,
@@ -170,13 +171,29 @@ def otp_verify():
             db.session.commit()
         return jsonify({"error": "invalid code"}), 401
     user = AppUser.query.filter_by(mobile=mobile).first()
+    is_new = user is None
     if user is None:
         # هدیه‌ی ورود (۱ عکس + ۱ صدا) از defaultهای مدل می‌آید.
         user = AppUser(mobile=mobile)
         db.session.add(user)
     user.last_login_at = datetime.datetime.utcnow()
     db.session.commit()
-    return jsonify({"token": _token_for(user)})
+    return jsonify({"token": _token_for(user), "is_new": is_new})
+
+
+@auth_bp.get("/auth/me")
+@require_auth
+def me():
+    # فقط موبایل ماسک‌شده (مثل «0905 *** *197» رقیب) — خود شماره
+    # هیچ‌وقت به اپ برنمی‌گردد.
+    m = g.user.mobile or ""
+    if len(m) >= 7:
+        masked = f"{m[:4]} *** *{m[-3:]}"
+    elif len(m) >= 3:
+        masked = f"{m[:1]}***{m[-2:]}"
+    else:
+        masked = "***"
+    return jsonify({"mobile_masked": masked})
 
 
 @auth_bp.post("/auth/test/login")
@@ -189,13 +206,14 @@ def test_login():
     if not mobile:
         return jsonify({"error": "mobile required"}), 400
     user = AppUser.query.filter_by(mobile=mobile).first()
+    is_new = user is None
     if user is None:
         # هدیه‌ی ورود از defaultهای مدل می‌آید (مثل otp_verify).
         user = AppUser(mobile=mobile)
         db.session.add(user)
     user.last_login_at = datetime.datetime.utcnow()
     db.session.commit()
-    return jsonify({"token": _token_for(user)})
+    return jsonify({"token": _token_for(user), "is_new": is_new})
 
 
 # ---------------- content ----------------
@@ -234,6 +252,70 @@ def list_worlds():
             for w in worlds
         ]
     )
+
+
+# ---------------- favorites ----------------
+# قلب روی دنیاها (مثل رقیب): لیست، افزودن (idempotent)، حذف.
+
+
+@content_bp.get("/favorites")
+@require_auth
+def list_favorites():
+    rows = (
+        AppFavorite.query.filter_by(user_id=g.user.id)
+        .order_by(AppFavorite.id.desc())
+        .all()
+    )
+    if not rows:
+        return jsonify([])
+    worlds = {
+        w.id: w
+        for w in AppWorld.query.filter(
+            AppWorld.id.in_([r.world_id for r in rows]), AppWorld.is_active.is_(True)
+        ).all()
+    }
+    return jsonify(
+        [
+            {
+                "id": w.id,
+                "name": w.name,
+                "slug": w.slug,
+                "category_id": w.category_id,
+                "sample_image_url": w.sample_image_url,
+                "coin_price": w.coin_price,
+                "is_featured": bool(w.is_featured),
+            }
+            for r in rows
+            if (w := worlds.get(r.world_id)) is not None
+        ]
+    )
+
+
+@content_bp.post("/favorites")
+@require_auth
+def add_favorite():
+    world = AppWorld.query.get((request.json or {}).get("world_id"))
+    if not world or not world.is_active:
+        return jsonify({"error": "world not found"}), 404
+    fav = AppFavorite.query.filter_by(
+        user_id=g.user.id, world_id=world.id
+    ).first()
+    if fav is None:
+        db.session.add(AppFavorite(user_id=g.user.id, world_id=world.id))
+        db.session.commit()
+    return jsonify({"ok": True, "world_id": world.id}), 201
+
+
+@content_bp.delete("/favorites/<int:world_id>")
+@require_auth
+def remove_favorite(world_id):
+    fav = AppFavorite.query.filter_by(
+        user_id=g.user.id, world_id=world_id
+    ).first()
+    if fav is not None:
+        db.session.delete(fav)
+        db.session.commit()
+    return jsonify({"ok": True})
 
 
 @content_bp.get("/singers")
@@ -322,6 +404,7 @@ def get_generation(gen_id):
     gen = AppGeneration.query.get(gen_id)
     if not gen or gen.user_id != g.user.id:
         return jsonify({"error": "not found"}), 404
+    world = AppWorld.query.get(gen.world_id) if gen.world_id else None
     return jsonify(
         {
             "id": gen.id,
@@ -330,6 +413,8 @@ def get_generation(gen_id):
             "output_url": gen.output_url,
             "charged": bool(gen.charged),
             "error": gen.error_message,
+            "world_id": gen.world_id,
+            "world_name": world.name if world else None,
         }
     )
 
@@ -343,6 +428,12 @@ def my_generations():
         .limit(50)
         .all()
     )
+    world_ids = [gen.world_id for gen in gens if gen.world_id]
+    worlds = (
+        {w.id: w for w in AppWorld.query.filter(AppWorld.id.in_(world_ids)).all()}
+        if world_ids
+        else {}
+    )
     return jsonify(
         [
             {
@@ -350,6 +441,10 @@ def my_generations():
                 "kind": gen.kind,
                 "status": gen.status,
                 "output_url": gen.output_url,
+                "world_id": gen.world_id,
+                "world_name": (
+                    worlds[gen.world_id].name if gen.world_id in worlds else None
+                ),
             }
             for gen in gens
         ]

@@ -26,10 +26,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import ir.inourai.newapp.billing.BazaarBilling
 import ir.inourai.newapp.data.Session
 import ir.inourai.newapp.ui.screens.CreateImageScreen
@@ -37,6 +39,7 @@ import ir.inourai.newapp.ui.screens.HomeScreen
 import ir.inourai.newapp.ui.screens.LoginScreen
 import ir.inourai.newapp.ui.screens.MyMediaScreen
 import ir.inourai.newapp.ui.screens.ProfileScreen
+import ir.inourai.newapp.ui.screens.ResultScreen
 import ir.inourai.newapp.ui.screens.SearchScreen
 import ir.inourai.newapp.ui.screens.SplashScreen
 import ir.inourai.newapp.ui.screens.WorldsScreen
@@ -53,26 +56,33 @@ object Dest {
     const val WORLDS = "worlds"
     const val CREATE_IMAGE = "create_image/{worldId}"
     const val LOGIN = "login"
+    const val RESULT = "result/{genId}?fresh={fresh}"
 }
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        /** از نوتیفیکیشن «تصویرت آماده شد»: بازکردن مستقیم نتیجه. */
+        const val EXTRA_GEN_ID = "gen_id"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // رابط فارسی است؛ جهت را سراسری راست‌به‌چپ می‌کنیم تا نوار پایین و
         // ردیف‌ها روی گوشی‌هایی با زبان سیستم چپ‌به‌راست هم برعکس نشوند.
         window.decorView.layoutDirection = android.view.View.LAYOUT_DIRECTION_RTL
         Session.init(this)
-        setContent { App() }
+        val genId = intent.getLongExtra(EXTRA_GEN_ID, -1L)
+        setContent { App(initialGenId = genId) }
     }
 }
 
 @Composable
-fun App() {
+fun App(initialGenId: Long = -1L) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
     var showSplash by rememberSaveable { mutableStateOf(true) }
-    val showNav = route != Dest.LOGIN && !showSplash
+    val showNav = route != Dest.LOGIN && route != Dest.RESULT && !showSplash
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -135,16 +145,14 @@ fun App() {
         ) { pad ->
             NavHost(
                 navController = nav,
-                startDestination = Dest.HOME,
+                startDestination = if (initialGenId > 0) "result/$initialGenId" else Dest.HOME,
                 modifier = Modifier.padding(pad),
             ) {
                 composable(Dest.HOME) {
                     HomeScreen(
-                        onPhoto = { nav.navigate(Dest.WORLDS) },
                         onWorld = { worldId ->
                             nav.navigate("create_image/$worldId")
                         },
-                        onSettings = { nav.navigate(Dest.PROFILE) },
                     )
                 }
                 composable(Dest.SEARCH) {
@@ -155,7 +163,16 @@ fun App() {
                     )
                 }
                 composable(Dest.MY_MEDIA) {
-                    MyMediaScreen(onCreate = { nav.navigate(Dest.WORLDS) })
+                    MyMediaScreen(
+                        onCreate = { nav.navigate(Dest.WORLDS) },
+                        onWorld = { worldId ->
+                            nav.navigate("create_image/$worldId")
+                        },
+                        onImage = { genId ->
+                            nav.navigate("result/$genId")
+                        },
+                        onLogin = { nav.navigate(Dest.LOGIN) },
+                    )
                 }
                 composable(Dest.PROFILE) {
                     ProfileScreen(onLogin = { nav.navigate(Dest.LOGIN) })
@@ -170,7 +187,31 @@ fun App() {
                 composable(Dest.CREATE_IMAGE) { entry ->
                     val worldId =
                         entry.arguments?.getString("worldId")?.toLongOrNull() ?: 0L
-                    CreateImageScreen(worldId = worldId)
+                    CreateImageScreen(
+                        worldId = worldId,
+                        onBack = { nav.popBackStack() },
+                        onLogin = { nav.navigate(Dest.LOGIN) },
+                        onDone = { genId ->
+                            nav.navigate("result/$genId?fresh=true")
+                        },
+                    )
+                }
+                composable(
+                    Dest.RESULT,
+                    arguments = listOf(
+                        navArgument("genId") { type = NavType.LongType },
+                        navArgument("fresh") { type = NavType.BoolType; defaultValue = false },
+                    ),
+                ) { entry ->
+                    val genId = entry.arguments?.getLong("genId") ?: 0L
+                    val fresh = entry.arguments?.getBoolean("fresh") ?: false
+                    ResultScreen(
+                        genId = genId,
+                        fresh = fresh,
+                        onBack = {
+                            if (!nav.popBackStack()) nav.navigate(Dest.HOME)
+                        },
+                    )
                 }
                 composable(Dest.LOGIN) {
                     LoginScreen(onDone = { nav.navigate(Dest.HOME) })
