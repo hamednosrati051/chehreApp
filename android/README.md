@@ -28,8 +28,11 @@
 
 ## پرداخت بازار (IAB)
 
-`billing/BazaarBilling.kt` با AIDL سرویس بازار وصل می‌شود
-(تگ `<queries>` برای `com.farsitel.bazaar` در Manifest هست):
+`billing/BazaarBilling.kt` با Binder مستقیم به سرویس بازار وصل می‌شود
+(Proxy دستیِ معادل AIDL برای `IInAppBillingService` — چون کامپایل
+Java تولیدشده‌ی AIDL به Gradle Worker Daemon نیاز دارد که در سندباکس
+این VM زنده نمی‌ماند؛ تگ `<queries>` برای `com.farsitel.bazaar` در
+Manifest هست):
 خرید SKU ← وریفای سروری (RSA + idempotency) ← consume ← رفرش موجودی.
 خریدهای ناتمام موقع شروع اپ بازیابی می‌شوند. پک‌ها consumable هستند،
 پس همان پک بلافاصله دوباره قابل خرید است.

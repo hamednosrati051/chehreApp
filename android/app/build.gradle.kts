@@ -19,6 +19,34 @@ android {
     buildFeatures {
         compose = true
     }
+    // jarهای common مولتی‌پلتفرم (بدون متادیتای ‎.module) روی classpath
+    // اندروید می‌آیند و فایل‌های متادیتای تکراری دارند؛ این متادیتا در
+    // ران‌تایم اندروید خوانده نمی‌شود (نسخه‌ی jvm/android همان کتابخانه
+    // هم در classpath هست).
+    packaging {
+        resources {
+            excludes += "commonMain/**"
+            excludes += "nonJvmMain/**"
+            excludes += "nativeMain/**"
+            excludes += "linuxMain/**"
+            excludes += "zlibMain/**"
+            excludes += "unixMain/**"
+            excludes += "systemFileSystemMain/**"
+            excludes += "nonAppleMain/**"
+            excludes += "hashFunctions/**"
+            excludes += "ios*/**"
+            excludes += "js/**"
+            excludes += "wasmJs/**"
+            excludes += "mingw*/**"
+            excludes += "linux*/**"
+            excludes += "macos*/**"
+            excludes += "tvos*/**"
+            excludes += "watchos*/**"
+            excludes += "androidNative*/**"
+            // متادیتای ساخت KMP که در همه‌ی jarهای common یکسان است.
+            excludes += "META-INF/kotlin-project-structure-metadata.json"
+        }
+    }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
     }
@@ -36,6 +64,9 @@ dependencies {
     implementation(composeBom)
     androidTestImplementation(composeBom)
     implementation("androidx.compose.material3:material3")
+    // نسخه‌ی اندرویدی آیکون‌ها؛ common فقط jar خالی است و بدون
+    // متادیتای Gradle (‎.module) به -android نمی‌رسد.
+    implementation("androidx.compose.material:material-icons-extended-android")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.activity:activity-compose:1.9.0")

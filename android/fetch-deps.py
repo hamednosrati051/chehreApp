@@ -234,6 +234,9 @@ def main():
         ("androidx.compose", "compose-bom", "2024.06.00"),
         # app libraries (compose versions resolved from BOM 2024.06.00)
         ("androidx.compose.material3", "material3", "1.2.1"),
+        ("androidx.compose.material", "material-icons-extended", "1.6.8"),
+        # نسخه‌ی اندرویدی واقعی آیکون‌ها (common فقط یک jar خالی است)
+        ("androidx.compose.material", "material-icons-extended-android", "1.6.8"),
         ("androidx.compose.ui", "ui", "1.6.8"),
         ("androidx.compose.ui", "ui-tooling-preview", "1.6.8"),
         ("androidx.activity", "activity-compose", "1.9.0"),

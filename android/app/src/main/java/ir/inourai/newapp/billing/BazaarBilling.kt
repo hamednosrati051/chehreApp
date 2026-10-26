@@ -3,10 +3,11 @@ package ir.inourai.newapp.billing
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.content.IntentSender
+import android.content.ServiceConnection
+import android.os.Bundle
 import android.os.IBinder
-import com.android.vending.billing.IInAppBillingService
+import android.os.Parcel
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.PurchaseVerifyRequest
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -29,6 +30,187 @@ data class OwnedPurchase(
     val signature: String,
 )
 
+private const val DESCRIPTOR = "com.android.vending.billing.IInAppBillingService"
+
+/** معادل دستیِ Proxy تولیدشده توسط AIDL برای
+ *  com.android.vending.billing.IInAppBillingService (بازار IAB نسخه‌ی ۳ را
+ *  آینه می‌کند). کدهای تراکنش دقیقاً به ترتیب اعلان AIDL هستند و
+ *  مارشال‌کردن Parcel هم همان الگوی تولیدشده است.
+ *
+ *  چرا دستی؟ کامپایل فایل Java تولیدشده‌ی AIDL به Gradle Worker Daemon
+ *  نیاز دارد که در سندباکس این VM زنده نمی‌ماند؛ با Proxy دستی، پروژه
+ *  کاملاً Kotlin می‌شود و آن مرحله حذف می‌شود.
+ */
+private class BazaarServiceProxy(private val remote: IBinder) {
+    private fun transact(code: Int, data: Parcel, reply: Parcel) {
+        remote.transact(code, data, reply, 0)
+        reply.readException()
+    }
+
+    private fun Parcel.writeBundleOrNull(bundle: Bundle?) {
+        if (bundle != null) {
+            writeInt(1)
+            bundle.writeToParcel(this, 0)
+        } else {
+            writeInt(0)
+        }
+    }
+
+    private fun Parcel.readBundleOrNull(): Bundle? {
+        return if (readInt() != 0) Bundle.CREATOR.createFromParcel(this) else null
+    }
+
+    fun isBillingSupported(apiVersion: Int, packageName: String, type: String): Int {
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(DESCRIPTOR)
+            data.writeInt(apiVersion)
+            data.writeString(packageName)
+            data.writeString(type)
+            transact(1, data, reply)
+            return reply.readInt()
+        } finally {
+            data.recycle()
+            reply.recycle()
+        }
+    }
+
+    fun getSkuDetails(
+        apiVersion: Int,
+        packageName: String,
+        type: String,
+        skusBundle: Bundle?,
+    ): Bundle? {
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(DESCRIPTOR)
+            data.writeInt(apiVersion)
+            data.writeString(packageName)
+            data.writeString(type)
+            data.writeBundleOrNull(skusBundle)
+            transact(2, data, reply)
+            return reply.readBundleOrNull()
+        } finally {
+            data.recycle()
+            reply.recycle()
+        }
+    }
+
+    fun getBuyIntent(
+        apiVersion: Int,
+        packageName: String,
+        sku: String,
+        type: String,
+        developerPayload: String,
+    ): Bundle? {
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(DESCRIPTOR)
+            data.writeInt(apiVersion)
+            data.writeString(packageName)
+            data.writeString(sku)
+            data.writeString(type)
+            data.writeString(developerPayload)
+            transact(3, data, reply)
+            return reply.readBundleOrNull()
+        } finally {
+            data.recycle()
+            reply.recycle()
+        }
+    }
+
+    fun getPurchases(
+        apiVersion: Int,
+        packageName: String,
+        type: String,
+        continuationToken: String?,
+    ): Bundle? {
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(DESCRIPTOR)
+            data.writeInt(apiVersion)
+            data.writeString(packageName)
+            data.writeString(type)
+            data.writeString(continuationToken)
+            transact(4, data, reply)
+            return reply.readBundleOrNull()
+        } finally {
+            data.recycle()
+            reply.recycle()
+        }
+    }
+
+    fun consumePurchase(apiVersion: Int, packageName: String, purchaseToken: String): Int {
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(DESCRIPTOR)
+            data.writeInt(apiVersion)
+            data.writeString(packageName)
+            data.writeString(purchaseToken)
+            transact(5, data, reply)
+            return reply.readInt()
+        } finally {
+            data.recycle()
+            reply.recycle()
+        }
+    }
+
+    fun getBuyIntentToReplaceSkus(
+        apiVersion: Int,
+        packageName: String,
+        oldSkus: List<String>,
+        newSku: String,
+        type: String,
+        developerPayload: String,
+    ): Bundle? {
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(DESCRIPTOR)
+            data.writeInt(apiVersion)
+            data.writeString(packageName)
+            data.writeStringList(oldSkus)
+            data.writeString(newSku)
+            data.writeString(type)
+            data.writeString(developerPayload)
+            transact(6, data, reply)
+            return reply.readBundleOrNull()
+        } finally {
+            data.recycle()
+            reply.recycle()
+        }
+    }
+
+    fun getPurchaseHistory(
+        apiVersion: Int,
+        packageName: String,
+        type: String,
+        continuationToken: String?,
+        extraParams: Bundle?,
+    ): Bundle? {
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(DESCRIPTOR)
+            data.writeInt(apiVersion)
+            data.writeString(packageName)
+            data.writeString(type)
+            data.writeString(continuationToken)
+            data.writeBundleOrNull(extraParams)
+            transact(7, data, reply)
+            return reply.readBundleOrNull()
+        } finally {
+            data.recycle()
+            reply.recycle()
+        }
+    }
+}
+
 object BazaarBilling {
     private const val BAZAAR_PACKAGE = "com.farsitel.bazaar"
     private const val API_VERSION = 3
@@ -36,12 +218,13 @@ object BazaarBilling {
 
     private suspend fun <T> withService(
         context: Context,
-        block: (IInAppBillingService) -> T,
+        block: (BazaarServiceProxy) -> T,
     ): T = suspendCancellableCoroutine { cont ->
         val conn = object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
                 try {
-                    val service = IInAppBillingService.Stub.asInterface(binder)
+                    val service = binder?.let { BazaarServiceProxy(it) }
+                        ?: throw IllegalStateException("no binder from bazaar")
                     val result = block(service)
                     if (cont.isActive) cont.resume(result)
                 } catch (e: Exception) {
@@ -77,14 +260,13 @@ object BazaarBilling {
     /** ساخت Intent خرید برای یک SKU؛ لانچ آن با StartIntentSenderForResult است. */
     suspend fun getBuyIntentSender(context: Context, sku: String): IntentSender {
         return withService(context) { service ->
-            @Suppress("DEPRECATION")
             val result = service.getBuyIntent(
                 API_VERSION,
                 context.packageName,
                 sku,
                 TYPE_INAPP,
                 "",
-            )
+            ) ?: throw RuntimeException("no buy intent from bazaar")
             if (result.getInt("RESPONSE_CODE") != 0) {
                 throw RuntimeException(
                     "bazaar buy intent failed: ${result.getInt("RESPONSE_CODE")}",
@@ -123,7 +305,7 @@ object BazaarBilling {
                     context.packageName,
                     TYPE_INAPP,
                     continuation,
-                )
+                ) ?: break
                 if (bundle.getInt("RESPONSE_CODE") != 0) break
                 val datas =
                     bundle.getStringArrayList("INAPP_PURCHASE_DATA_LIST") ?: arrayListOf()
