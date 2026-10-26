@@ -60,6 +60,7 @@ data class Pack(
     val price_toman: Int,
     val bazaar_sku: String,
     val badge: String?,
+    val pack_type: String?,
     val sort_order: Int,
 )
 data class PurchaseVerifyRequest(

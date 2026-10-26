@@ -12,8 +12,8 @@ android {
         applicationId = "ir.inourai.newapp"
         minSdk = 26
         targetSdk = 34
-        // v3: آیکون برند + اسپلش + طراحی جدید (کارت‌های تصویری، تم آبی/طلایی).
-        versionCode = 3
+        // v4: پروفایل مطابق طرح مرجع (کارت آبی سکه + شیت پک‌ها با دکمه‌ی خرید) + pack_type.
+        versionCode = 4
         versionName = "1.0"
     }
 
