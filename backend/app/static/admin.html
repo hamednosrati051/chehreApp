@@ -5,37 +5,51 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ادمین چهره‌ساز</title>
 <style>
-  body{font-family:Tahoma, sans-serif; margin:0; background:#f4f6fb; color:#222;}
-  header{background:#0B3D91; color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px;}
+  :root{color-scheme:dark;}
+  body{font-family:Tahoma, sans-serif; margin:0; background:#0f172a; color:#e2e8f0;}
+  header{background:#0B3D91; color:#fff; padding:16px 20px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
   header h1{font-size:20px; margin:0;}
   header span{color:#E8B84B;}
   header .who{margin-right:auto; font-size:13px; color:#cfe0ff;}
   header .who button{margin-right:10px;}
   main{max-width:960px; margin:0 auto; padding:16px;}
-  input, select, textarea{padding:8px 10px; border:1px solid #ccc; border-radius:8px; font-family:inherit; font-size:14px;}
+  input, select, textarea{padding:8px 10px; border:1px solid #475569; border-radius:8px; font-family:inherit; font-size:14px; background:#0f172a; color:#e2e8f0;}
   textarea{width:100%; box-sizing:border-box; min-height:80px;}
   button{background:#1D6FE0; color:#fff; border:0; border-radius:8px; padding:8px 16px; cursor:pointer; font-family:inherit;}
   button.gold{background:#E8B84B; color:#222;}
   button.danger{background:#c0392b;}
   button.small{padding:4px 10px; font-size:13px;}
   #tabs{display:flex; gap:8px; flex-wrap:wrap; margin:16px 0;}
-  #tabs button{background:#fff; color:#0B3D91; border:1px solid #0B3D91;}
-  #tabs button.on{background:#0B3D91; color:#fff;}
-  section{background:#fff; border:1px solid #ddd; border-radius:12px; padding:16px; margin-bottom:16px; display:none;}
+  #tabs button{background:#1e293b; color:#93c5fd; border:1px solid #1D6FE0;}
+  #tabs button.on{background:#1D6FE0; color:#fff;}
+  section{background:#1e293b; border:1px solid #334155; border-radius:12px; padding:16px; margin-bottom:16px; display:none;}
   section.on{display:block;}
   form.grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;}
   form.grid .full{grid-column:1 / -1;}
-  table{width:100%; border-collapse:collapse; font-size:14px;}
-  th, td{border-bottom:1px solid #eee; padding:8px; text-align:right; vertical-align:top;}
-  th{color:#0B3D91;}
+  div[id$="-list"]{overflow-x:auto;}
+  table{width:100%; border-collapse:collapse; font-size:14px; min-width:520px;}
+  th, td{border-bottom:1px solid #334155; padding:8px; text-align:right; vertical-align:top;}
+  th{color:#93c5fd;}
   img.thumb{width:72px; height:72px; object-fit:cover; border-radius:10px;}
-  #msg{color:#c0392b; min-height:20px; margin:8px 0;}
-  #msg.ok{color:#1e7d32;}
-  .muted{color:#666; font-size:13px;}
-  .card{background:#fff; border:1px solid #ddd; border-radius:12px; padding:20px; max-width:420px; margin:40px auto;}
-  .card h2{margin-top:0; color:#0B3D91;}
+  #msg{color:#f87171; min-height:20px; margin:8px 0;}
+  #msg.ok{color:#4ade80;}
+  .muted{color:#94a3b8; font-size:13px;}
+  .card{background:#1e293b; border:1px solid #334155; border-radius:12px; padding:20px; max-width:420px; margin:40px auto;}
+  .card h2{margin-top:0; color:#93c5fd;}
   .card input{display:block; width:100%; box-sizing:border-box; margin-bottom:10px;}
   .search{width:100%; box-sizing:border-box; margin-bottom:10px;}
+  @media (max-width:640px){
+    main{padding:10px;}
+    header h1{font-size:17px;}
+    form.grid{grid-template-columns:1fr;}
+    form.grid .full{grid-column:auto;}
+    input, select, textarea{font-size:16px; width:100%; box-sizing:border-box;}
+    label{display:flex; align-items:center; gap:8px;}
+    label input{width:auto;}
+    button{padding:10px 18px;}
+    section{padding:12px;}
+    table{min-width:560px;}
+  }
 </style>
 </head>
 <body>
@@ -83,7 +97,7 @@
       <input id="w-img" placeholder="لینک عکس نمونه" class="full">
       <label class="full">آپلود عکس نمونه (به‌جای لینک): <input id="w-file" type="file" accept=".jpg,.jpeg,.png,.webp"></label>
       <textarea id="w-prompt" placeholder="پرامپت مخفی (انگلیسی، برای مدل تصویر)" class="full" required></textarea>
-      <input id="w-price" type="number" value="5" placeholder="قیمت (سکه)">
+      <input id="w-price" type="number" value="10" placeholder="قیمت (سکه)">
       <label><input id="w-feat" type="checkbox"> پیشنهادی</label>
       <label><input id="w-act" type="checkbox" checked> فعال</label>
       <span><button>ذخیره دنیا</button> <button type="button" class="gold" onclick="resetWorldForm()">فرم جدید</button></span>
@@ -150,7 +164,7 @@
     <form class="grid" onsubmit="savePricing(event)">
       <select id="pr-model"></select>
       <input id="pr-unit" placeholder="واحد (مثلا image_count)" required>
-      <input id="pr-size" type="number" value="1" placeholder="اندازه واحد">
+      <input id="pr-size" type="number" value="1" placeholder="اندازه واحد" required>
       <input id="pr-price" type="number" step="0.000001" placeholder="قیمت واحد (دلار)" required>
       <input id="pr-dim" placeholder="dimension_key (مثلا 1024x1024، خالی = همه)">
       <input id="pr-quality" placeholder="quality_key (مثلا medium، خالی = همه)">
@@ -223,7 +237,7 @@
     <h2>تنظیمات</h2>
     <form class="grid" onsubmit="saveSetting(event)">
       <input id="s-key" placeholder="کلید (مثلا image_coin_price)" required>
-      <input id="s-val" placeholder="مقدار (مثلا 5)" required>
+      <input id="s-val" placeholder="مقدار (مثلا 10)" required>
       <button>ذخیره تنظیم</button>
     </form>
     <div id="s-list"></div>
@@ -300,7 +314,7 @@ async function loadWorlds(){
   applyFilter('w-list');
 }
 function editWorld(w){ editingWorld = w.id; $('w-name').value = w.name; $('w-slug').value = w.slug; $('w-cat').value = w.category_id || ''; $('w-model').value = w.model_id; $('w-img').value = w.sample_image_url || ''; $('w-prompt').value = w.hidden_prompt || ''; $('w-price').value = w.coin_price; $('w-feat').checked = w.is_featured; $('w-act').checked = w.is_active; window.scrollTo(0, 0); }
-function resetWorldForm(){ editingWorld = null; ['w-name','w-slug','w-img','w-prompt'].forEach(i => $(i).value = ''); $('w-file').value = ''; $('w-price').value = 5; $('w-feat').checked = false; $('w-act').checked = true; }
+function resetWorldForm(){ editingWorld = null; ['w-name','w-slug','w-img','w-prompt'].forEach(i => $(i).value = ''); $('w-file').value = ''; $('w-cat').value = ''; if($('w-model').options.length) $('w-model').selectedIndex = 0; $('w-price').value = 10; $('w-feat').checked = false; $('w-act').checked = true; }
 async function saveWorld(e){ e.preventDefault(); const body = {name: $('w-name').value.trim(), slug: $('w-slug').value.trim(), category_id: $('w-cat').value ? +$('w-cat').value : null, sample_image_url: $('w-img').value.trim() || null, hidden_prompt: $('w-prompt').value.trim(), model_id: +$('w-model').value, coin_price: +$('w-price').value, is_featured: $('w-feat').checked, is_active: $('w-act').checked};
   try { const saved = editingWorld ? await api('/admin/worlds/' + editingWorld, 'PATCH', body) : await api('/admin/worlds', 'POST', body);
     const file = $('w-file').files[0];
@@ -322,7 +336,7 @@ async function loadPacks(){ const ps = await api('/admin/packs');
     ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>';
   applyFilter('p-list'); }
 function editPack(p){ editingPack = p.id; $('p-name').value = p.name; $('p-coins').value = p.coins; $('p-price').value = p.price_toman; $('p-sku').value = p.bazaar_sku; $('p-badge').value = p.badge || ''; $('p-sort').value = p.sort_order; }
-function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-sku','p-badge'].forEach(i => $(i).value = ''); }
+function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-sku','p-badge'].forEach(i => $(i).value = ''); $('p-sort').value = 0; }
 async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').value.trim(), coins: +$('p-coins').value, price_toman: +$('p-price').value, bazaar_sku: $('p-sku').value.trim(), badge: $('p-badge').value.trim() || null, sort_order: +$('p-sort').value};
   try { editingPack ? await api('/admin/packs/' + editingPack, 'PATCH', body) : await api('/admin/packs', 'POST', body); setMsg('پک ذخیره شد.', true); resetPackForm(); loadPacks(); } catch(err){ setMsg(err.message); } }
 async function delPack(id){ if(!confirm('پک حذف شود؟')) return; try { await api('/admin/packs/' + id, 'DELETE'); loadPacks(); } catch(err){ setMsg(err.message); } }
@@ -396,7 +410,7 @@ async function loadUserDetail(id){ const u = await api('/admin/users/' + id);
   `<h4>دفتر سکه</h4>` + (u.ledger.length ? `<table><tr><th>مبلغ</th><th>دلیل</th><th>تاریخ</th></tr>` + u.ledger.map(r => `<tr><td>${r.delta}</td><td>${esc(r.reason)}</td><td class="muted">${esc(r.created_at)}</td></tr>`).join('') + '</table>' : '<p class="muted">تراکنشی نیست.</p>') +
   `<h4>گالری</h4>` + (u.gallery.length ? u.gallery.map(r => `<img class="thumb" src="${esc(r.image_url)}" title="${esc(r.status)}">`).join(' ') : '<p class="muted">عکسی نیست.</p>');
   window.scrollTo(0, document.body.scrollHeight); }
-async function coinAdjust(e, id){ e.preventDefault(); try { const r = await api('/admin/users/' + id + '/coin-adjust', 'POST', {delta: +$('u-delta').value}); setMsg('موجودی جدید: ' + r.balance + ' سکه.', true); loadUserDetail(id); loadUsers(); } catch(err){ setMsg(err.message); } }
+async function coinAdjust(e, id){ e.preventDefault(); try { const r = await api('/admin/users/' + id + '/coin-adjust', 'POST', {delta: +$('u-delta').value, reason: $('u-reason').value.trim() || null}); setMsg('موجودی جدید: ' + r.balance + ' سکه.', true); loadUserDetail(id); loadUsers(); } catch(err){ setMsg(err.message); } }
 
 async function loadAdmins(){ const rows = await api('/admin/admin-users');
   $('a-list').innerHTML = rows.length ? `<table><tr><th>نام کاربری</th><th>فعال</th><th>ساخته‌شده</th><th></th></tr>` +

@@ -710,6 +710,12 @@ def admin_update_model(model_id):
     ):
         if field in body:
             setattr(m, field, body[field])
+    if "capability" in body and body["capability"] not in (
+        "generate_image",
+        "edit_image",
+        "image",
+    ):
+        return jsonify({"error": "invalid capability"}), 400
     if body.get("capability") in ("generate_image", "edit_image", "image"):
         m.capability = body["capability"]
     if "is_active" in body:
@@ -793,6 +799,14 @@ def admin_update_world(world_id):
     if not w:
         return jsonify({"error": "world not found"}), 404
     body = request.json or {}
+    if "model_id" in body:
+        model = AppModel.query.get(body["model_id"])
+        if not model or model.kind != "image":
+            return jsonify({"error": "image model not found"}), 400
+    if body.get("slug"):
+        clash = AppWorld.query.filter_by(slug=body["slug"]).first()
+        if clash and clash.id != world_id:
+            return jsonify({"error": "slug exists"}), 409
     for field in (
         "name",
         "slug",
@@ -876,6 +890,10 @@ def admin_update_pack(pack_id):
     if not p:
         return jsonify({"error": "pack not found"}), 404
     body = request.json or {}
+    if body.get("bazaar_sku"):
+        clash = AppCoinPack.query.filter_by(bazaar_sku=body["bazaar_sku"]).first()
+        if clash and clash.id != pack_id:
+            return jsonify({"error": "sku exists"}), 409
     for field in ("name", "coins", "price_toman", "bazaar_sku", "badge", "sort_order"):
         if field in body:
             setattr(p, field, body[field])
@@ -1071,6 +1089,10 @@ def admin_update_category(category_id):
     if not c:
         return jsonify({"error": "category not found"}), 404
     body = request.json or {}
+    if body.get("slug"):
+        clash = AppCategory.query.filter_by(slug=body["slug"]).first()
+        if clash and clash.id != category_id:
+            return jsonify({"error": "slug exists"}), 409
     for field in ("name", "slug", "sort_order"):
         if field in body:
             setattr(c, field, body[field])
@@ -1244,7 +1266,9 @@ def admin_user_coin_adjust(user_id):
     if delta == 0 or abs(delta) > 100000:
         return jsonify({"error": "delta must be non-zero and within 100000"}), 400
     try:
-        balance = coins_svc.adjust_coins(u, delta, reason="admin")
+        balance = coins_svc.adjust_coins(
+            u, delta, reason=(str(body.get("reason") or "admin")[:200])
+        )
     except ValueError:
         return jsonify({"error": "insufficient balance"}), 400
     return jsonify({"id": u.id, "balance": balance})
