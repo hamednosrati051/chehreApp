@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,6 +60,13 @@ fun LoginScreen(onDone: () -> Unit) {
             label = { Text("شماره موبایل") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color.White,
+                unfocusedContainerColor = Color.White,
+                focusedBorderColor = Color(0xFF1D6FE0),
+                unfocusedBorderColor = Color(0xFFD4DCE8),
+            ),
         )
         if (!sent) {
             Row(
@@ -88,6 +97,13 @@ fun LoginScreen(onDone: () -> Unit) {
                 label = { Text("کد ۶ رقمی") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White,
+                    focusedBorderColor = Color(0xFF1D6FE0),
+                    unfocusedBorderColor = Color(0xFFD4DCE8),
+                ),
             )
             Text("کد ۶ رقمی پیامک‌شده را وارد کن.", color = Color.Gray, fontSize = 13.sp)
             Text(

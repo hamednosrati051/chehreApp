@@ -30,10 +30,10 @@ private val Scheme = lightColorScheme(
     surfaceContainerLow = Color.White,
 )
 
-// فونت فارسی استعداد (رایگان، OFL)، روی همه‌ی استایل‌های متنی.
-val Estedad = FontFamily(
-    Font(R.font.estedad_regular, FontWeight.Normal),
-    Font(R.font.estedad_bold, FontWeight.Bold),
+// فونت فارسی صمیم (رایگان، OFL)، روی همه‌ی استایل‌های متنی.
+val Samim = FontFamily(
+    Font(R.font.samim_regular, FontWeight.Normal),
+    Font(R.font.samim_bold, FontWeight.Bold),
 )
 
 // فونت فانتزی نمایشی (لاله‌زار) برای تیترها؛ حروف فارسی گ/چ/پ/ژ را دارد.
@@ -52,14 +52,14 @@ val AppTypography = Typography(
     headlineMedium = BaseTypography.headlineMedium.copy(fontFamily = Lalezar),
     headlineSmall = BaseTypography.headlineSmall.copy(fontFamily = Lalezar),
     titleLarge = BaseTypography.titleLarge.copy(fontFamily = Lalezar),
-    titleMedium = BaseTypography.titleMedium.copy(fontFamily = Estedad),
-    titleSmall = BaseTypography.titleSmall.copy(fontFamily = Estedad),
-    bodyLarge = BaseTypography.bodyLarge.copy(fontFamily = Estedad),
-    bodyMedium = BaseTypography.bodyMedium.copy(fontFamily = Estedad),
-    bodySmall = BaseTypography.bodySmall.copy(fontFamily = Estedad),
-    labelLarge = BaseTypography.labelLarge.copy(fontFamily = Estedad),
-    labelMedium = BaseTypography.labelMedium.copy(fontFamily = Estedad),
-    labelSmall = BaseTypography.labelSmall.copy(fontFamily = Estedad),
+    titleMedium = BaseTypography.titleMedium.copy(fontFamily = Samim),
+    titleSmall = BaseTypography.titleSmall.copy(fontFamily = Samim),
+    bodyLarge = BaseTypography.bodyLarge.copy(fontFamily = Samim),
+    bodyMedium = BaseTypography.bodyMedium.copy(fontFamily = Samim),
+    bodySmall = BaseTypography.bodySmall.copy(fontFamily = Samim),
+    labelLarge = BaseTypography.labelLarge.copy(fontFamily = Samim),
+    labelMedium = BaseTypography.labelMedium.copy(fontFamily = Samim),
+    labelSmall = BaseTypography.labelSmall.copy(fontFamily = Samim),
 )
 
 @Composable

@@ -90,12 +90,14 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
     var payments by remember { mutableStateOf<List<PaymentItem>>(emptyList()) }
     var showPacks by remember { mutableStateOf(false) }
     var showAccount by remember { mutableStateOf(false) }
+    var showPayments by remember { mutableStateOf(false) }
     var maskedMobile by remember { mutableStateOf<String?>(null) }
     var pubSettings by remember { mutableStateOf(PublicSettings()) }
     var dialog by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val loggedIn = Session.token != null
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val paymentsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(Unit) {
         pubSettings = try { Api.service.publicSettings() } catch (_: Exception) { PublicSettings() }
@@ -148,19 +150,19 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Text("سکه", color = Color.White, fontSize = 14.sp)
+                    Text("سکه", color = Color.White, fontSize = 15.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         "${balance?.coins ?: 0}",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 28.sp,
+                        fontSize = 30.sp,
                     )
                     if ((balance?.free_image ?: 0) > 0) {
                         Text(
                             "عکس رایگان باقی‌مانده: ${balance!!.free_image}",
                             color = Color.White,
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }
@@ -172,7 +174,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                         if (coins >= 9) "معادل تولید ${coins / 9} تصویر"
                         else "برای ساخت تصویر جدید سکه اضافه کن.",
                         color = Color.White,
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
@@ -186,7 +188,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                     ) {
                         Icon(Icons.Rounded.Add, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("افزایش سکه", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text("افزایش سکه", fontWeight = FontWeight.Bold, fontSize = 17.sp)
                     }
                 }
             }
@@ -227,7 +229,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                         icon = Icons.Rounded.Receipt,
                         title = "سابقه پرداخت",
                         iconBg = Color(0xFFE6F4EA), iconTint = Color(0xFF1B7A3D),
-                        onClick = { dialog = "payments" },
+                        onClick = { showPayments = true },
                     )
                 }
             }
@@ -301,8 +303,8 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
             sheetState = sheetState,
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("حساب کاربری", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("جزئیات حسابت", color = Color.Gray, fontSize = 14.sp)
+                Text("حساب کاربری", fontWeight = FontWeight.Bold, fontSize = 19.sp)
+                Text("جزئیات حسابت", color = Color.Gray, fontSize = 15.sp)
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -349,6 +351,53 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
         )
     }
 
+    if (showPayments) {
+        ModalBottomSheet(
+            onDismissRequest = { showPayments = false },
+            sheetState = paymentsSheetState,
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(28.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("سابقه پرداخت", fontWeight = FontWeight.Bold, fontSize = 19.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    if (payments.isEmpty()) {
+                        Text("هنوز پرداختی ثبت نشده است.", color = Color.Gray)
+                    } else {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                            payments.forEachIndexed { i, pay ->
+                                if (i > 0) HorizontalDivider()
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column {
+                                        Text(pay.pack_name, fontWeight = FontWeight.Bold)
+                                        Text("${pay.coins} سکه", color = Color.Gray, fontSize = 14.sp)
+                                        Text(pay.created_at?.take(10) ?: "", color = Color.Gray, fontSize = 13.sp)
+                                    }
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text("${pay.amount_irr / 10} تومان", fontWeight = FontWeight.Bold)
+                                        Text(
+                                            if (pay.status == "pending") "در انتظار" else "پرداخت شد",
+                                            color = if (pay.status == "pending") Color(0xFFB7791F) else Color(0xFF1B7A3D),
+                                            fontSize = 14.sp,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     when (dialog) {
         "about" -> AlertDialog(
             onDismissRequest = { dialog = null },
@@ -377,7 +426,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                     Text(
                         if (crash != null) "گزارش کرش اخیر (برای ارسال به پشتیبانی، «کپی گزارش» را بزن):\n$crash"
                         else "هنوز گزارش کرشی ثبت نشده است.",
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                     )
                 }
             },
@@ -411,43 +460,6 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                 TextButton(onClick = { dialog = null }) { Text("باشه") }
             },
         )
-        "payments" -> AlertDialog(
-            onDismissRequest = { dialog = null },
-            title = { Text("سابقه پرداخت") },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    if (payments.isEmpty()) {
-                        Text("هنوز پرداختی ثبت نشده است.", color = Color.Gray)
-                    } else {
-                        payments.forEachIndexed { i, pay ->
-                            if (i > 0) HorizontalDivider()
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column {
-                                    Text(pay.pack_name, fontWeight = FontWeight.Bold)
-                                    Text("${pay.coins} سکه", color = Color.Gray, fontSize = 13.sp)
-                                    Text(pay.created_at?.take(10) ?: "", color = Color.Gray, fontSize = 12.sp)
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text("${pay.amount_irr / 10} تومان", fontWeight = FontWeight.Bold)
-                                    Text(
-                                        if (pay.status == "pending") "در انتظار" else "پرداخت شد",
-                                        color = if (pay.status == "pending") Color(0xFFB7791F) else Color(0xFF1B7A3D),
-                                        fontSize = 13.sp,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { dialog = null }) { Text("باشه") }
-            },
-        )
         else -> Unit
     }
 }
@@ -457,7 +469,7 @@ private fun SectionLabel(text: String) {
     Text(
         text,
         color = Color.Gray,
-        fontSize = 14.sp,
+        fontSize = 15.sp,
         modifier = Modifier.padding(top = 8.dp),
     )
 }
@@ -494,11 +506,11 @@ private fun LinkRow(
             Text(
                 title,
                 fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
+                fontSize = 16.sp,
                 style = TextStyle(textDirection = titleDirection ?: TextDirection.Unspecified),
             )
             if (subtitle != null) {
-                Text(subtitle, color = Color.Gray, fontSize = 13.sp)
+                Text(subtitle, color = Color.Gray, fontSize = 14.sp)
             }
         }
         Icon(
