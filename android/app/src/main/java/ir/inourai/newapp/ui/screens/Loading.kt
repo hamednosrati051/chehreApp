@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,12 +27,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.inourai.newapp.R
@@ -69,70 +68,41 @@ fun GenerationLoading() {
     }
 }
 
-/** اسپلش اول اپ: تصویر متحرک تمام‌صفحه، بدون هیچ نوشته‌ای؛ با ضربه رد می‌شود.
- *  (ساخت ویدیو برای این حساب در دسترس نیست، پس انیمیشن با همان تصویر برند
- *  و جرقه‌های طلایی در خود کد ساخته شده.) */
+/** اسپلش اول اپ: تصویر اینترو + نوشته‌ی زیرش؛ با ضربه رد می‌شود. */
 @Composable
 fun SplashScreen(onSkip: () -> Unit) {
     // زوم آرام روی تصویر در ۲ ثانیه‌ی اسپلش.
     val zoom by animateFloatAsState(
-        targetValue = 1.12f,
+        targetValue = 1.05f,
         animationSpec = tween(2000),
         label = "splashZoom",
     )
-    // چشمک جرقه‌های طلایی.
-    val sparkles = rememberInfiniteTransition(label = "sparkles")
-    val tw1 by sparkles.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "tw1",
-    )
-    val tw2 by sparkles.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.25f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "tw2",
-    )
     Box(
         modifier = Modifier.fillMaxSize()
-            .background(Color(0xFF0B3D91))
+            .background(Color(0xFF0B1020))
             .clickable { onSkip() },
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.splash_icon),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize()
-                .graphicsLayer(scaleX = zoom, scaleY = zoom),
-            contentScale = ContentScale.Crop,
-        )
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val stars = listOf(
-                Triple(0.15f, 0.20f, 0),
-                Triple(0.85f, 0.15f, 1),
-                Triple(0.70f, 0.35f, 0),
-                Triple(0.25f, 0.55f, 1),
-                Triple(0.90f, 0.60f, 0),
-                Triple(0.10f, 0.75f, 1),
-                Triple(0.50f, 0.25f, 0),
-                Triple(0.40f, 0.85f, 1),
-                Triple(0.80f, 0.85f, 0),
-                Triple(0.30f, 0.40f, 1),
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.intro_grid),
+                contentDescription = null,
+                modifier = Modifier.fillMaxWidth()
+                    .graphicsLayer(scaleX = zoom, scaleY = zoom)
+                    .clip(RoundedCornerShape(24.dp)),
+                contentScale = ContentScale.FillWidth,
             )
-            for ((fx, fy, which) in stars) {
-                val alpha = if (which == 0) tw1 else tw2
-                drawCircle(
-                    color = Color(0xFFFFD97A).copy(alpha = alpha),
-                    radius = 8.dp.toPx(),
-                    center = Offset(size.width * fx, size.height * fy),
-                )
-            }
+            Text(
+                "با چهره‌ساز شخصیت‌های مختلف\nاز خودت بساز و ببین",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 20.dp),
+            )
         }
     }
 }

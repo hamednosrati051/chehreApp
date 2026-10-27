@@ -100,6 +100,8 @@ class AppWorld(db.Model):
     is_featured = db.Column(db.Boolean, default=False, nullable=False)
     is_instagram_trend = db.Column(db.Boolean, default=False, nullable=False)
     is_iranian_trend = db.Column(db.Boolean, default=False, nullable=False)
+    is_sport_trend = db.Column(db.Boolean, default=False, nullable=False)
+    is_seasonal_trend = db.Column(db.Boolean, default=False, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     sort_order = db.Column(db.Integer, default=0, nullable=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)

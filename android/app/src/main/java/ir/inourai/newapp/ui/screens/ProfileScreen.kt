@@ -76,6 +76,7 @@ import ir.inourai.newapp.billing.BazaarBilling
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Balance
 import ir.inourai.newapp.data.Pack
+import ir.inourai.newapp.data.PaymentItem
 import ir.inourai.newapp.data.PublicSettings
 import ir.inourai.newapp.data.Session
 import kotlinx.coroutines.launch
@@ -87,11 +88,12 @@ private val GoldText = Color(0xFF8A5A00)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(onLogin: () -> Unit) {
+fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
     val context = LocalContext.current
     var balance by remember { mutableStateOf<Balance?>(null) }
     var packs by remember { mutableStateOf<List<Pack>>(emptyList()) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var payments by remember { mutableStateOf<List<PaymentItem>>(emptyList()) }
     var showPacks by remember { mutableStateOf(false) }
     var showAccount by remember { mutableStateOf(false) }
     var maskedMobile by remember { mutableStateOf<String?>(null) }
@@ -103,6 +105,18 @@ fun ProfileScreen(onLogin: () -> Unit) {
 
     LaunchedEffect(Unit) {
         pubSettings = try { Api.service.publicSettings() } catch (_: Exception) { PublicSettings() }
+    }
+
+    // سابقه‌ی پرداخت: بازیابی دستی حذف شد؛ خرید ناتمام موقع شروع اپ
+    // خودکار بازیابی می‌شود و اینجا فقط تاریخچه‌ی پرداخت‌ها دیده می‌شود.
+    LaunchedEffect(loggedIn) {
+        if (loggedIn) {
+            payments = try {
+                Api.service.myPurchases()
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
     }
 
     fun refreshBalance() {
@@ -174,6 +188,7 @@ fun ProfileScreen(onLogin: () -> Unit) {
         }
     }
 
+    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); onGoHome() }) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(ScreenBg).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -255,22 +270,39 @@ fun ProfileScreen(onLogin: () -> Unit) {
             }
         }
         if (loggedIn) {
-            item {
-                OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            try {
-                                val recovered = BazaarBilling.recoverPurchases(context)
-                                refreshBalance()
-                                notice = if (recovered > 0) "بازیابی خریدها انجام شد" else "خرید ناتمامی پیدا نشد"
-                            } catch (e: Exception) {
-                                notice = e.message
+            item { SectionLabel("سابقه پرداخت") }
+            if (payments.isEmpty()) {
+                item {
+                    Text("هنوز پرداختی ثبت نشده است.", color = Color.Gray)
+                }
+            } else {
+                items(payments) { pay ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(20.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column {
+                                Text(pay.pack_name, fontWeight = FontWeight.Bold)
+                                Text("${pay.coins} سکه", color = Color.Gray, fontSize = 13.sp)
+                                Text(pay.created_at?.take(10) ?: "", color = Color.Gray, fontSize = 12.sp)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("${pay.amount_irr / 10} تومان", fontWeight = FontWeight.Bold)
+                                Text(
+                                    if (pay.status == "pending") "در انتظار" else "پرداخت شد",
+                                    color = if (pay.status == "pending") Color(0xFFB7791F) else Color(0xFF1B7A3D),
+                                    fontSize = 13.sp,
+                                )
                             }
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("بازیابی خریدها")
+                    }
                 }
             }
         }
@@ -344,8 +376,13 @@ fun ProfileScreen(onLogin: () -> Unit) {
             }
         }
         notice?.let {
-            item { Text(it) }
+            // خطای فنی سرویس بازار (bazaar billing service not available)
+            // دیگر پایین پروفایل نشان داده نمی‌شود.
+            if (!it.contains("billing service", ignoreCase = true)) {
+                item { Text(it) }
+            }
         }
+    }
     }
 
     // شیت جزئیات حساب (مثل رقیب): موبایل ماسک‌شده، عضویت، سکه، خروج.

@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,7 +37,7 @@ import ir.inourai.newapp.data.World
 
 /** جستجو: فیلد متن + چیپ دسته‌ها + شبکه‌ی دنیا‌ها (مثل طرح مرجع). */
 @Composable
-fun SearchScreen(onWorld: (Long) -> Unit) {
+fun SearchScreen(onWorld: (Long) -> Unit, onGoHome: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var worlds by remember { mutableStateOf<List<World>>(emptyList()) }
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
@@ -59,6 +60,7 @@ fun SearchScreen(onWorld: (Long) -> Unit) {
             (query.isBlank() || w.name.contains(query))
     }
 
+    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); onGoHome() }) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         OutlinedTextField(
             value = query,
@@ -66,6 +68,13 @@ fun SearchScreen(onWorld: (Long) -> Unit) {
             label = { Text("جستجوی دنیا") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color.White,
+                unfocusedContainerColor = Color.White,
+                focusedBorderColor = Color(0xFF1D6FE0),
+                unfocusedBorderColor = Color(0xFFD4DCE8),
+            ),
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -93,6 +102,7 @@ fun SearchScreen(onWorld: (Long) -> Unit) {
                 WorldCard(w, { onWorld(w.id) })
             }
         }
+    }
     }
 }
 

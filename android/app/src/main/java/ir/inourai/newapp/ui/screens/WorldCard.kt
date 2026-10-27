@@ -43,8 +43,8 @@ fun WorldCard(world: World, onClick: () -> Unit, modifier: Modifier = Modifier) 
     val scope = rememberCoroutineScope()
     Card(
         modifier = modifier.clickable { onClick() },
-        shape = RoundedCornerShape(28.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Box {
             AsyncImage(
@@ -53,17 +53,17 @@ fun WorldCard(world: World, onClick: () -> Unit, modifier: Modifier = Modifier) 
                 modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f),
                 contentScale = ContentScale.Crop,
             )
-            // سایه‌ی پایین عکس برای خوانایی نام.
+            // سایه‌ی ملایم پایین عکس برای خوانایی نام.
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(72.dp)
+                    .height(56.dp)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.6f),
+                                Color.Black.copy(alpha = 0.5f),
                             ),
                         ),
                     ),
@@ -72,21 +72,21 @@ fun WorldCard(world: World, onClick: () -> Unit, modifier: Modifier = Modifier) 
                 world.name,
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 modifier = Modifier.align(Alignment.BottomStart).padding(10.dp),
             )
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(8.dp)
-                    .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
             ) {
                 Text(
-                    "🪙 ${world.coin_price} سکه",
+                    "${world.coin_price} سکه",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                 )
             }
             if (Session.token != null) {
@@ -95,14 +95,14 @@ fun WorldCard(world: World, onClick: () -> Unit, modifier: Modifier = Modifier) 
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(4.dp)
-                        .size(36.dp)
-                        .background(Color.Black.copy(alpha = 0.45f), CircleShape),
+                        .size(32.dp)
+                        .background(Color.Black.copy(alpha = 0.35f), CircleShape),
                 ) {
                     Icon(
                         if (world.id in favIds) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                         contentDescription = null,
                         tint = if (world.id in favIds) Color(0xFFFF5A5A) else Color.White,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }

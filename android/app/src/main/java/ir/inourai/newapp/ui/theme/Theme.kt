@@ -15,6 +15,8 @@ private val Blue = Color(0xFF1D6FE0)
 private val DarkBlue = Color(0xFF0B3D91)
 private val Gold = Color(0xFFC98A1B)
 
+// زمینه‌ی صفحه‌ها آبی‌خاکستری خیلی روشن است تا سفیدی مطلق کم شود؛
+ // کارت‌ها سفید می‌مانند تا از زمینه جدا دیده شوند.
 private val Scheme = lightColorScheme(
     primary = Blue,
     onPrimary = Color.White,
@@ -22,6 +24,10 @@ private val Scheme = lightColorScheme(
     onSecondary = Color.White,
     tertiary = Gold,
     onTertiary = Color.White,
+    background = Color(0xFFF2F5FA),
+    surface = Color(0xFFF2F5FA),
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color.White,
 )
 
 // فونت فارسی وزیرمتن، روی همه‌ی استایل‌های متنی.

@@ -225,10 +225,11 @@ fun App(initialGenId: Long = -1L) {
                         onWorld = { worldId ->
                             nav.navigate("create_image/$worldId")
                         },
+                        onGoHome = { navToTab(Dest.HOME) },
                     )
                 }
                 composable(Dest.GALLERY) {
-                    GalleryScreen()
+                    GalleryScreen(onGoHome = { navToTab(Dest.HOME) })
                 }
                 composable(Dest.MY_MEDIA) {
                     MyMediaScreen(
@@ -240,16 +241,21 @@ fun App(initialGenId: Long = -1L) {
                             nav.navigate("result/$genId")
                         },
                         onLogin = { nav.navigate(Dest.LOGIN) },
+                        onGoHome = { navToTab(Dest.HOME) },
                     )
                 }
                 composable(Dest.PROFILE) {
-                    ProfileScreen(onLogin = { nav.navigate(Dest.LOGIN) })
+                    ProfileScreen(
+                        onLogin = { nav.navigate(Dest.LOGIN) },
+                        onGoHome = { navToTab(Dest.HOME) },
+                    )
                 }
                 composable(Dest.WORLDS) {
                     WorldsScreen(
                         onWorld = { worldId ->
                             nav.navigate("create_image/$worldId")
                         },
+                        onGoHome = { navToTab(Dest.HOME) },
                     )
                 }
                 composable(Dest.CREATE_IMAGE) { entry ->

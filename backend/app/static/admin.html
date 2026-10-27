@@ -102,6 +102,8 @@
       <label><input id="w-feat" type="checkbox"> پیشنهادی</label>
       <label><input id="w-ig" type="checkbox"> ترند اینستاگرام</label>
       <label><input id="w-ir" type="checkbox"> ترند ایرانی</label>
+      <label><input id="w-sp" type="checkbox"> ترند ورزشی</label>
+      <label><input id="w-se" type="checkbox"> ترند فصلی</label>
       <label><input id="w-act" type="checkbox" checked> فعال</label>
       <span><button>ذخیره دنیا</button> <button type="button" class="gold" onclick="resetWorldForm()">فرم جدید</button></span>
     </form>
@@ -236,16 +238,6 @@
     <p class="muted">image_coin_price = قیمت پیش‌فرض هر تصویر (سکه) برای دنیاهای جدید.</p>
   </section>
 
-  <section id="grant">
-    <h2>شارژ تستی سکه</h2>
-    <p class="muted">فقط وقتی APP_TEST_GRANTS_ENABLED=true است کار می‌کند؛ در دفتر سکه با reason=test ثبت می‌شود.</p>
-    <form class="grid" onsubmit="grantCoins(event)">
-      <input id="g-user" type="number" placeholder="user_id" required>
-      <input id="g-coins" type="number" placeholder="سکه (۱ تا ۱۰۰۰)" required>
-      <button>شارژ تستی</button>
-    </form>
-    <div id="grant-res"></div>
-  </section>
   </div>
 </main>
 <script>
@@ -303,8 +295,8 @@ function renderWorlds(){
   const page = filtered.slice((wPage - 1) * W_PAGE_SIZE, wPage * W_PAGE_SIZE);
   const catName = id => (cats.find(c => c.id === id) || {}).name || '—';
   if (!filtered.length) { $('w-list').innerHTML = '<p class="muted">دنیایی نیست.</p>'; return; }
-  let html = `<table><tr><th>عکس</th><th>نام</th><th>دسته</th><th>سکه</th><th>پیشنهادی</th><th>ترند اینستا</th><th>ترند ایرانی</th><th>فعال</th><th></th></tr>` +
-    page.map(w => `<tr><td>${w.sample_image_url ? `<img class="thumb" src="${esc(w.sample_image_url)}">` : '—'}</td><td>${esc(w.name)}<br><span class="muted">${esc(w.slug)}</span></td><td>${esc(catName(w.category_id))}</td><td>${w.coin_price}</td><td>${w.is_featured ? '✓' : '—'}</td><td>${w.is_instagram_trend ? '✓' : '—'}</td><td>${w.is_iranian_trend ? '✓' : '—'}</td><td>${w.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editWorld(${JSON.stringify(w).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delWorld(${w.id})">حذف</button></td></tr>`).join('') + '</table>';
+  let html = `<table><tr><th>عکس</th><th>نام</th><th>دسته</th><th>سکه</th><th>پیشنهادی</th><th>ترند اینستا</th><th>ترند ایرانی</th><th>ترند ورزشی</th><th>ترند فصلی</th><th>فعال</th><th></th></tr>` +
+    page.map(w => `<tr><td>${w.sample_image_url ? `<img class="thumb" src="${esc(w.sample_image_url)}">` : '—'}</td><td>${esc(w.name)}<br><span class="muted">${esc(w.slug)}</span></td><td>${esc(catName(w.category_id))}</td><td>${w.coin_price}</td><td>${w.is_featured ? '✓' : '—'}</td><td>${w.is_instagram_trend ? '✓' : '—'}</td><td>${w.is_iranian_trend ? '✓' : '—'}</td><td>${w.is_sport_trend ? '✓' : '—'}</td><td>${w.is_seasonal_trend ? '✓' : '—'}</td><td>${w.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editWorld(${JSON.stringify(w).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delWorld(${w.id})">حذف</button></td></tr>`).join('') + '</table>';
   let pager = '<div style="margin-top:8px">';
   pager += `<button class="small" ${wPage <= 1 ? 'disabled' : ''} onclick="wGoto(${wPage - 1})">قبلی</button> `;
   for (let i = 1; i <= total; i++) pager += `<button class="small" ${i === wPage ? 'disabled' : ''} onclick="wGoto(${i})">${i}</button> `;
@@ -321,9 +313,9 @@ async function loadWorlds(){
   wPage = 1;
   renderWorlds();
 }
-function editWorld(w){ editingWorld = w.id; $('w-name').value = w.name; $('w-slug').value = w.slug; $('w-cat').value = w.category_id || ''; $('w-model').value = w.model_id; $('w-img').value = w.sample_image_url || ''; $('w-prompt').value = w.hidden_prompt || ''; $('w-price').value = w.coin_price; $('w-feat').checked = w.is_featured; $('w-ig').checked = w.is_instagram_trend; $('w-ir').checked = w.is_iranian_trend; $('w-act').checked = w.is_active; window.scrollTo(0, 0); }
-function resetWorldForm(){ editingWorld = null; ['w-name','w-slug','w-img','w-prompt'].forEach(i => $(i).value = ''); $('w-file').value = ''; $('w-cat').value = ''; if($('w-model').options.length) $('w-model').selectedIndex = 0; $('w-price').value = 8; $('w-feat').checked = false; $('w-ig').checked = false; $('w-ir').checked = false; $('w-act').checked = true; }
-async function saveWorld(e){ e.preventDefault(); const body = {name: $('w-name').value.trim(), slug: $('w-slug').value.trim(), category_id: $('w-cat').value ? +$('w-cat').value : null, sample_image_url: $('w-img').value.trim() || null, hidden_prompt: $('w-prompt').value.trim(), model_id: +$('w-model').value, coin_price: +$('w-price').value, is_featured: $('w-feat').checked, is_instagram_trend: $('w-ig').checked, is_iranian_trend: $('w-ir').checked, is_active: $('w-act').checked};
+function editWorld(w){ editingWorld = w.id; $('w-name').value = w.name; $('w-slug').value = w.slug; $('w-cat').value = w.category_id || ''; $('w-model').value = w.model_id; $('w-img').value = w.sample_image_url || ''; $('w-prompt').value = w.hidden_prompt || ''; $('w-price').value = w.coin_price; $('w-feat').checked = w.is_featured; $('w-ig').checked = w.is_instagram_trend; $('w-ir').checked = w.is_iranian_trend; $('w-sp').checked = w.is_sport_trend; $('w-se').checked = w.is_seasonal_trend; $('w-act').checked = w.is_active; window.scrollTo(0, 0); }
+function resetWorldForm(){ editingWorld = null; ['w-name','w-slug','w-img','w-prompt'].forEach(i => $(i).value = ''); $('w-file').value = ''; $('w-cat').value = ''; if($('w-model').options.length) $('w-model').selectedIndex = 0; $('w-price').value = 8; $('w-feat').checked = false; $('w-ig').checked = false; $('w-ir').checked = false; $('w-sp').checked = false; $('w-se').checked = false; $('w-act').checked = true; }
+async function saveWorld(e){ e.preventDefault(); const body = {name: $('w-name').value.trim(), slug: $('w-slug').value.trim(), category_id: $('w-cat').value ? +$('w-cat').value : null, sample_image_url: $('w-img').value.trim() || null, hidden_prompt: $('w-prompt').value.trim(), model_id: +$('w-model').value, coin_price: +$('w-price').value, is_featured: $('w-feat').checked, is_instagram_trend: $('w-ig').checked, is_iranian_trend: $('w-ir').checked, is_sport_trend: $('w-sp').checked, is_seasonal_trend: $('w-se').checked, is_active: $('w-act').checked};
   try { const saved = editingWorld ? await api('/admin/worlds/' + editingWorld, 'PATCH', body) : await api('/admin/worlds', 'POST', body);
     const file = $('w-file').files[0];
     if(file){ const up = await apiUpload('/admin/worlds/' + saved.id + '/sample', file);
@@ -432,8 +424,6 @@ async function loadPublicSettings(){ try { const ss = await api('/admin/settings
   const m = {}; ss.forEach(s => m[s.key] = s.value);
   $('ps-about').value = m.about_us || ''; $('ps-support').value = m.support_info || ''; $('ps-bug').value = m.bug_report_info || ''; $('ps-insta').value = m.instagram_handle || ''; $('ps-bazaar').value = m.bazaar_url || '';
 } catch(_){} }
-
-async function grantCoins(e){ e.preventDefault(); try { const r = await api('/admin/test/grant-coins', 'POST', {user_id: +$('g-user').value, coins: +$('g-coins').value}); $('grant-res').innerHTML = `<p>موجودی جدید کاربر ${r.user_id}: <b>${r.balance}</b> سکه</p>`; setMsg('شارژ تستی انجام شد.', true); } catch(err){ setMsg(err.message); } }
 
 bindSearch('w-search', 'w-list'); bindSearch('p-search', 'p-list');
 bindSearch('a-search', 'a-list');

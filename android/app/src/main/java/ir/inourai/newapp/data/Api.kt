@@ -25,7 +25,6 @@ private const val BASE_URL = "http://171.22.25.152:5001/api/v1/"
 
 data class OtpRequest(val mobile: String)
 data class OtpVerify(val mobile: String, val code: String)
-data class TestLoginRequest(val mobile: String)
 data class TokenResponse(val token: String, val is_new: Boolean? = null)
 data class MeResponse(val mobile_masked: String)
 data class FavoriteRequest(val world_id: Long)
@@ -40,6 +39,8 @@ data class World(
     val is_featured: Boolean,
     val is_instagram_trend: Boolean = false,
     val is_iranian_trend: Boolean = false,
+    val is_sport_trend: Boolean = false,
+    val is_seasonal_trend: Boolean = false,
     val created_at: String? = null,
 )
 data class GenerationRequest(
@@ -91,6 +92,15 @@ data class PendingPurchase(
     val amount_irr: Long,
     val purchase_token: String?,
 )
+
+data class PaymentItem(
+    val id: Long,
+    val pack_name: String,
+    val coins: Int,
+    val amount_irr: Long,
+    val status: String,
+    val created_at: String?,
+)
 data class GallerySubmitRequest(val generation_id: Long)
 data class GallerySubmitResponse(val id: Long, val status: String)
 data class GalleryItem(val id: Long, val image_url: String, val generation_id: Long? = null)
@@ -108,9 +118,6 @@ interface ApiService {
 
     @POST("auth/otp/verify")
     suspend fun otpVerify(@Body b: OtpVerify): TokenResponse
-
-    @POST("auth/test/login")
-    suspend fun testLogin(@Body b: TestLoginRequest): TokenResponse
 
     @GET("auth/me")
     suspend fun me(): MeResponse
@@ -153,6 +160,9 @@ interface ApiService {
 
     @GET("coins/purchases/pending")
     suspend fun pendingPurchases(): List<PendingPurchase>
+
+    @GET("coins/purchases/mine")
+    suspend fun myPurchases(): List<PaymentItem>
 
     @POST("gallery/submit")
     suspend fun gallerySubmit(@Body b: GallerySubmitRequest): GallerySubmitResponse

@@ -22,14 +22,15 @@ def _ledger(user_id, delta, reason, ref_type=None, ref_id=None):
     )
 
 
-def credit_coins(user, amount, reason="purchase", ref_type=None, ref_id=None):
+def credit_coins(user, amount, reason="purchase", ref_type=None, ref_id=None, commit=True):
     row = AppCoinBalance.query.get(user.id)
     if row is None:
         row = AppCoinBalance(user_id=user.id, balance=0)
     row.balance += amount
     db.session.add(row)
     _ledger(user.id, amount, reason, ref_type, ref_id)
-    db.session.commit()
+    if commit:
+        db.session.commit()
 
 
 def adjust_coins(user, delta, reason="admin", ref_type=None, ref_id=None):

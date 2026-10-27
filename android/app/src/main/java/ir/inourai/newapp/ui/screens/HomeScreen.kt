@@ -69,6 +69,10 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
                 context, "🎁 ۱ تصویر هدیه به حسابت اضافه شد", Toast.LENGTH_LONG
             ).show()
         }
+    }
+    // بارگذاری داده؛ با هر pull-to-refresh (RefreshBus.tick) دوباره خوانده می‌شود.
+    val refreshTick = RefreshBus.tick
+    LaunchedEffect(refreshTick) {
         try {
             worlds = Api.service.worlds()
         } catch (_: Exception) {
@@ -90,8 +94,12 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
             worlds.filter { it.is_featured }
         }
     }
-    // «تازه‌های هفته»: دنیاهای ۷ روز اخیر (جدیدترین اول)؛ اگر در این هفته
-    // دنیایی نیامده باشد، ۶ دنیای آخری که وارد شده‌اند.
+    // «ترند ورزشی» و «ترند فصلی»: فقط تیک‌خورده‌های ادمین؛ اگر
+    // هیچ‌کدام تیک نخورده باشد، ردیف نشان داده نمی‌شود.
+    val sport = worlds.filter { it.is_sport_trend }
+    val seasonal = worlds.filter { it.is_seasonal_trend }
+    // «تازه‌های هفته»: دنیاهای ۷ روز اخیر (جدیدترین اول)، حداکثر ۸ تا؛
+    // اگر در این هفته دنیایی نیامده باشد، ۶ دنیای آخری که وارد شده‌اند.
     fun createdMillis(w: World): Long {
         return try {
             val s = (w.created_at ?: return 0L).replace("Z", "")
@@ -101,7 +109,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
         }
     }
     val weekAgo = System.currentTimeMillis() - 7L * 24 * 3600 * 1000
-    val fresh = worlds.filter { createdMillis(it) >= weekAgo }.sortedByDescending { createdMillis(it) }
+    val fresh = worlds.filter { createdMillis(it) >= weekAgo }.sortedByDescending { createdMillis(it) }.take(8)
     val freshFallback = worlds.sortedByDescending { createdMillis(it) }.take(6)
     val shown = if (selected != null) {
         worlds.filter { it.category_id == selected }
@@ -115,6 +123,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
         }
     }
 
+    PullRefreshLayout(onRefresh = { RefreshBus.refresh() }) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -137,7 +146,10 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
                 }
             }
         }
-        // ترندهای اینستاگرام: کاروسل افقی کارت‌های بلند + نقطه‌ها.
+        // ترندها و تازه‌های هفته فقط در «پیشنهادی»؛ در دسته‌ها
+        // فقط دنیاهای همان دسته نشان داده می‌شود.
+        if (selected == null) {
+                // ترندهای اینستاگرام: کاروسل افقی کارت‌های بلند + نقطه‌ها.
         if (insta.isNotEmpty()) {
             item {
                 Text("ترندهای اینستاگرام", fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -204,8 +216,71 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
                 }
             }
         }
+        // ترند ورزشی: آواتارهای دایره‌ای.
+        if (sport.isNotEmpty()) {
+            item {
+                Text("ترند ورزشی", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
+            item {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(sport) { w ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(76.dp).clickable { onWorld(w.id) },
+                        ) {
+                            AsyncImage(
+                                model = w.sample_image_url,
+                                contentDescription = w.name,
+                                modifier = Modifier.size(72.dp).clip(CircleShape),
+                                contentScale = ContentScale.Crop,
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                w.name,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        // ترند فصلی: آواتارهای دایره‌ای.
+        if (seasonal.isNotEmpty()) {
+            item {
+                Text("ترند فصلی", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
+            item {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(seasonal) { w ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(76.dp).clickable { onWorld(w.id) },
+                        ) {
+                            AsyncImage(
+                                model = w.sample_image_url,
+                                contentDescription = w.name,
+                                modifier = Modifier.size(72.dp).clip(CircleShape),
+                                contentScale = ContentScale.Crop,
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                w.name,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                }
+            }
+        }
         item {
             Text("تازه‌های هفته", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        }
         }
         if (shown.isEmpty()) {
             item {
@@ -214,13 +289,14 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
         } else {
             item {
                 // ارتفاع شبکه از روی نسبت ۳:۴ کارت حساب می‌شود تا اسکرول
-                // تودرتو پیش نیاید (کارت‌ها در سه ستون‌اند).
+                // تودرتو پیش نیاید (پیشنهادی ۳ ستون، دسته‌ها ۲ ستون).
+                val cols = if (selected == null) 3 else 2
                 val screenW = LocalConfiguration.current.screenWidthDp.dp
-                val cardW = (screenW - 32.dp - 24.dp) / 3
+                val cardW = (screenW - 32.dp - 12.dp * (cols - 1)) / cols
                 val cardH = cardW * 4 / 3
-                val rows = (shown.size + 2) / 3
+                val rows = (shown.size + cols - 1) / cols
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
+                    columns = GridCells.Fixed(cols),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.height(
@@ -233,6 +309,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
                 }
             }
         }
+    }
     }
 }
 

@@ -29,7 +29,7 @@ import ir.inourai.newapp.data.Favorites
 import ir.inourai.newapp.data.World
 
 @Composable
-fun WorldsScreen(onWorld: (Long) -> Unit) {
+fun WorldsScreen(onWorld: (Long) -> Unit, onGoHome: () -> Unit) {
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
     var worlds by remember { mutableStateOf<List<World>>(emptyList()) }
     // null = تب «پیشنهادی» (برچسب، نه دسته‌ی واقعی).
@@ -50,6 +50,7 @@ fun WorldsScreen(onWorld: (Long) -> Unit) {
         worlds.filter { it.category_id == selectedCategory }
     }
 
+    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); onGoHome() }) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
@@ -90,5 +91,6 @@ fun WorldsScreen(onWorld: (Long) -> Unit) {
                 WorldCard(w, { onWorld(w.id) })
             }
         }
+    }
     }
 }

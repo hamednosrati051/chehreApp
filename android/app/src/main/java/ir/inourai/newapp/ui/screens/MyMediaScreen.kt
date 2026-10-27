@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -46,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import ir.inourai.newapp.data.Api
-import ir.inourai.newapp.data.GallerySubmitRequest
 import ir.inourai.newapp.data.GenerationStatus
 import ir.inourai.newapp.data.Session
 import ir.inourai.newapp.data.World
@@ -60,6 +58,7 @@ fun MyMediaScreen(
     onWorld: (Long) -> Unit,
     onImage: (Long) -> Unit,
     onLogin: () -> Unit,
+    onGoHome: () -> Unit,
 ) {
     var tab by remember { mutableStateOf(1) } // 0 = قلب، 1 = عکس
     var images by remember { mutableStateOf<List<GenerationStatus>>(emptyList()) }
@@ -107,6 +106,7 @@ fun MyMediaScreen(
         }
     }
 
+    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); onGoHome() }) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
         // سگمنت قلب | عکس (مثل رقیب).
@@ -203,9 +203,11 @@ fun MyMediaScreen(
                 }
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
             ) {
                 val pending = images.filter { it.status == "queued" || it.status == "processing" }
                 val done = images.filter { it.status == "done" && it.output_url != null }
@@ -215,61 +217,39 @@ fun MyMediaScreen(
                     }
                 }
                 items(pending) { item ->
-                    Card(
-                        shape = RoundedCornerShape(24.dp),
-                        modifier = Modifier.fillMaxWidth().clickable { onImage(item.id) },
+                    Box(
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color(0xFF1A1F2E))
+                            .clickable { onImage(item.id) },
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("در حال ساخت…", fontWeight = FontWeight.Bold)
-                                Text(item.world_name ?: "", color = Color.Gray, fontSize = 13.sp)
-                                Text("برای دیدن نتیجه بزن", color = Color.Gray, fontSize = 13.sp)
-                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("در حال ساخت…", color = Color.White, fontSize = 13.sp)
                         }
                     }
                 }
                 items(done) { item ->
-                    Card(shape = RoundedCornerShape(24.dp)) {
-                        Column {
-                            AsyncImage(
-                                model = item.output_url,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                                    .clickable { onImage(item.id) },
-                                contentScale = ContentScale.Crop,
-                            )
-                            if (item.id !in submitted) {
-                                Button(
-                                    onClick = {
-                                        scope.launch {
-                                            try {
-                                                Api.service.gallerySubmit(
-                                                    GallerySubmitRequest(item.id),
-                                                )
-                                                submitted = submitted + item.id
-                                                notice = "برای نمایش عمومی، در صف تایید گالری چهره‌ساز قرار گرفت"
-                                            } catch (e: Exception) {
-                                                notice = e.message
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                ) {
-                                    Text("ارسال به گالری چهره‌ساز")
-                                }
-                            } else {
-                                Button(
-                                    onClick = {},
-                                    enabled = false,
-                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                ) {
-                                    Text("ارسال شده به گالری")
-                                }
+                    Box(
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { onImage(item.id) },
+                    ) {
+                        AsyncImage(
+                            model = item.output_url,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                        if (item.id in submitted) {
+                            Box(
+                                modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                            ) {
+                                Text("✓ گالری", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -294,5 +274,6 @@ fun MyMediaScreen(
                 Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
             }
         }
+    }
     }
 }

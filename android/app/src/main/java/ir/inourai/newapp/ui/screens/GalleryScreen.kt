@@ -37,7 +37,7 @@ import ir.inourai.newapp.data.GalleryItem
  * بدون لاگین هم باز می‌شود؛ داده از /gallery/public می‌آید.
  */
 @Composable
-fun GalleryScreen() {
+fun GalleryScreen(onGoHome: () -> Unit) {
     var items by remember { mutableStateOf<List<GalleryItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var selected by remember { mutableStateOf<GalleryItem?>(null) }
@@ -50,6 +50,7 @@ fun GalleryScreen() {
         loading = false
     }
 
+    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); onGoHome() }) {
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
             "گالری کاربران",
@@ -89,6 +90,7 @@ fun GalleryScreen() {
                 }
             }
         }
+    }
     }
 
     selected?.let { item ->

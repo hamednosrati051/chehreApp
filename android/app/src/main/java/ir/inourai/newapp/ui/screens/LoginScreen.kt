@@ -28,7 +28,6 @@ import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.OtpRequest
 import ir.inourai.newapp.data.OtpVerify
 import ir.inourai.newapp.data.Session
-import ir.inourai.newapp.data.TestLoginRequest
 import kotlinx.coroutines.launch
 
 /** ورود با موبایل — با همان متن‌های شیت اپ مرجع: «شماره موبایلت را وارد
@@ -81,28 +80,6 @@ fun LoginScreen(onDone: () -> Unit) {
                 ) {
                     Text("ارسال کد")
                 }
-                // ورود تستی موقت (بدون پیامک) برای تست روی گوشی؛
-                // فقط وقتی حالت تست بک‌اند روشن است کار می‌کند.
-                OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            if (mobile.isBlank()) {
-                                error = "شماره موبایل را بنویس"
-                                return@launch
-                            }
-                            try {
-                                val res = Api.service.testLogin(TestLoginRequest(mobile))
-                                Session.token = res.token
-                                Session.justRegistered = res.is_new == true
-                                onDone()
-                            } catch (e: Exception) {
-                                error = "ورود تستی ناموفق بود"
-                            }
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("ورود تستی")
                 }
             }
         } else {

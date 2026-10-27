@@ -71,10 +71,12 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature):
     existing = AppPurchase.query.filter_by(
         bazaar_purchase_token=purchase_token
     ).first()
-    if existing is not None and existing.status in ("verified", "consumed"):
-        return existing, True
+    # مالکیت توکن مقدم بر وضعیت آن است: توکن مصرف‌شده‌ی کاربر دیگر
+    # نباید برای کاربر فعلی «موفق» برگردد.
     if existing is not None and existing.user_id != user.id:
         raise ValueError("purchase token belongs to another user")
+    if existing is not None and existing.status in ("verified", "consumed"):
+        return existing, True
 
     # اگر پک داده نشده ولی خرید pending از قبل هست، از همان ردیف بردار.
     if pack is None and existing is not None:
@@ -109,11 +111,14 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature):
         db.session.add(existing)
         db.session.commit()
 
+    # شارژ سکه و تغییر وضعیت در یک تراکنش: اگر بین آن دو خطا رخ دهد،
+    # نه سکه‌ای بی‌سند شارژ می‌شود و نه خریدی pending می‌ماند که بعداً
+    # دوباره شارژ شود.
     coins_svc.credit_coins(
         user, pack.coins if pack else 0,
         reason="purchase", ref_type="purchase", ref_id=existing.id,
+        commit=False,
     )
-    # credit_coins خودش commit می‌کند؛ بعد وضعیت را consumed می‌کنیم.
     existing.status = "consumed"
     existing.verified_at = db.func.now()
     db.session.add(existing)

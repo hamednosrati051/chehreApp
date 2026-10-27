@@ -196,26 +196,6 @@ def me():
     return jsonify({"mobile_masked": masked})
 
 
-@auth_bp.post("/auth/test/login")
-def test_login():
-    # ورود تستی موقت (بدون پیامک) برای تست روی گوشی؛ فقط وقتی
-    # APP_TEST_GRANTS_ENABLED=true است کار می‌کند (مثل تست سکه).
-    if not current_app.config.get("TEST_GRANTS_ENABLED", True):
-        return jsonify({"error": "test login disabled"}), 403
-    mobile = (request.json or {}).get("mobile", "").strip()
-    if not mobile:
-        return jsonify({"error": "mobile required"}), 400
-    user = AppUser.query.filter_by(mobile=mobile).first()
-    is_new = user is None
-    if user is None:
-        # هدیه‌ی ورود از defaultهای مدل می‌آید (مثل otp_verify).
-        user = AppUser(mobile=mobile)
-        db.session.add(user)
-    user.last_login_at = datetime.datetime.utcnow()
-    db.session.commit()
-    return jsonify({"token": _token_for(user), "is_new": is_new})
-
-
 # ---------------- content ----------------
 
 
@@ -250,6 +230,8 @@ def list_worlds():
                 "is_featured": bool(w.is_featured),
                 "is_instagram_trend": bool(w.is_instagram_trend),
                 "is_iranian_trend": bool(w.is_iranian_trend),
+                "is_sport_trend": bool(w.is_sport_trend),
+                "is_seasonal_trend": bool(w.is_seasonal_trend),
                 "created_at": w.created_at.isoformat() if w.created_at else None,
             }
             for w in worlds
@@ -289,6 +271,8 @@ def list_favorites():
                 "is_featured": bool(w.is_featured),
                 "is_instagram_trend": bool(w.is_instagram_trend),
                 "is_iranian_trend": bool(w.is_iranian_trend),
+                "is_sport_trend": bool(w.is_sport_trend),
+                "is_seasonal_trend": bool(w.is_seasonal_trend),
                 "created_at": w.created_at.isoformat() if w.created_at else None,
             }
             for r in rows
@@ -601,6 +585,8 @@ def world_detail(world_id):
             "is_featured": bool(w.is_featured),
             "is_instagram_trend": bool(w.is_instagram_trend),
             "is_iranian_trend": bool(w.is_iranian_trend),
+            "is_sport_trend": bool(w.is_sport_trend),
+            "is_seasonal_trend": bool(w.is_seasonal_trend),
             "created_at": w.created_at.isoformat() if w.created_at else None,
         }
     )
@@ -693,6 +679,32 @@ def pending_purchases():
                 "pack_id": r.pack_id,
                 "amount_irr": r.amount_irr,
                 "purchase_token": r.bazaar_purchase_token,
+            }
+            for r in rows
+        ]
+    )
+
+
+@coins_bp.get("/coins/purchases/mine")
+@require_auth
+def my_purchases():
+    """سابقه‌ی پرداخت‌های خود کاربر (برای بخش سابقه پرداخت پروفایل)."""
+    rows = (
+        AppPurchase.query.filter_by(user_id=g.user.id)
+        .order_by(AppPurchase.id.desc())
+        .limit(50)
+        .all()
+    )
+    packs = {pk.id: pk for pk in AppCoinPack.query.all()}
+    return jsonify(
+        [
+            {
+                "id": r.id,
+                "pack_name": packs[r.pack_id].name if r.pack_id in packs else "",
+                "coins": packs[r.pack_id].coins if r.pack_id in packs else 0,
+                "amount_irr": r.amount_irr,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
             }
             for r in rows
         ]
@@ -890,6 +902,8 @@ def _world_admin(w):
         "is_featured": bool(w.is_featured),
         "is_instagram_trend": bool(w.is_instagram_trend),
         "is_iranian_trend": bool(w.is_iranian_trend),
+        "is_sport_trend": bool(w.is_sport_trend),
+        "is_seasonal_trend": bool(w.is_seasonal_trend),
         "is_active": bool(w.is_active),
         "sort_order": w.sort_order,
     }
@@ -925,6 +939,8 @@ def admin_create_world():
         is_featured=bool(body.get("is_featured", False)),
         is_instagram_trend=bool(body.get("is_instagram_trend", False)),
         is_iranian_trend=bool(body.get("is_iranian_trend", False)),
+        is_sport_trend=bool(body.get("is_sport_trend", False)),
+        is_seasonal_trend=bool(body.get("is_seasonal_trend", False)),
         is_active=bool(body.get("is_active", True)),
         sort_order=body.get("sort_order", 0),
     )
@@ -960,7 +976,7 @@ def admin_update_world(world_id):
     ):
         if field in body:
             setattr(w, field, body[field])
-    for field in ("is_featured", "is_instagram_trend", "is_iranian_trend", "is_active"):
+    for field in ("is_featured", "is_instagram_trend", "is_iranian_trend", "is_sport_trend", "is_seasonal_trend", "is_active"):
         if field in body:
             setattr(w, field, bool(body[field]))
     db.session.commit()
@@ -1147,43 +1163,6 @@ def admin_gallery_delete(row_id):
     db.session.delete(r)
     db.session.commit()
     return jsonify({"ok": True})
-
-
-# ---------------------------------------------------------------------------
-# حالت تست (پیش از انتشار در بازار) — فقط با توکن ادمین.
-# سکه‌ی تستی بدون هیچ پرداختی شارژ می‌کند تا چرخه‌ی کامل
-# سکه ← تولید ← گالری قبل از انتشار بازار قابل وریفای باشد.
-# در دفتر سکه با reason=test مشخص است و با پرداخت واقعی (بازار)
-# قاطی نمی‌شود. پرداخت واقعی همیشه فقط Bazaar IAB است؛ هیچ مسیر
-# زیبالی وجود ندارد. با APP_TEST_GRANTS_ENABLED=false بسته می‌شود.
-# ---------------------------------------------------------------------------
-TEST_GRANT_MAX_COINS = 1000
-
-
-@admin_bp.post("/admin/test/grant-coins")
-@require_admin
-def admin_test_grant_coins():
-    if not current_app.config.get("TEST_GRANTS_ENABLED", True):
-        return jsonify({"error": "test grants disabled"}), 403
-    data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    coins = data.get("coins")
-    if not isinstance(user_id, int) or not isinstance(coins, int):
-        return jsonify({"error": "user_id and coins (int) required"}), 400
-    if coins < 1 or coins > TEST_GRANT_MAX_COINS:
-        return jsonify({"error": "coins must be 1..1000"}), 400
-    user = AppUser.query.get(user_id)
-    if not user:
-        return jsonify({"error": "user not found"}), 404
-    coins_svc.credit_coins(user, coins, reason="test", ref_type="test_grant")
-    return jsonify(
-        {
-            "test_mode": True,
-            "user_id": user.id,
-            "granted": coins,
-            "balance": coins_svc.get_balance(user),
-        }
-    )
 
 
 # ---------------- admin: categories ----------------
