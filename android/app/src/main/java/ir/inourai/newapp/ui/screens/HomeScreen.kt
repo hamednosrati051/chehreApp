@@ -98,7 +98,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
     // هیچ‌کدام تیک نخورده باشد، ردیف نشان داده نمی‌شود.
     val sport = worlds.filter { it.is_sport_trend }
     val seasonal = worlds.filter { it.is_seasonal_trend }
-    // «تازه‌های هفته»: دنیاهای ۷ روز اخیر (جدیدترین اول)، حداکثر ۸ تا؛
+    // «تازه‌های هفته»: دنیاهای ۷ روز اخیر (جدیدترین اول)، حداکثر ۹ تا؛
     // اگر در این هفته دنیایی نیامده باشد، ۶ دنیای آخری که وارد شده‌اند.
     fun createdMillis(w: World): Long {
         return try {
@@ -109,7 +109,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
         }
     }
     val weekAgo = System.currentTimeMillis() - 7L * 24 * 3600 * 1000
-    val fresh = worlds.filter { createdMillis(it) >= weekAgo }.sortedByDescending { createdMillis(it) }.take(8)
+    val fresh = worlds.filter { createdMillis(it) >= weekAgo }.sortedByDescending { createdMillis(it) }.take(9)
     val freshFallback = worlds.sortedByDescending { createdMillis(it) }.take(6)
     val shown = if (selected != null) {
         worlds.filter { it.category_id == selected }
