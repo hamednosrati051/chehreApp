@@ -106,7 +106,7 @@ fun SplashScreen(onSkip: () -> Unit) {
             .clickable { onSkip() },
     ) {
         Image(
-            painter = painterResource(id = R.mipmap.ic_launcher),
+            painter = painterResource(id = R.drawable.splash_icon),
             contentDescription = null,
             modifier = Modifier.fillMaxSize()
                 .graphicsLayer(scaleX = zoom, scaleY = zoom),
