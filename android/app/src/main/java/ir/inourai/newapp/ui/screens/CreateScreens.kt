@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -58,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -88,9 +90,6 @@ private fun friendlyError(e: Exception): String {
     if (e.message?.contains("content_policy_violation") == true || e.message?.contains("safety system") == true) {
         return "ساخت این تصویر به‌خاطر محدودیت ایمنی مدل رد شد. عکس یا دنیای دیگری را امتحان کن؛ سکه و هدیه‌ات کم نشده است."
     }
-    if (e is HttpException && e.code() == 402) {
-        return "سکه کافی نیست؛ از پروفایل سکه اضافه کن"
-    }
     if (e.message?.contains("upload failed") == true) {
         return "آپلود عکس ناموفق بود؛ دوباره تلاش کن"
     }
@@ -117,6 +116,7 @@ fun CreateImageScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var showPicker by remember { mutableStateOf(false) }
+    var showPacks by remember { mutableStateOf(false) }
     val favIds by Favorites.ids
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -202,6 +202,20 @@ fun CreateImageScreen(
 
     val cost = world?.coin_price ?: 0
     val isWorking = jobId != null
+    // سکه‌ی ناکافی: لاگین‌کرده، عکس انتخاب‌شده، هدیه‌ی تصویری ندارد و
+    // سکه‌اش از قیمت دنیا کمتر است — قبل از تلاش ساخت نشان داده می‌شود.
+    val insufficient = Session.token != null && picked != null && cost > 0 &&
+        (balance?.free_image ?: 0) <= 0 && (balance?.coins ?: 0) < cost
+
+    fun refreshBalance() {
+        scope.launch {
+            balance = try {
+                Api.service.balance()
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // نمونه‌ی دنیا، تمام‌صفحه (مثل رقیب).
@@ -298,6 +312,56 @@ fun CreateImageScreen(
                         ) {
                             Text("تصویر خود را آپلود کنید", fontWeight = FontWeight.Bold)
                         }
+                    } else if (insufficient) {
+                        // حالت سکه‌ی ناکافی (مثل رقیب): بندانگشتی + تغییر تصویر،
+                        // «سکه کافی نداری» و دکمه‌ی بزرگ «+ افزایش سکه».
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            picked?.let {
+                                AsyncImage(
+                                    model = it,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(20.dp)),
+                                    contentScale = ContentScale.Crop,
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = { showPicker = true }) {
+                                Text("تغییر تصویر", color = Color.White)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("سکه کافی نداری", color = Color.White, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                Icons.Rounded.Info,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { showPacks = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(50),
+                        ) {
+                            Text("+ افزایش سکه", fontWeight = FontWeight.Bold)
+                        }
+                        Text(
+                            "هر ساخت $cost سکه",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            textAlign = TextAlign.Center,
+                        )
                     } else {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -344,7 +408,13 @@ fun CreateImageScreen(
                                             status = "queued"
                                             GenerationPollService.start(context, created.id)
                                         } catch (e: Exception) {
-                                            error = friendlyError(e)
+                                            if (e is HttpException && e.code() == 402) {
+                                                // سکه ناکافی: به‌جای خطای قرمز بعد از ساخت،
+                                                // موجودی تازه می‌شود تا حالت «سکه کافی نداری» بیاید.
+                                                refreshBalance()
+                                            } else {
+                                                error = friendlyError(e)
+                                            }
                                         }
                                     }
                                 },
@@ -457,5 +527,15 @@ fun CreateImageScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+
+    // شیت بسته‌های سکه (همان شیت پروفایل).
+    if (showPacks) {
+        PacksSheet(
+            onDismiss = { showPacks = false },
+            onPurchased = { refreshBalance(); notice = "سکه‌ها اضافه شد" },
+            onError = { notice = it },
+            onLogin = onLogin,
+        )
     }
 }

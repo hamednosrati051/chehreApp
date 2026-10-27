@@ -1,11 +1,7 @@
 package ir.inourai.newapp.ui.screens
 
-import android.app.Activity
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -72,10 +68,8 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ir.inourai.newapp.billing.BazaarBilling
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Balance
-import ir.inourai.newapp.data.Pack
 import ir.inourai.newapp.data.PaymentItem
 import ir.inourai.newapp.data.PublicSettings
 import ir.inourai.newapp.data.Session
@@ -91,7 +85,6 @@ private val GoldText = Color(0xFF8A5A00)
 fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
     val context = LocalContext.current
     var balance by remember { mutableStateOf<Balance?>(null) }
-    var packs by remember { mutableStateOf<List<Pack>>(emptyList()) }
     var notice by remember { mutableStateOf<String?>(null) }
     var payments by remember { mutableStateOf<List<PaymentItem>>(emptyList()) }
     var showPacks by remember { mutableStateOf(false) }
@@ -129,48 +122,6 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
         }
     }
 
-    // نتیجه‌ی Intent خرید بازار: وریفای سروری ← consume ← رفرش موجودی.
-    val buyLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartIntentSenderForResult(),
-    ) { result ->
-        scope.launch {
-            try {
-                if (result.resultCode != Activity.RESULT_OK) {
-                    notice = "خرید لغو شد"
-                    return@launch
-                }
-                val purchase = BazaarBilling.parsePurchaseResult(result.data)
-                    ?: run {
-                        notice = "نتیجه‌ی خرید خوانا نبود"
-                        return@launch
-                    }
-                BazaarBilling.verifyAndConsume(context, purchase)
-                refreshBalance()
-                showPacks = false
-                notice = "سکه‌ها اضافه شد"
-            } catch (e: Exception) {
-                notice = e.message
-            }
-        }
-    }
-
-    fun buy(p: Pack) {
-        if (!loggedIn) {
-            showPacks = false
-            notice = "برای خرید اول وارد شوید"
-            onLogin()
-            return
-        }
-        scope.launch {
-            try {
-                val sender = BazaarBilling.getBuyIntentSender(context, p.bazaar_sku)
-                buyLauncher.launch(IntentSenderRequest.Builder(sender).build())
-            } catch (e: Exception) {
-                notice = e.message
-            }
-        }
-    }
-
     LaunchedEffect(loggedIn) {
         if (loggedIn) {
             refreshBalance()
@@ -180,11 +131,6 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                 } catch (_: Exception) {
                 }
             }
-        }
-        packs = try {
-            Api.service.packs()
-        } catch (_: Exception) {
-            emptyList()
         }
     }
 
@@ -432,62 +378,12 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
     }
 
     if (showPacks) {
-        ModalBottomSheet(
-            onDismissRequest = { showPacks = false },
-            sheetState = sheetState,
-        ) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(28.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("بسته‌های سکه", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Spacer(modifier = Modifier.height(12.dp))
-                if (packs.isEmpty()) {
-                    Text("بسته‌ای نیست.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                packs.forEach { p ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                if (p.name.isNotBlank()) {
-                                    Text(p.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                }
-                                if (p.badge != null) {
-                                    Text(
-                                        p.badge,
-                                        color = GoldText,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                }
-                                if (p.pack_type != null) {
-                                    Text(
-                                        p.pack_type,
-                                        color = RoyalBlue,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                }
-                            }
-                            Text(
-                                "${p.coins} سکه — ${p.price_toman} تومان",
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
-                        Button(onClick = { buy(p) }) {
-                            Text("خرید")
-                        }
-                    }
-                    HorizontalDivider()
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-            }
-        }
+        PacksSheet(
+            onDismiss = { showPacks = false },
+            onPurchased = { refreshBalance(); notice = "سکه‌ها اضافه شد" },
+            onError = { notice = it },
+            onLogin = onLogin,
+        )
     }
 
     when (dialog) {
