@@ -44,11 +44,11 @@ admin_bp = Blueprint("admin", __name__)
 OTP_TTL_MINUTES = 2
 OTP_MAX_PER_HOUR = 5
 TOKEN_DAYS = 30
-DEFAULT_IMAGE_COINS = 8
+DEFAULT_IMAGE_COINS = 9
 
 
 def _default_image_coins():
-    """تعرفه‌ی پیش‌فرض هر تصویر (سکه)؛ از app_settings وگرنه ۵."""
+    """تعرفه‌ی پیش‌فرض هر تصویر (سکه)؛ از app_settings وگرنه DEFAULT_IMAGE_COINS."""
     row = AppSetting.query.get("image_coin_price")
     try:
         return int(row.value) if row else DEFAULT_IMAGE_COINS
