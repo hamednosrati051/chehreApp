@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -99,7 +99,7 @@ fun WorldCard(world: World, onClick: () -> Unit, modifier: Modifier = Modifier) 
                         .background(Color.Black.copy(alpha = 0.45f), CircleShape),
                 ) {
                     Icon(
-                        if (world.id in favIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        if (world.id in favIds) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                         contentDescription = null,
                         tint = if (world.id in favIds) Color(0xFFFF5A5A) else Color.White,
                         modifier = Modifier.size(20.dp),

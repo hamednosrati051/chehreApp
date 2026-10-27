@@ -21,8 +21,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -124,7 +124,7 @@ fun MyMediaScreen(
                     .padding(horizontal = 32.dp, vertical = 10.dp),
             ) {
                 Icon(
-                    Icons.Filled.FavoriteBorder,
+                    Icons.Rounded.FavoriteBorder,
                     contentDescription = null,
                     tint = if (tab == 0) Color.White else Color.Gray,
                 )
@@ -139,7 +139,7 @@ fun MyMediaScreen(
                     .padding(horizontal = 32.dp, vertical = 10.dp),
             ) {
                 Icon(
-                    Icons.Filled.Image,
+                    Icons.Rounded.Image,
                     contentDescription = null,
                     tint = if (tab == 1) Color.White else Color.Gray,
                 )
@@ -168,7 +168,7 @@ fun MyMediaScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Icon(
-                        Icons.Filled.FavoriteBorder,
+                        Icons.Rounded.FavoriteBorder,
                         contentDescription = null,
                         tint = Color.LightGray,
                         modifier = Modifier.size(72.dp),

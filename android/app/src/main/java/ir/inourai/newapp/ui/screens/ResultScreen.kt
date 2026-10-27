@@ -22,10 +22,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -189,7 +189,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(8.dp),
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowForward, contentDescription = null, tint = Color.White)
+                Icon(Icons.Rounded.ArrowForward, contentDescription = null, tint = Color.White)
             }
             Text(
                 worldName ?: "",
@@ -202,7 +202,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
             if (wid != null && Session.token != null) {
                 IconButton(onClick = { scope.launch { Favorites.toggle(wid) } }) {
                     Icon(
-                        if (wid in favIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        if (wid in favIds) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                         contentDescription = null,
                         tint = if (wid in favIds) Color(0xFFFF5A5A) else Color.White,
                     )
@@ -301,7 +301,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Icon(
-                        Icons.Filled.Star,
+                        Icons.Rounded.Star,
                         contentDescription = null,
                         tint = Color(0xFFFFC107),
                         modifier = Modifier.size(28.dp),

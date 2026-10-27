@@ -25,11 +25,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -231,7 +231,7 @@ fun CreateImageScreen(
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Filled.ArrowForward, contentDescription = null, tint = Color.White)
+                    Icon(Icons.Rounded.ArrowForward, contentDescription = null, tint = Color.White)
                 }
                 Text(
                     world?.name ?: "",
@@ -243,7 +243,7 @@ fun CreateImageScreen(
                 if (Session.token != null) {
                     IconButton(onClick = { scope.launch { Favorites.toggle(worldId) } }) {
                         Icon(
-                            if (worldId in favIds) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            if (worldId in favIds) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                             contentDescription = null,
                             tint = if (worldId in favIds) Color(0xFFFF5A5A) else Color.White,
                         )
@@ -405,7 +405,7 @@ fun CreateImageScreen(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                Icons.Filled.Image,
+                                Icons.Rounded.Image,
                                 contentDescription = null,
                                 tint = Color(0xFF2E5BFF),
                                 modifier = Modifier.size(32.dp),
@@ -440,7 +440,7 @@ fun CreateImageScreen(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                Icons.Filled.CameraAlt,
+                                Icons.Rounded.CameraAlt,
                                 contentDescription = null,
                                 tint = Color(0xFF2E5BFF),
                                 modifier = Modifier.size(32.dp),

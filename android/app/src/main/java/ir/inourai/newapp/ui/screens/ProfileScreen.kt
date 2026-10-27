@@ -24,17 +24,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.HelpOutline
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.HelpOutline
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Phone
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -218,7 +218,7 @@ fun ProfileScreen(onLogin: () -> Unit) {
                         ),
                         shape = RoundedCornerShape(50),
                     ) {
-                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Icon(Icons.Rounded.Add, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("افزایش سکه", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
@@ -235,14 +235,14 @@ fun ProfileScreen(onLogin: () -> Unit) {
             ) {
                 if (!loggedIn) {
                     LinkRow(
-                        icon = Icons.Filled.Person,
+                        icon = Icons.Rounded.Person,
                         title = "ورود / ساخت حساب",
                         subtitle = "با اولین ورود، ۱ تصویر هدیه بگیر",
                         onClick = onLogin,
                     )
                 } else {
                     LinkRow(
-                        icon = Icons.Filled.Phone,
+                        icon = Icons.Rounded.Phone,
                         title = maskedMobile ?: "حساب شما",
                         subtitle = "عضویت رایگان",
                         titleDirection = if (maskedMobile != null) TextDirection.Ltr else null,
@@ -281,20 +281,23 @@ fun ProfileScreen(onLogin: () -> Unit) {
             ) {
                 Column {
                     LinkRow(
-                        icon = Icons.Filled.HelpOutline,
+                        icon = Icons.Rounded.HelpOutline,
                         title = "پشتیبانی",
+                        iconBg = Color(0xFFE6F7EC), iconTint = Color(0xFF1B7A3D),
                         onClick = { dialog = "support" },
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     LinkRow(
-                        icon = Icons.Filled.BugReport,
+                        icon = Icons.Rounded.BugReport,
                         title = "گزارش خطا",
+                        iconBg = Color(0xFFFDE8E8), iconTint = Color(0xFFC0392B),
                         onClick = { dialog = "bug" },
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     LinkRow(
-                        icon = Icons.Filled.Star,
+                        icon = Icons.Rounded.Star,
                         title = "امتیاز به چهره‌ساز در بازار",
+                        iconBg = Color(0xFFFFF3D6), iconTint = Color(0xFFB77900),
                         external = true,
                         onClick = {
                             val url = pubSettings.bazaar_url.ifBlank { "https://cafebazaar.ir/app/" + context.packageName }
@@ -305,8 +308,9 @@ fun ProfileScreen(onLogin: () -> Unit) {
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     LinkRow(
-                        icon = Icons.Filled.CameraAlt,
+                        icon = Icons.Rounded.CameraAlt,
                         title = "اینستاگرام",
+                        iconBg = Color(0xFFFDE8F3), iconTint = Color(0xFFC13584),
                         external = true,
                         onClick = {
                             val handle = pubSettings.instagram_handle.trim().removePrefix("@")
@@ -321,14 +325,16 @@ fun ProfileScreen(onLogin: () -> Unit) {
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     LinkRow(
-                        icon = Icons.Filled.Info,
+                        icon = Icons.Rounded.Info,
                         title = "درباره ما",
+                        iconBg = Color(0xFFE6F4F1), iconTint = Color(0xFF0E7C6B),
                         onClick = { dialog = "about" },
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     LinkRow(
-                        icon = Icons.Filled.Shield,
+                        icon = Icons.Rounded.Shield,
                         title = "قوانین و حریم خصوصی",
+                        iconBg = Color(0xFFEDE9FE), iconTint = Color(0xFF5B4DBC),
                         onClick = { dialog = "rules" },
                     )
                 }
@@ -511,6 +517,8 @@ private fun LinkRow(
     subtitle: String? = null,
     external: Boolean = false,
     titleDirection: TextDirection? = null,
+    iconBg: Color = IconBg,
+    iconTint: Color = RoyalBlue,
     onClick: (() -> Unit)?,
 ) {
     Row(
@@ -524,10 +532,10 @@ private fun LinkRow(
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(IconBg),
+                .background(iconBg),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = RoyalBlue)
+            Icon(icon, contentDescription = null, tint = iconTint)
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -542,7 +550,7 @@ private fun LinkRow(
             }
         }
         Icon(
-            if (external) Icons.Filled.OpenInNew else Icons.Filled.KeyboardArrowLeft,
+            if (external) Icons.Rounded.OpenInNew else Icons.Rounded.KeyboardArrowLeft,
             contentDescription = null,
             tint = Color.Gray,
         )
