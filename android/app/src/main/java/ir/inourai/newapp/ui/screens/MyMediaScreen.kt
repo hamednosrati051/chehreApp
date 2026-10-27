@@ -23,9 +23,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -80,11 +80,23 @@ fun MyMediaScreen(
                 favorites = Api.service.favorites()
             } catch (_: Exception) {
             }
+            try {
+                submitted = Api.service.myGallery().mapNotNull { it.generation_id }.toSet()
+            } catch (_: Exception) {
+            }
         }
     }
 
     LaunchedEffect(loggedIn) {
         if (loggedIn) refresh()
+    }
+
+    // پیام کوتاه و موقت: بعد از ~۲٫۵ ثانیه محو می‌شود، متن ماندگار پایین صفحه نمی‌ماند.
+    LaunchedEffect(notice) {
+        if (notice != null) {
+            kotlinx.coroutines.delay(2500)
+            notice = null
+        }
     }
 
     // اگر ساختی در حال انجام است، هر ۴ ثانیه تازه کن تا آماده‌شدنش همین‌جا دیده شود.
@@ -95,7 +107,8 @@ fun MyMediaScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
         // سگمنت قلب | عکس (مثل رقیب).
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -195,7 +208,6 @@ fun MyMediaScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 val pending = images.filter { it.status == "queued" || it.status == "processing" }
-                val failed = images.filter { it.status == "failed" }
                 val done = images.filter { it.status == "done" && it.output_url != null }
                 if (images.isEmpty()) {
                     item {
@@ -221,25 +233,6 @@ fun MyMediaScreen(
                         }
                     }
                 }
-                items(failed) { item ->
-                    Card(
-                        shape = RoundedCornerShape(24.dp),
-                        modifier = Modifier.fillMaxWidth().clickable { onImage(item.id) },
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFD32F2F))
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("ساخت ناموفق شد", fontWeight = FontWeight.Bold)
-                                Text(item.world_name ?: "", color = Color.Gray, fontSize = 13.sp)
-                                Text("برای دیدن علت بزن (سکه کم نشده)", color = Color.Gray, fontSize = 13.sp)
-                            }
-                        }
-                    }
-                }
                 items(done) { item ->
                     Card(shape = RoundedCornerShape(24.dp)) {
                         Column {
@@ -259,7 +252,7 @@ fun MyMediaScreen(
                                                     GallerySubmitRequest(item.id),
                                                 )
                                                 submitted = submitted + item.id
-                                                notice = "به صف تایید گالری فرستاده شد"
+                                                notice = "برای نمایش عمومی، در صف تایید گالری چهره‌ساز قرار گرفت"
                                             } catch (e: Exception) {
                                                 notice = e.message
                                             }
@@ -267,24 +260,38 @@ fun MyMediaScreen(
                                     },
                                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                                 ) {
-                                    Text("ارسال به گالری")
+                                    Text("ارسال به گالری چهره‌ساز")
                                 }
                             } else {
-                                Text(
-                                    "در صف تایید گالری",
-                                    modifier = Modifier.padding(12.dp),
-                                )
+                                Button(
+                                    onClick = {},
+                                    enabled = false,
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                ) {
+                                    Text("ارسال شده به گالری")
+                                }
                             }
                         }
                     }
                 }
-                notice?.let { item { Text(it) } }
             }
             Button(
                 onClick = onCreate,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
                 Text("+ ساخت عکس جدید")
+            }
+        }
+        }
+
+        // بنر نوتیف شناور، مثل صفحه‌ی نتیجه.
+        notice?.let {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF222222)),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+            ) {
+                Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
             }
         }
     }

@@ -542,6 +542,7 @@ def my_gallery():
         [
             {
                 "id": r.id,
+                "generation_id": r.generation_id,
                 "image_url": r.image_url,
                 "status": r.status,
                 "published_in_app": bool(r.published_in_app),
@@ -563,6 +564,18 @@ def public_gallery():
 
 
 # ---------------- world detail ----------------
+
+
+PUBLIC_SETTINGS = ("about_us", "support_info", "bug_report_info", "instagram_handle", "bazaar_url")
+
+
+@content_bp.get("/app/settings")
+def public_app_settings():
+    """تنظیمات عمومی اپ (درباره ما، پشتیبانی، لینک‌ها) — بدون احراز هویت،
+    فقط کلیدهای سفید؛ هیچ رازی از app_settings بیرون نمی‌آید."""
+    rows = AppSetting.query.filter(AppSetting.key.in_(PUBLIC_SETTINGS)).all()
+    out = {r.key: r.value for r in rows}
+    return jsonify({k: out.get(k, "") for k in PUBLIC_SETTINGS})
 
 
 @content_bp.get("/worlds/<int:world_id>")

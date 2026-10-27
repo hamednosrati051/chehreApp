@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
@@ -61,13 +62,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.inourai.newapp.billing.BazaarBilling
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Balance
 import ir.inourai.newapp.data.Pack
+import ir.inourai.newapp.data.PublicSettings
 import ir.inourai.newapp.data.Session
 import kotlinx.coroutines.launch
 
@@ -86,10 +91,15 @@ fun ProfileScreen(onLogin: () -> Unit) {
     var showPacks by remember { mutableStateOf(false) }
     var showAccount by remember { mutableStateOf(false) }
     var maskedMobile by remember { mutableStateOf<String?>(null) }
+    var pubSettings by remember { mutableStateOf(PublicSettings()) }
     var dialog by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val loggedIn = Session.token != null
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    LaunchedEffect(Unit) {
+        pubSettings = try { Api.service.publicSettings() } catch (_: Exception) { PublicSettings() }
+    }
 
     fun refreshBalance() {
         scope.launch {
@@ -235,6 +245,7 @@ fun ProfileScreen(onLogin: () -> Unit) {
                         icon = Icons.Filled.Phone,
                         title = maskedMobile ?: "حساب شما",
                         subtitle = "عضویت رایگان",
+                        titleDirection = if (maskedMobile != null) TextDirection.Ltr else null,
                         onClick = { showAccount = true },
                     )
                 }
@@ -246,9 +257,9 @@ fun ProfileScreen(onLogin: () -> Unit) {
                     onClick = {
                         scope.launch {
                             try {
-                                BazaarBilling.recoverPurchases(context)
+                                val recovered = BazaarBilling.recoverPurchases(context)
                                 refreshBalance()
-                                notice = "بازیابی خریدها انجام شد"
+                                notice = if (recovered > 0) "بازیابی خریدها انجام شد" else "خرید ناتمامی پیدا نشد"
                             } catch (e: Exception) {
                                 notice = e.message
                             }
@@ -271,8 +282,14 @@ fun ProfileScreen(onLogin: () -> Unit) {
                 Column {
                     LinkRow(
                         icon = Icons.Filled.HelpOutline,
-                        title = "پشتیبانی و گزارش خطا",
-                        onClick = { notice = "پشتیبانی به‌زودی فعال می‌شود" },
+                        title = "پشتیبانی",
+                        onClick = { dialog = "support" },
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    LinkRow(
+                        icon = Icons.Filled.BugReport,
+                        title = "گزارش خطا",
+                        onClick = { dialog = "bug" },
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     LinkRow(
@@ -280,7 +297,7 @@ fun ProfileScreen(onLogin: () -> Unit) {
                         title = "امتیاز به چهره‌ساز در بازار",
                         external = true,
                         onClick = {
-                            val url = "https://cafebazaar.ir/app/" + context.packageName
+                            val url = pubSettings.bazaar_url.ifBlank { "https://cafebazaar.ir/app/" + context.packageName }
                             context.startActivity(
                                 Intent(Intent.ACTION_VIEW, Uri.parse(url)),
                             )
@@ -291,7 +308,16 @@ fun ProfileScreen(onLogin: () -> Unit) {
                         icon = Icons.Filled.CameraAlt,
                         title = "اینستاگرام",
                         external = true,
-                        onClick = { notice = "صفحه‌ی اینستاگرام به‌زودی معرفی می‌شود" },
+                        onClick = {
+                            val handle = pubSettings.instagram_handle.trim().removePrefix("@")
+                            if (handle.isBlank()) {
+                                notice = "صفحه‌ی اینستاگرام به‌زودی معرفی می‌شود"
+                            } else {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://instagram.com/" + handle)),
+                                )
+                            }
+                        },
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     LinkRow(
@@ -328,7 +354,12 @@ fun ProfileScreen(onLogin: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text("شماره موبایل", color = Color.Gray)
-                    Text(maskedMobile ?: "—", fontWeight = FontWeight.Bold)
+                    Text(
+                        maskedMobile ?: "—",
+                        fontWeight = FontWeight.Bold,
+                        style = TextStyle(textDirection = TextDirection.Ltr),
+                        textAlign = TextAlign.End,
+                    )
                 }
                 HorizontalDivider()
                 Row(
@@ -367,6 +398,12 @@ fun ProfileScreen(onLogin: () -> Unit) {
             onDismissRequest = { showPacks = false },
             sheetState = sheetState,
         ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(28.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("بسته‌های سکه", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(modifier = Modifier.height(12.dp))
@@ -411,6 +448,7 @@ fun ProfileScreen(onLogin: () -> Unit) {
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
+            }
         }
     }
 
@@ -418,7 +456,23 @@ fun ProfileScreen(onLogin: () -> Unit) {
         "about" -> AlertDialog(
             onDismissRequest = { dialog = null },
             title = { Text("درباره ما") },
-            text = { Text("چهره‌ساز — سلفی بده، یه چهره‌ی تازه بگیر.") },
+            text = { Text(pubSettings.about_us.ifBlank { "چهره‌ساز — سلفی بده، یه چهره‌ی تازه بگیر." }) },
+            confirmButton = {
+                TextButton(onClick = { dialog = null }) { Text("باشه") }
+            },
+        )
+        "support" -> AlertDialog(
+            onDismissRequest = { dialog = null },
+            title = { Text("پشتیبانی") },
+            text = { Text(pubSettings.support_info.ifBlank { "پشتیبانی به‌زودی فعال می‌شود." }) },
+            confirmButton = {
+                TextButton(onClick = { dialog = null }) { Text("باشه") }
+            },
+        )
+        "bug" -> AlertDialog(
+            onDismissRequest = { dialog = null },
+            title = { Text("گزارش خطا") },
+            text = { Text(pubSettings.bug_report_info.ifBlank { "گزارش خطا به‌زودی فعال می‌شود." }) },
             confirmButton = {
                 TextButton(onClick = { dialog = null }) { Text("باشه") }
             },
@@ -456,6 +510,7 @@ private fun LinkRow(
     title: String,
     subtitle: String? = null,
     external: Boolean = false,
+    titleDirection: TextDirection? = null,
     onClick: (() -> Unit)?,
 ) {
     Row(
@@ -476,7 +531,12 @@ private fun LinkRow(
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text(
+                title,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                style = TextStyle(textDirection = titleDirection ?: TextDirection.Unspecified),
+            )
             if (subtitle != null) {
                 Text(subtitle, color = Color.Gray, fontSize = 13.sp)
             }

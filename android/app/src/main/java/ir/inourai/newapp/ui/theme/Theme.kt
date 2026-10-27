@@ -30,17 +30,24 @@ val Vazirmatn = FontFamily(
     Font(R.font.vazirmatn_bold, FontWeight.Bold),
 )
 
+// فونت فانتزی نمایشی (لاله‌زار) برای تیترها؛ حروف فارسی گ/چ/پ/ژ را دارد.
+// متن‌های بدنه و برچسب‌ها وزیرمتن می‌مانند تا خوانایی در سایز کوچک حفظ شود.
+val Lalezar = FontFamily(
+    Font(R.font.lalezar_regular, FontWeight.Normal),
+    Font(R.font.lalezar_regular, FontWeight.Bold),
+)
+
 private val BaseTypography = Typography()
 val AppTypography = Typography(
-    displayLarge = BaseTypography.displayLarge.copy(fontFamily = Vazirmatn),
-    displayMedium = BaseTypography.displayMedium.copy(fontFamily = Vazirmatn),
-    displaySmall = BaseTypography.displaySmall.copy(fontFamily = Vazirmatn),
-    headlineLarge = BaseTypography.headlineLarge.copy(fontFamily = Vazirmatn),
-    headlineMedium = BaseTypography.headlineMedium.copy(fontFamily = Vazirmatn),
-    headlineSmall = BaseTypography.headlineSmall.copy(fontFamily = Vazirmatn),
-    titleLarge = BaseTypography.titleLarge.copy(fontFamily = Vazirmatn),
-    titleMedium = BaseTypography.titleMedium.copy(fontFamily = Vazirmatn),
-    titleSmall = BaseTypography.titleSmall.copy(fontFamily = Vazirmatn),
+    displayLarge = BaseTypography.displayLarge.copy(fontFamily = Lalezar),
+    displayMedium = BaseTypography.displayMedium.copy(fontFamily = Lalezar),
+    displaySmall = BaseTypography.displaySmall.copy(fontFamily = Lalezar),
+    headlineLarge = BaseTypography.headlineLarge.copy(fontFamily = Lalezar),
+    headlineMedium = BaseTypography.headlineMedium.copy(fontFamily = Lalezar),
+    headlineSmall = BaseTypography.headlineSmall.copy(fontFamily = Lalezar),
+    titleLarge = BaseTypography.titleLarge.copy(fontFamily = Lalezar),
+    titleMedium = BaseTypography.titleMedium.copy(fontFamily = Lalezar),
+    titleSmall = BaseTypography.titleSmall.copy(fontFamily = Lalezar),
     bodyLarge = BaseTypography.bodyLarge.copy(fontFamily = Vazirmatn),
     bodyMedium = BaseTypography.bodyMedium.copy(fontFamily = Vazirmatn),
     bodySmall = BaseTypography.bodySmall.copy(fontFamily = Vazirmatn),

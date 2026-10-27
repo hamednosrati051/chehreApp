@@ -27,6 +27,8 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -103,6 +105,10 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel(genId.toInt())
         Favorites.refresh()
+        try {
+            submitted = Api.service.myGallery().any { it.generation_id == genId }
+        } catch (_: Exception) {
+        }
         while (true) {
             try {
                 val st = Api.service.generation(genId)
@@ -117,6 +123,14 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                 break
             }
             delay(3000)
+        }
+    }
+
+    // پیام کوتاه و موقت: بعد از ~۲٫۵ ثانیه محو می‌شود.
+    LaunchedEffect(notice) {
+        if (notice != null) {
+            delay(2500)
+            notice = null
         }
     }
 
@@ -164,9 +178,12 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier.fillMaxSize().background(ViewerBg),
     ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+        ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -232,7 +249,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                             try {
                                 Api.service.gallerySubmit(GallerySubmitRequest(genId))
                                 submitted = true
-                                notice = "به صف تایید گالری فرستاده شد"
+                                notice = "برای نمایش عمومی، در صف تایید گالری چهره‌ساز قرار گرفت"
                             } catch (e: Exception) {
                                 notice = e.message
                             }
@@ -240,20 +257,32 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                     },
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                 ) {
-                    Text("ارسال به گالری", color = Color.White)
+                    Text("ارسال به گالری چهره‌ساز", color = Color.White)
                 }
             } else {
-                Text(
-                    "در صف تایید گالری",
-                    color = Color.Gray,
+                Button(
+                    onClick = {},
+                    enabled = false,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                )
+                ) {
+                    Text("ارسال شده به گالری")
+                }
             }
         }
-        notice?.let {
-            Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-        }
         Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // بنر نوتیف شناور: پیام زیر عکس نمی‌آید؛ مثل یک نوتیف کوتاه
+        // بالای نوار پایین می‌نشیند و بعد از ~۲٫۵ ثانیه محو می‌شود.
+        notice?.let {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF222222)),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+            ) {
+                Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+            }
+        }
     }
 
     // شیت امتیاز بعد از ساخت (فقط برای ساخت تازه، یک بار).

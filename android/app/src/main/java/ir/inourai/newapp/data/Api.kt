@@ -90,7 +90,14 @@ data class PendingPurchase(
 )
 data class GallerySubmitRequest(val generation_id: Long)
 data class GallerySubmitResponse(val id: Long, val status: String)
-data class GalleryItem(val id: Long, val image_url: String)
+data class GalleryItem(val id: Long, val image_url: String, val generation_id: Long? = null)
+data class PublicSettings(
+    val about_us: String = "",
+    val support_info: String = "",
+    val bug_report_info: String = "",
+    val instagram_handle: String = "",
+    val bazaar_url: String = "",
+)
 
 interface ApiService {
     @POST("auth/otp/request")
@@ -152,6 +159,9 @@ interface ApiService {
 
     @GET("gallery/public")
     suspend fun publicGallery(): List<GalleryItem>
+
+    @GET("app/settings")
+    suspend fun publicSettings(): PublicSettings
 }
 
 object Api {

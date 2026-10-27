@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -17,10 +20,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PhotoLibrary
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -52,6 +56,7 @@ import androidx.navigation.navArgument
 import ir.inourai.newapp.billing.BazaarBilling
 import ir.inourai.newapp.data.Session
 import ir.inourai.newapp.ui.screens.CreateImageScreen
+import ir.inourai.newapp.ui.screens.GalleryScreen
 import ir.inourai.newapp.ui.screens.HomeScreen
 import ir.inourai.newapp.ui.screens.LoginScreen
 import ir.inourai.newapp.ui.screens.MyMediaScreen
@@ -69,6 +74,7 @@ object Dest {
     const val HOME = "home"
     const val SEARCH = "search"
     const val MY_MEDIA = "my_media"
+    const val GALLERY = "gallery"
     const val PROFILE = "profile"
     const val WORLDS = "worlds"
     const val CREATE_IMAGE = "create_image/{worldId}"
@@ -96,6 +102,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun App(initialGenId: Long = -1L) {
     val nav = rememberNavController()
+    // جابه‌جایی تب‌ها بدون انباشتن پشته و بدون لگد: تک‌نمونه، بازیابی حالت، گذر fade.
+    val navToTab: (String) -> Unit = { dest ->
+        nav.navigate(dest) {
+            launchSingleTop = true
+            restoreState = true
+            popUpTo(nav.graph.startDestinationId) { saveState = true }
+        }
+    }
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
     var showSplash by rememberSaveable { mutableStateOf(true) }
@@ -150,10 +164,11 @@ fun App(initialGenId: Long = -1L) {
                                     .padding(horizontal = 8.dp, vertical = 10.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                             ) {
-                                NavTab(Icons.Filled.Home, "خانه", route == Dest.HOME) { nav.navigate(Dest.HOME) }
-                                NavTab(Icons.Filled.Search, "جستجو", route == Dest.SEARCH) { nav.navigate(Dest.SEARCH) }
-                                NavTab(Icons.Filled.Image, "تصاویر من", route == Dest.MY_MEDIA) { nav.navigate(Dest.MY_MEDIA) }
-                                NavTab(Icons.Filled.Person, "پروفایل", route == Dest.PROFILE) { nav.navigate(Dest.PROFILE) }
+                                NavTab(Icons.Rounded.Home, "خانه", route == Dest.HOME) { navToTab(Dest.HOME) }
+                                NavTab(Icons.Rounded.Search, "جستجو", route == Dest.SEARCH) { navToTab(Dest.SEARCH) }
+                                NavTab(Icons.Rounded.PhotoLibrary, "گالری", route == Dest.GALLERY) { navToTab(Dest.GALLERY) }
+                                NavTab(Icons.Rounded.Image, "تصاویر من", route == Dest.MY_MEDIA) { navToTab(Dest.MY_MEDIA) }
+                                NavTab(Icons.Rounded.Person, "پروفایل", route == Dest.PROFILE) { navToTab(Dest.PROFILE) }
                             }
                         }
                     }
@@ -164,6 +179,10 @@ fun App(initialGenId: Long = -1L) {
                 navController = nav,
                 startDestination = if (initialGenId > 0) "result/$initialGenId" else Dest.HOME,
                 modifier = Modifier.padding(pad),
+                enterTransition = { fadeIn(animationSpec = tween(300)) },
+                exitTransition = { fadeOut(animationSpec = tween(300)) },
+                popEnterTransition = { fadeIn(animationSpec = tween(300)) },
+                popExitTransition = { fadeOut(animationSpec = tween(300)) },
             ) {
                 composable(Dest.HOME) {
                     HomeScreen(
@@ -178,6 +197,9 @@ fun App(initialGenId: Long = -1L) {
                             nav.navigate("create_image/$worldId")
                         },
                     )
+                }
+                composable(Dest.GALLERY) {
+                    GalleryScreen()
                 }
                 composable(Dest.MY_MEDIA) {
                     MyMediaScreen(

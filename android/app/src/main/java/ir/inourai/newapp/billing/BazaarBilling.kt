@@ -357,13 +357,17 @@ object BazaarBilling {
         consume(context, purchase.purchaseToken)
     }
 
-    /** بازیابی خریدهای ناتمام: همه‌ی ownedها وریفای و consume می‌شوند. */
-    suspend fun recoverPurchases(context: Context) {
+    /** بازیابی خریدهای ناتمام: همه‌ی ownedها وریفای و consume می‌شوند.
+     *  تعداد بازیابی‌شده را برمی‌گرداند تا پیام دکمه دروغ نگوید. */
+    suspend fun recoverPurchases(context: Context): Int {
+        var recovered = 0
         for (purchase in getOwnedPurchases(context)) {
             try {
                 verifyAndConsume(context, purchase)
+                recovered++
             } catch (_: Exception) {
             }
         }
+        return recovered
     }
 }

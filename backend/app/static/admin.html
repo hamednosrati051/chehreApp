@@ -221,6 +221,15 @@
       <input id="s-val" placeholder="مقدار (مثلا 8)" required>
       <button>ذخیره تنظیم</button>
     </form>
+    <form class="grid" onsubmit="savePublicSettings(event)">
+      <textarea id="ps-about" rows="3" placeholder="درباره ما (متن نمایشی در پروفایل)"></textarea>
+      <textarea id="ps-support" rows="3" placeholder="پشتیبانی (متن نمایشی در پروفایل)"></textarea>
+      <textarea id="ps-bug" rows="3" placeholder="گزارش خطا (متن نمایشی در پروفایل)"></textarea>
+      <input id="ps-insta" placeholder="آیدی اینستاگرام (بدون @، مثلا chehresaz.app)">
+      <input id="ps-bazaar" placeholder="لینک بازار (خالی = لینک خودکار با نام پکیج)">
+      <button>ذخیره متن‌ها و لینک‌های عمومی</button>
+    </form>
+    <p class="muted">این پنج مورد در پروفایل اپ نمایش داده می‌شوند؛ هر کدام خالی باشد، اپ جای آن «به‌زودی» نشان می‌دهد (بازار: لینک خودکار).</p>
     <div id="s-list"></div>
     <p class="muted">image_coin_price = قیمت پیش‌فرض هر تصویر (سکه) برای دنیاهای جدید.</p>
   </section>
@@ -392,9 +401,19 @@ async function saveAdmin(e){ e.preventDefault(); try { await api('/admin/admin-u
 async function adminToggle(id, on){ try { await api('/admin/admin-users/' + id, 'PATCH', {is_active: on}); loadAdmins(); } catch(err){ setMsg(err.message); } }
 async function delAdmin(id){ if(!confirm('ادمین حذف شود؟')) return; try { await api('/admin/admin-users/' + id, 'DELETE'); loadAdmins(); } catch(err){ setMsg(err.message); } }
 
-async function loadSettings(){ const ss = await api('/admin/settings');
+async function loadSettings(){ loadPublicSettings(); const ss = await api('/admin/settings');
   $('s-list').innerHTML = ss.length ? `<table><tr><th>کلید</th><th>مقدار</th></tr>` + ss.map(s => `<tr><td>${esc(s.key)}</td><td>${esc(s.value)}</td></tr>`).join('') + '</table>' : '<p class="muted">تنظیمی نیست.</p>'; }
 async function saveSetting(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: $('s-key').value.trim(), value: $('s-val').value.trim()}); setMsg('تنظیم ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
+async function savePublicSettings(e){ e.preventDefault(); try {
+  for (const [k, id] of [['about_us','ps-about'],['support_info','ps-support'],['bug_report_info','ps-bug'],['instagram_handle','ps-insta'],['bazaar_url','ps-bazaar']]) {
+    await api('/admin/settings', 'PATCH', {key: k, value: $(id).value.trim()});
+  }
+  setMsg('متن‌ها و لینک‌های عمومی ذخیره شد.', true); loadSettings();
+} catch(err){ setMsg(err.message); } }
+async function loadPublicSettings(){ try { const ss = await api('/admin/settings');
+  const m = {}; ss.forEach(s => m[s.key] = s.value);
+  $('ps-about').value = m.about_us || ''; $('ps-support').value = m.support_info || ''; $('ps-bug').value = m.bug_report_info || ''; $('ps-insta').value = m.instagram_handle || ''; $('ps-bazaar').value = m.bazaar_url || '';
+} catch(_){} }
 
 async function grantCoins(e){ e.preventDefault(); try { const r = await api('/admin/test/grant-coins', 'POST', {user_id: +$('g-user').value, coins: +$('g-coins').value}); $('grant-res').innerHTML = `<p>موجودی جدید کاربر ${r.user_id}: <b>${r.balance}</b> سکه</p>`; setMsg('شارژ تستی انجام شد.', true); } catch(err){ setMsg(err.message); } }
 
