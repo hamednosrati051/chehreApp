@@ -30,14 +30,14 @@ private val Scheme = lightColorScheme(
     surfaceContainerLow = Color.White,
 )
 
-// فونت فارسی وزیرمتن، روی همه‌ی استایل‌های متنی.
-val Vazirmatn = FontFamily(
-    Font(R.font.vazirmatn_regular, FontWeight.Normal),
-    Font(R.font.vazirmatn_bold, FontWeight.Bold),
+// فونت فارسی استعداد (رایگان، OFL)، روی همه‌ی استایل‌های متنی.
+val Estedad = FontFamily(
+    Font(R.font.estedad_regular, FontWeight.Normal),
+    Font(R.font.estedad_bold, FontWeight.Bold),
 )
 
 // فونت فانتزی نمایشی (لاله‌زار) برای تیترها؛ حروف فارسی گ/چ/پ/ژ را دارد.
-// متن‌های بدنه و برچسب‌ها وزیرمتن می‌مانند تا خوانایی در سایز کوچک حفظ شود.
+// متن‌های بدنه و برچسب‌ها استعداد می‌مانند تا خوانایی در سایز کوچک حفظ شود.
 val Lalezar = FontFamily(
     Font(R.font.lalezar_regular, FontWeight.Normal),
     Font(R.font.lalezar_regular, FontWeight.Bold),
@@ -52,14 +52,14 @@ val AppTypography = Typography(
     headlineMedium = BaseTypography.headlineMedium.copy(fontFamily = Lalezar),
     headlineSmall = BaseTypography.headlineSmall.copy(fontFamily = Lalezar),
     titleLarge = BaseTypography.titleLarge.copy(fontFamily = Lalezar),
-    titleMedium = BaseTypography.titleMedium.copy(fontFamily = Vazirmatn),
-    titleSmall = BaseTypography.titleSmall.copy(fontFamily = Vazirmatn),
-    bodyLarge = BaseTypography.bodyLarge.copy(fontFamily = Vazirmatn),
-    bodyMedium = BaseTypography.bodyMedium.copy(fontFamily = Vazirmatn),
-    bodySmall = BaseTypography.bodySmall.copy(fontFamily = Vazirmatn),
-    labelLarge = BaseTypography.labelLarge.copy(fontFamily = Vazirmatn),
-    labelMedium = BaseTypography.labelMedium.copy(fontFamily = Vazirmatn),
-    labelSmall = BaseTypography.labelSmall.copy(fontFamily = Vazirmatn),
+    titleMedium = BaseTypography.titleMedium.copy(fontFamily = Estedad),
+    titleSmall = BaseTypography.titleSmall.copy(fontFamily = Estedad),
+    bodyLarge = BaseTypography.bodyLarge.copy(fontFamily = Estedad),
+    bodyMedium = BaseTypography.bodyMedium.copy(fontFamily = Estedad),
+    bodySmall = BaseTypography.bodySmall.copy(fontFamily = Estedad),
+    labelLarge = BaseTypography.labelLarge.copy(fontFamily = Estedad),
+    labelMedium = BaseTypography.labelMedium.copy(fontFamily = Estedad),
+    labelSmall = BaseTypography.labelSmall.copy(fontFamily = Estedad),
 )
 
 @Composable
