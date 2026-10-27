@@ -194,3 +194,15 @@ object Api {
         }
     }
 }
+
+/** پیام فارسی ساده برای خطای ساخت؛ بدنه‌ی خام provider هرگز به کاربر نشان داده نمی‌شود. */
+fun friendlyGenerationError(raw: String?): String {
+    if (raw == null) return "ساخت ناموفق بود"
+    if (raw.contains("content_policy_violation") || raw.contains("safety system")) {
+        return "ساخت این تصویر به‌خاطر محدودیت ایمنی مدل رد شد. عکس یا دنیای دیگری را امتحان کن؛ سکه و هدیه‌ات کم نشده است."
+    }
+    if (raw.contains("provider http")) {
+        return "ساخت ناموفق بود (خطای سرویس‌دهنده)؛ دوباره تلاش کن"
+    }
+    return raw
+}

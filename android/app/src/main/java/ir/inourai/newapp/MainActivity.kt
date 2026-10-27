@@ -3,15 +3,25 @@ package ir.inourai.newapp
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,7 +32,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -114,31 +131,31 @@ fun App(initialGenId: Long = -1L) {
         Scaffold(
             bottomBar = {
                 if (showNav) {
-                    NavigationBar {
-                        NavigationBarItem(
-                            selected = route == Dest.HOME,
-                            onClick = { nav.navigate(Dest.HOME) },
-                            icon = { Icon(Icons.Filled.Home, null) },
-                            label = { Text("خانه") },
-                        )
-                        NavigationBarItem(
-                            selected = route == Dest.SEARCH,
-                            onClick = { nav.navigate(Dest.SEARCH) },
-                            icon = { Icon(Icons.Filled.Search, null) },
-                            label = { Text("جستجو") },
-                        )
-                        NavigationBarItem(
-                            selected = route == Dest.MY_MEDIA,
-                            onClick = { nav.navigate(Dest.MY_MEDIA) },
-                            icon = { Icon(Icons.Filled.Image, null) },
-                            label = { Text("تصاویر من") },
-                        )
-                        NavigationBarItem(
-                            selected = route == Dest.PROFILE,
-                            onClick = { nav.navigate(Dest.PROFILE) },
-                            icon = { Icon(Icons.Filled.Person, null) },
-                            label = { Text("پروفایل") },
-                        )
+                    // نوار پایین شناور و گرد، مثل اسکرین‌شات مرجع:
+                    // باکس سفید جدا با سایه‌ی ملایم و pill برای تب انتخاب‌شده.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Card(
+                            shape = RoundedCornerShape(28.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                            ) {
+                                NavTab(Icons.Filled.Home, "خانه", route == Dest.HOME) { nav.navigate(Dest.HOME) }
+                                NavTab(Icons.Filled.Search, "جستجو", route == Dest.SEARCH) { nav.navigate(Dest.SEARCH) }
+                                NavTab(Icons.Filled.Image, "تصاویر من", route == Dest.MY_MEDIA) { nav.navigate(Dest.MY_MEDIA) }
+                                NavTab(Icons.Filled.Person, "پروفایل", route == Dest.PROFILE) { nav.navigate(Dest.PROFILE) }
+                            }
+                        }
                     }
                 }
             },
@@ -220,5 +237,29 @@ fun App(initialGenId: Long = -1L) {
         }
         }
     }
+    }
+}
+
+@Composable
+private fun NavTab(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable { onClick() },
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(if (selected) Color(0xFFE8EEFF) else Color.Transparent)
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = if (selected) Color(0xFF2E5BFF) else Color.Gray, modifier = Modifier.size(24.dp))
+        }
+        Text(
+            label,
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) Color(0xFF2E5BFF) else Color.Gray,
+        )
     }
 }

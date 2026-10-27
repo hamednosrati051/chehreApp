@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -22,8 +23,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -70,7 +73,7 @@ fun MyMediaScreen(
         scope.launch {
             try {
                 images = Api.service.myGenerations()
-                    .filter { it.kind == "image" && it.status == "done" && it.output_url != null }
+                    .filter { it.kind == "image" }
             } catch (_: Exception) {
             }
             try {
@@ -82,6 +85,14 @@ fun MyMediaScreen(
 
     LaunchedEffect(loggedIn) {
         if (loggedIn) refresh()
+    }
+
+    // اگر ساختی در حال انجام است، هر ۴ ثانیه تازه کن تا آماده‌شدنش همین‌جا دیده شود.
+    LaunchedEffect(images) {
+        if (loggedIn && images.any { it.status == "queued" || it.status == "processing" }) {
+            kotlinx.coroutines.delay(4000)
+            refresh()
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -183,12 +194,53 @@ fun MyMediaScreen(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                val pending = images.filter { it.status == "queued" || it.status == "processing" }
+                val failed = images.filter { it.status == "failed" }
+                val done = images.filter { it.status == "done" && it.output_url != null }
                 if (images.isEmpty()) {
                     item {
                         Text("هنوز عکسی نساخته‌ای؛ از خانه یک دنیا را انتخاب کن.")
                     }
                 }
-                items(images) { item ->
+                items(pending) { item ->
+                    Card(
+                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { onImage(item.id) },
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("در حال ساخت…", fontWeight = FontWeight.Bold)
+                                Text(item.world_name ?: "", color = Color.Gray, fontSize = 13.sp)
+                                Text("برای دیدن نتیجه بزن", color = Color.Gray, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+                items(failed) { item ->
+                    Card(
+                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { onImage(item.id) },
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFD32F2F))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("ساخت ناموفق شد", fontWeight = FontWeight.Bold)
+                                Text(item.world_name ?: "", color = Color.Gray, fontSize = 13.sp)
+                                Text("برای دیدن علت بزن (سکه کم نشده)", color = Color.Gray, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+                items(done) { item ->
                     Card(shape = RoundedCornerShape(24.dp)) {
                         Column {
                             AsyncImage(

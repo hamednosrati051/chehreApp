@@ -1,5 +1,6 @@
 package ir.inourai.newapp.ui.screens
 
+import ir.inourai.newapp.data.friendlyGenerationError
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -109,6 +110,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                 outputUrl = st.output_url
                 worldName = st.world_name
                 worldId = st.world_id
+                if (st.status == "failed") error = friendlyGenerationError(st.error)
                 if (st.status == "done" || st.status == "failed") break
             } catch (e: Exception) {
                 error = e.message

@@ -1,5 +1,6 @@
 package ir.inourai.newapp.ui.screens
 
+import ir.inourai.newapp.data.friendlyGenerationError
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -84,6 +85,9 @@ private fun uriToFile(context: Context, uri: Uri): File {
 }
 
 private fun friendlyError(e: Exception): String {
+    if (e.message?.contains("content_policy_violation") == true || e.message?.contains("safety system") == true) {
+        return "ساخت این تصویر به‌خاطر محدودیت ایمنی مدل رد شد. عکس یا دنیای دیگری را امتحان کن؛ سکه و هدیه‌ات کم نشده است."
+    }
     if (e is HttpException && e.code() == 402) {
         return "سکه کافی نیست؛ از پروفایل سکه اضافه کن"
     }
@@ -187,7 +191,7 @@ fun CreateImageScreen(
                 }
                 if (st.status == "failed") {
                     GenerationPollService.stop(context)
-                    error = st.error ?: "ساخت ناموفق بود"
+                    error = friendlyGenerationError(st.error)
                     jobId = null
                     break
                 }

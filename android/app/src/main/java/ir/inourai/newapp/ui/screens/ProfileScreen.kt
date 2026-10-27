@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -145,6 +146,12 @@ fun ProfileScreen(onLogin: () -> Unit) {
     LaunchedEffect(loggedIn) {
         if (loggedIn) {
             refreshBalance()
+            scope.launch {
+                try {
+                    maskedMobile = Api.service.me().mobile_masked
+                } catch (_: Exception) {
+                }
+            }
         }
         packs = try {
             Api.service.packs()
@@ -162,12 +169,13 @@ fun ProfileScreen(onLogin: () -> Unit) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = RoyalBlue),
                 shape = RoundedCornerShape(28.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text("سکه", color = Color.White, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "🪙 ${balance?.coins ?: 0}",
+                        "${balance?.coins ?: 0}",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 28.sp,
@@ -213,6 +221,7 @@ fun ProfileScreen(onLogin: () -> Unit) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(28.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             ) {
                 if (!loggedIn) {
                     LinkRow(
@@ -223,18 +232,10 @@ fun ProfileScreen(onLogin: () -> Unit) {
                     )
                 } else {
                     LinkRow(
-                        icon = Icons.Filled.Person,
-                        title = "حساب شما",
-                        subtitle = "وارد شده‌اید",
-                        onClick = {
-                            showAccount = true
-                            scope.launch {
-                                try {
-                                    maskedMobile = Api.service.me().mobile_masked
-                                } catch (_: Exception) {
-                                }
-                            }
-                        },
+                        icon = Icons.Filled.Phone,
+                        title = maskedMobile ?: "حساب شما",
+                        subtitle = "عضویت رایگان",
+                        onClick = { showAccount = true },
                     )
                 }
             }
@@ -265,6 +266,7 @@ fun ProfileScreen(onLogin: () -> Unit) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(28.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             ) {
                 Column {
                     LinkRow(
