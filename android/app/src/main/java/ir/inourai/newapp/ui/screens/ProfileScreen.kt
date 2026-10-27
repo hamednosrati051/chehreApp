@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Phone
+import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.AlertDialog
@@ -216,39 +217,18 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
             }
         }
         if (loggedIn) {
-            item { SectionLabel("سابقه پرداخت") }
-            if (payments.isEmpty()) {
-                item {
-                    Text("هنوز پرداختی ثبت نشده است.", color = Color.Gray)
-                }
-            } else {
-                items(payments) { pay ->
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(20.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column {
-                                Text(pay.pack_name, fontWeight = FontWeight.Bold)
-                                Text("${pay.coins} سکه", color = Color.Gray, fontSize = 13.sp)
-                                Text(pay.created_at?.take(10) ?: "", color = Color.Gray, fontSize = 12.sp)
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("${pay.amount_irr / 10} تومان", fontWeight = FontWeight.Bold)
-                                Text(
-                                    if (pay.status == "pending") "در انتظار" else "پرداخت شد",
-                                    color = if (pay.status == "pending") Color(0xFFB7791F) else Color(0xFF1B7A3D),
-                                    fontSize = 13.sp,
-                                )
-                            }
-                        }
-                    }
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(28.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                ) {
+                    LinkRow(
+                        icon = Icons.Rounded.Receipt,
+                        title = "سابقه پرداخت",
+                        iconBg = Color(0xFFE6F4EA), iconTint = Color(0xFF1B7A3D),
+                        onClick = { dialog = "payments" },
+                    )
                 }
             }
         }
@@ -285,23 +265,6 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                             context.startActivity(
                                 Intent(Intent.ACTION_VIEW, Uri.parse(url)),
                             )
-                        },
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    LinkRow(
-                        icon = Icons.Rounded.CameraAlt,
-                        title = "اینستاگرام",
-                        iconBg = Color(0xFFFDE8F3), iconTint = Color(0xFFC13584),
-                        external = true,
-                        onClick = {
-                            val handle = pubSettings.instagram_handle.trim().removePrefix("@")
-                            if (handle.isBlank()) {
-                                notice = "صفحه‌ی اینستاگرام به‌زودی معرفی می‌شود"
-                            } else {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://instagram.com/" + handle)),
-                                )
-                            }
                         },
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -435,10 +398,51 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
             onDismissRequest = { dialog = null },
             title = { Text("قوانین و حریم خصوصی") },
             text = {
-                Text(
-                    "عکس‌های شما فقط برای ساخت تصویر ویرایش‌شده استفاده می‌شود " +
-                        "و در حساب شما ذخیره می‌شود. سکه‌ها فقط داخل اپ مصرف می‌شوند.",
-                )
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        pubSettings.rules_privacy.ifBlank {
+                            "عکس‌های شما فقط برای ساخت تصویر ویرایش‌شده استفاده می‌شود " +
+                                "و در حساب شما ذخیره می‌شود. سکه‌ها فقط داخل اپ مصرف می‌شوند."
+                        },
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { dialog = null }) { Text("باشه") }
+            },
+        )
+        "payments" -> AlertDialog(
+            onDismissRequest = { dialog = null },
+            title = { Text("سابقه پرداخت") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    if (payments.isEmpty()) {
+                        Text("هنوز پرداختی ثبت نشده است.", color = Color.Gray)
+                    } else {
+                        payments.forEachIndexed { i, pay ->
+                            if (i > 0) HorizontalDivider()
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column {
+                                    Text(pay.pack_name, fontWeight = FontWeight.Bold)
+                                    Text("${pay.coins} سکه", color = Color.Gray, fontSize = 13.sp)
+                                    Text(pay.created_at?.take(10) ?: "", color = Color.Gray, fontSize = 12.sp)
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("${pay.amount_irr / 10} تومان", fontWeight = FontWeight.Bold)
+                                    Text(
+                                        if (pay.status == "pending") "در انتظار" else "پرداخت شد",
+                                        color = if (pay.status == "pending") Color(0xFFB7791F) else Color(0xFF1B7A3D),
+                                        fontSize = 13.sp,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             },
             confirmButton = {
                 TextButton(onClick = { dialog = null }) { Text("باشه") }

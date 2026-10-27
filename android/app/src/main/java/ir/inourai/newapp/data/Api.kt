@@ -108,8 +108,8 @@ data class PublicSettings(
     val about_us: String = "",
     val support_info: String = "",
     val bug_report_info: String = "",
-    val instagram_handle: String = "",
     val bazaar_url: String = "",
+    val rules_privacy: String = "",
 )
 
 interface ApiService {

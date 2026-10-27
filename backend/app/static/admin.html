@@ -85,7 +85,6 @@
     <button data-tab="users" onclick="showTab('users')">کاربران</button>
     <button data-tab="admins" onclick="showTab('admins')">ادمین‌ها</button>
     <button data-tab="settings" onclick="showTab('settings')">تنظیمات</button>
-    <button data-tab="grant" onclick="showTab('grant')">تست سکه</button>
   </div>
 
   <section id="worlds" class="on">
@@ -229,7 +228,7 @@
       <textarea id="ps-about" rows="3" placeholder="درباره ما (متن نمایشی در پروفایل)"></textarea>
       <textarea id="ps-support" rows="3" placeholder="پشتیبانی (متن نمایشی در پروفایل)"></textarea>
       <textarea id="ps-bug" rows="3" placeholder="گزارش خطا (متن نمایشی در پروفایل)"></textarea>
-      <input id="ps-insta" placeholder="آیدی اینستاگرام (بدون @، مثلا chehresaz.app)">
+      <textarea id="ps-rules" rows="8" placeholder="قوانین و حریم خصوصی (متن نمایشی در پروفایل)"></textarea>
       <input id="ps-bazaar" placeholder="لینک بازار (خالی = لینک خودکار با نام پکیج)">
       <button>ذخیره متن‌ها و لینک‌های عمومی</button>
     </form>
@@ -415,14 +414,14 @@ async function loadSettings(){ loadPublicSettings(); const ss = await api('/admi
   $('s-list').innerHTML = ss.length ? `<table><tr><th>کلید</th><th>مقدار</th></tr>` + ss.map(s => `<tr><td>${esc(s.key)}</td><td>${esc(s.value)}</td></tr>`).join('') + '</table>' : '<p class="muted">تنظیمی نیست.</p>'; }
 async function saveSetting(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: $('s-key').value.trim(), value: $('s-val').value.trim()}); setMsg('تنظیم ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function savePublicSettings(e){ e.preventDefault(); try {
-  for (const [k, id] of [['about_us','ps-about'],['support_info','ps-support'],['bug_report_info','ps-bug'],['instagram_handle','ps-insta'],['bazaar_url','ps-bazaar']]) {
+  for (const [k, id] of [['about_us','ps-about'],['support_info','ps-support'],['bug_report_info','ps-bug'],['rules_privacy','ps-rules'],['bazaar_url','ps-bazaar']]) {
     await api('/admin/settings', 'PATCH', {key: k, value: $(id).value.trim()});
   }
   setMsg('متن‌ها و لینک‌های عمومی ذخیره شد.', true); loadSettings();
 } catch(err){ setMsg(err.message); } }
 async function loadPublicSettings(){ try { const ss = await api('/admin/settings');
   const m = {}; ss.forEach(s => m[s.key] = s.value);
-  $('ps-about').value = m.about_us || ''; $('ps-support').value = m.support_info || ''; $('ps-bug').value = m.bug_report_info || ''; $('ps-insta').value = m.instagram_handle || ''; $('ps-bazaar').value = m.bazaar_url || '';
+  $('ps-about').value = m.about_us || ''; $('ps-support').value = m.support_info || ''; $('ps-bug').value = m.bug_report_info || ''; $('ps-rules').value = m.rules_privacy || ''; $('ps-bazaar').value = m.bazaar_url || '';
 } catch(_){} }
 
 bindSearch('w-search', 'w-list'); bindSearch('p-search', 'p-list');

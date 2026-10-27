@@ -556,7 +556,7 @@ def public_gallery():
 # ---------------- world detail ----------------
 
 
-PUBLIC_SETTINGS = ("about_us", "support_info", "bug_report_info", "instagram_handle", "bazaar_url")
+PUBLIC_SETTINGS = ("about_us", "support_info", "bug_report_info", "bazaar_url", "rules_privacy")
 
 
 @content_bp.get("/app/settings")
