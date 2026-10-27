@@ -224,10 +224,10 @@ private fun HomeChip(label: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .background(
                 if (selected) MaterialTheme.colorScheme.primary else Color(0xFFF1F3F5),
-                RoundedCornerShape(20.dp),
+                RoundedCornerShape(28.dp),
             )
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 18.dp, vertical = 10.dp),
     ) {
         Text(
             label,

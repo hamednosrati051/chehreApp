@@ -189,7 +189,7 @@ fun MyMediaScreen(
                     }
                 }
                 items(images) { item ->
-                    Card(shape = RoundedCornerShape(16.dp)) {
+                    Card(shape = RoundedCornerShape(24.dp)) {
                         Column {
                             AsyncImage(
                                 model = item.output_url,

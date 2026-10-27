@@ -19,7 +19,12 @@ celery_app = Celery(
 def _download_to_temp(url):
     resp = requests.get(url, timeout=60)
     resp.raise_for_status()
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".bin")
+    # پسوند واقعی فایل را نگه دار (قبلاً .bin بود و AvalAI نام/فرمت
+    # فایل را نمی‌دید)؛ پیش‌فرض jpg است چون سلفی‌های اپ jpg هستند.
+    from urllib.parse import urlparse
+
+    ext = os.path.splitext(urlparse(url).path)[1] or ".jpg"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
     tmp.write(resp.content)
     tmp.close()
     return tmp.name

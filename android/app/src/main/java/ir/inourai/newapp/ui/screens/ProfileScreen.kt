@@ -161,7 +161,7 @@ fun ProfileScreen(onLogin: () -> Unit) {
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = RoyalBlue),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(28.dp),
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text("سکه", color = Color.White, fontSize = 14.sp)
@@ -212,7 +212,7 @@ fun ProfileScreen(onLogin: () -> Unit) {
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(28.dp),
             ) {
                 if (!loggedIn) {
                     LinkRow(
@@ -264,7 +264,7 @@ fun ProfileScreen(onLogin: () -> Unit) {
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(28.dp),
             ) {
                 Column {
                     LinkRow(

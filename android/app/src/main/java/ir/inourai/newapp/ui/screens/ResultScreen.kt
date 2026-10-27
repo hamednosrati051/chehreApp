@@ -265,7 +265,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                     AsyncImage(
                         model = outputUrl,
                         contentDescription = null,
-                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)),
+                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(20.dp)),
                         contentScale = ContentScale.Crop,
                     )
                     Spacer(modifier = Modifier.width(12.dp))

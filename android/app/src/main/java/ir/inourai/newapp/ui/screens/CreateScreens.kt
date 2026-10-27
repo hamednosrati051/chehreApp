@@ -252,7 +252,7 @@ fun CreateImageScreen(
                 if (isWorking) {
                     // لودینگ ساخت: عکس خود کاربر تیره + اسپینر + نام دنیا.
                     Card(
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(28.dp),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
                     ) {
                         Column(
@@ -274,7 +274,7 @@ fun CreateImageScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .aspectRatio(1f)
-                                            .clip(RoundedCornerShape(16.dp))
+                                            .clip(RoundedCornerShape(24.dp))
                                             .alpha(0.35f),
                                         contentScale = ContentScale.Crop,
                                     )
@@ -302,7 +302,7 @@ fun CreateImageScreen(
                             AsyncImage(
                                 model = picked,
                                 contentDescription = null,
-                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)),
+                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(20.dp)),
                                 contentScale = ContentScale.Crop,
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -350,7 +350,7 @@ fun CreateImageScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Box(
                                     modifier = Modifier
-                                        .background(Color(0xFF8A5A00), RoundedCornerShape(20.dp))
+                                        .background(Color(0xFF8A5A00), RoundedCornerShape(24.dp))
                                         .padding(horizontal = 10.dp, vertical = 2.dp),
                                 ) {
                                     Text("🪙 $cost", color = Color.White, fontSize = 13.sp)

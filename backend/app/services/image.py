@@ -30,7 +30,11 @@ def _call(model_row, files, data):
         data=data,
         timeout=300,
     )
-    resp.raise_for_status()
+    if resp.status_code >= 400:
+        # قبلاً raise_for_status بدنه‌ی پاسخ را دور می‌انداخت و اپ فقط
+        # «Client Error» نشان می‌داد؛ حالا پیام واقعی provider در
+        # error_message نسل ذخیره می‌شود تا دلیل ۴۰۰ معلوم باشد.
+        raise RuntimeError(f"provider http {resp.status_code}: {resp.text[:500]}")
     payload = resp.json()
     item = payload["data"][0]
     result = {}
