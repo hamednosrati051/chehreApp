@@ -80,7 +80,6 @@ fun LoginScreen(onDone: () -> Unit) {
                 ) {
                     Text("ارسال کد")
                 }
-                }
             }
         } else {
             OutlinedTextField(
