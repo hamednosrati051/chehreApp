@@ -62,6 +62,8 @@ def edit_image(model_row, image_path, prompt):
                 "model": model_name,
                 "prompt": prompt,
                 "quality": "medium",
+                # moderation ثابت low — تصمیم مالک (۱۴۰۴-۰۸-۰۵) برای ردهای ایمنی.
+                "moderation": "low",
             },
         )
 
@@ -72,5 +74,11 @@ def generate_image(model_row, prompt):
     return _call(
         model_row,
         files={},
-        data={"model": model_name, "prompt": prompt, "quality": "medium"},
+        data={
+            "model": model_name,
+            "prompt": prompt,
+            "quality": "medium",
+            # moderation ثابت low — مثل edit_image.
+            "moderation": "low",
+        },
     )
