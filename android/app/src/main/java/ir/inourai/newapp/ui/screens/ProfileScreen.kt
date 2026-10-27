@@ -248,7 +248,6 @@ fun ProfileScreen(onLogin: () -> Unit) {
                     LinkRow(
                         icon = Icons.Rounded.Phone,
                         title = maskedMobile ?: "حساب شما",
-                        subtitle = "عضویت رایگان",
                         titleDirection = if (maskedMobile != null) TextDirection.Ltr else null,
                         onClick = { showAccount = true },
                     )
@@ -370,14 +369,6 @@ fun ProfileScreen(onLogin: () -> Unit) {
                         style = TextStyle(textDirection = TextDirection.Ltr),
                         textAlign = TextAlign.End,
                     )
-                }
-                HorizontalDivider()
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text("عضویت", color = Color.Gray)
-                    Text("رایگان", fontWeight = FontWeight.Bold)
                 }
                 HorizontalDivider()
                 Row(
