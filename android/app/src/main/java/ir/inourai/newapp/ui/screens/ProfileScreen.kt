@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -51,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +66,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
@@ -135,6 +141,19 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                 }
             }
         }
+    }
+
+    // موجودی در هر بار ورود به پروفایل (و بازگشت به اپ) تازه شود،
+    // نه فقط موقع ورود؛ وگرنه تغییر سروریِ موجودی کهنه می‌ماند.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && Session.token != null) {
+                refreshBalance()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     PullRefreshLayout(onRefresh = { RefreshBus.refresh(); onGoHome() }) {
@@ -368,8 +387,10 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                     if (payments.isEmpty()) {
                         Text("هنوز پرداختی ثبت نشده است.", color = Color.Gray)
                     } else {
-                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                            payments.forEachIndexed { i, pay ->
+                        // سقف ارتفاع تا وقتی پرداخت‌ها زیاد شدند، فهرست اسکرول بخورد
+                        // (ستون اسکرولیِ بدون سقف، در باتم‌شیت تا تهِ صفحه کش می‌آمد و نمی‌چرخید).
+                        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
+                            itemsIndexed(payments) { i, pay ->
                                 if (i > 0) HorizontalDivider()
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
