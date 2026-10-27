@@ -171,7 +171,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                     // دعوت به اضافه‌کردن.
                     val coins = balance?.coins ?: 0
                     Text(
-                        if (coins >= 9) "معادل تولید ${coins / 9} تصویر"
+                        if (coins >= 10) "معادل تولید ${coins / 10} تصویر"
                         else "برای ساخت تصویر جدید سکه اضافه کن.",
                         color = Color.White,
                         fontSize = 15.sp,
