@@ -100,6 +100,8 @@
       <textarea id="w-prompt" placeholder="پرامپت مخفی (انگلیسی، برای مدل تصویر)" class="full" required></textarea>
       <input id="w-price" type="number" value="8" placeholder="قیمت (سکه)">
       <label><input id="w-feat" type="checkbox"> پیشنهادی</label>
+      <label><input id="w-ig" type="checkbox"> ترند اینستاگرام</label>
+      <label><input id="w-ir" type="checkbox"> ترند ایرانی</label>
       <label><input id="w-act" type="checkbox" checked> فعال</label>
       <span><button>ذخیره دنیا</button> <button type="button" class="gold" onclick="resetWorldForm()">فرم جدید</button></span>
     </form>
@@ -281,7 +283,7 @@ async function apiUpload(path, file){
 }
 const queries = {};
 function bindSearch(inp, listEl){ $(inp).addEventListener('input', e => { queries[listEl] = e.target.value.trim(); applyFilter(listEl); }); }
-function applyFilter(listEl){ const q = queries[listEl] || '';
+function applyFilter(listEl){ if (listEl === 'w-list') { wPage = 1; renderWorlds(); return; } const q = queries[listEl] || '';
   document.querySelectorAll('#' + listEl + ' table tr').forEach((tr, i) => { if(i === 0) return; tr.style.display = (!q || tr.textContent.includes(q)) ? '' : 'none'; }); }
 function showTab(tab){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
@@ -292,20 +294,36 @@ function showTab(tab){
 }
 
 let cats = [], models = [], editingWorld = null, editingPack = null, editingCat = null, editingModel = null;
+let allWs = [], wPage = 1; const W_PAGE_SIZE = 10;
+function renderWorlds(){
+  const q = queries['w-list'] || '';
+  const filtered = allWs.filter(w => !q || (w.name + ' ' + w.slug).includes(q));
+  const total = Math.max(1, Math.ceil(filtered.length / W_PAGE_SIZE));
+  if (wPage > total) wPage = total;
+  const page = filtered.slice((wPage - 1) * W_PAGE_SIZE, wPage * W_PAGE_SIZE);
+  const catName = id => (cats.find(c => c.id === id) || {}).name || '—';
+  if (!filtered.length) { $('w-list').innerHTML = '<p class="muted">دنیایی نیست.</p>'; return; }
+  let html = `<table><tr><th>عکس</th><th>نام</th><th>دسته</th><th>سکه</th><th>پیشنهادی</th><th>ترند اینستا</th><th>ترند ایرانی</th><th>فعال</th><th></th></tr>` +
+    page.map(w => `<tr><td>${w.sample_image_url ? `<img class="thumb" src="${esc(w.sample_image_url)}">` : '—'}</td><td>${esc(w.name)}<br><span class="muted">${esc(w.slug)}</span></td><td>${esc(catName(w.category_id))}</td><td>${w.coin_price}</td><td>${w.is_featured ? '✓' : '—'}</td><td>${w.is_instagram_trend ? '✓' : '—'}</td><td>${w.is_iranian_trend ? '✓' : '—'}</td><td>${w.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editWorld(${JSON.stringify(w).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delWorld(${w.id})">حذف</button></td></tr>`).join('') + '</table>';
+  let pager = '<div style="margin-top:8px">';
+  pager += `<button class="small" ${wPage <= 1 ? 'disabled' : ''} onclick="wGoto(${wPage - 1})">قبلی</button> `;
+  for (let i = 1; i <= total; i++) pager += `<button class="small" ${i === wPage ? 'disabled' : ''} onclick="wGoto(${i})">${i}</button> `;
+  pager += `<button class="small" ${wPage >= total ? 'disabled' : ''} onclick="wGoto(${wPage + 1})">بعدی</button>`;
+  pager += `<span class="muted"> صفحه ${wPage} از ${total} (${filtered.length} دنیا)</span></div>`;
+  $('w-list').innerHTML = html + pager;
+}
+function wGoto(n){ wPage = n; renderWorlds(); }
 async function loadWorlds(){
   cats = await api('/admin/categories'); models = await api('/admin/models');
   $('w-cat').innerHTML = '<option value="">بدون دسته</option>' + cats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
   $('w-model').innerHTML = models.map(m => `<option value="${m.id}">${esc(m.name)} (${esc(m.capability)})</option>`).join('');
-  const ws = await api('/admin/worlds');
-  const catName = id => (cats.find(c => c.id === id) || {}).name || '—';
-  $('w-list').innerHTML = ws.length ? `<table><tr><th>عکس</th><th>نام</th><th>دسته</th><th>سکه</th><th>پیشنهادی</th><th>فعال</th><th></th></tr>` +
-    ws.map(w => `<tr><td>${w.sample_image_url ? `<img class="thumb" src="${esc(w.sample_image_url)}">` : '—'}</td><td>${esc(w.name)}<br><span class="muted">${esc(w.slug)}</span></td><td>${esc(catName(w.category_id))}</td><td>${w.coin_price}</td><td>${w.is_featured ? '✓' : '—'}</td><td>${w.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editWorld(${JSON.stringify(w).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delWorld(${w.id})">حذف</button></td></tr>`).join('') + '</table>'
-    : '<p class="muted">دنیایی نیست.</p>';
-  applyFilter('w-list');
+  allWs = await api('/admin/worlds');
+  wPage = 1;
+  renderWorlds();
 }
-function editWorld(w){ editingWorld = w.id; $('w-name').value = w.name; $('w-slug').value = w.slug; $('w-cat').value = w.category_id || ''; $('w-model').value = w.model_id; $('w-img').value = w.sample_image_url || ''; $('w-prompt').value = w.hidden_prompt || ''; $('w-price').value = w.coin_price; $('w-feat').checked = w.is_featured; $('w-act').checked = w.is_active; window.scrollTo(0, 0); }
-function resetWorldForm(){ editingWorld = null; ['w-name','w-slug','w-img','w-prompt'].forEach(i => $(i).value = ''); $('w-file').value = ''; $('w-cat').value = ''; if($('w-model').options.length) $('w-model').selectedIndex = 0; $('w-price').value = 8; $('w-feat').checked = false; $('w-act').checked = true; }
-async function saveWorld(e){ e.preventDefault(); const body = {name: $('w-name').value.trim(), slug: $('w-slug').value.trim(), category_id: $('w-cat').value ? +$('w-cat').value : null, sample_image_url: $('w-img').value.trim() || null, hidden_prompt: $('w-prompt').value.trim(), model_id: +$('w-model').value, coin_price: +$('w-price').value, is_featured: $('w-feat').checked, is_active: $('w-act').checked};
+function editWorld(w){ editingWorld = w.id; $('w-name').value = w.name; $('w-slug').value = w.slug; $('w-cat').value = w.category_id || ''; $('w-model').value = w.model_id; $('w-img').value = w.sample_image_url || ''; $('w-prompt').value = w.hidden_prompt || ''; $('w-price').value = w.coin_price; $('w-feat').checked = w.is_featured; $('w-ig').checked = w.is_instagram_trend; $('w-ir').checked = w.is_iranian_trend; $('w-act').checked = w.is_active; window.scrollTo(0, 0); }
+function resetWorldForm(){ editingWorld = null; ['w-name','w-slug','w-img','w-prompt'].forEach(i => $(i).value = ''); $('w-file').value = ''; $('w-cat').value = ''; if($('w-model').options.length) $('w-model').selectedIndex = 0; $('w-price').value = 8; $('w-feat').checked = false; $('w-ig').checked = false; $('w-ir').checked = false; $('w-act').checked = true; }
+async function saveWorld(e){ e.preventDefault(); const body = {name: $('w-name').value.trim(), slug: $('w-slug').value.trim(), category_id: $('w-cat').value ? +$('w-cat').value : null, sample_image_url: $('w-img').value.trim() || null, hidden_prompt: $('w-prompt').value.trim(), model_id: +$('w-model').value, coin_price: +$('w-price').value, is_featured: $('w-feat').checked, is_instagram_trend: $('w-ig').checked, is_iranian_trend: $('w-ir').checked, is_active: $('w-act').checked};
   try { const saved = editingWorld ? await api('/admin/worlds/' + editingWorld, 'PATCH', body) : await api('/admin/worlds', 'POST', body);
     const file = $('w-file').files[0];
     if(file){ const up = await apiUpload('/admin/worlds/' + saved.id + '/sample', file);

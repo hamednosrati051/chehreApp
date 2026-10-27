@@ -248,6 +248,9 @@ def list_worlds():
                 "sample_image_url": w.sample_image_url,
                 "coin_price": w.coin_price,
                 "is_featured": bool(w.is_featured),
+                "is_instagram_trend": bool(w.is_instagram_trend),
+                "is_iranian_trend": bool(w.is_iranian_trend),
+                "created_at": w.created_at.isoformat() if w.created_at else None,
             }
             for w in worlds
         ]
@@ -284,6 +287,9 @@ def list_favorites():
                 "sample_image_url": w.sample_image_url,
                 "coin_price": w.coin_price,
                 "is_featured": bool(w.is_featured),
+                "is_instagram_trend": bool(w.is_instagram_trend),
+                "is_iranian_trend": bool(w.is_iranian_trend),
+                "created_at": w.created_at.isoformat() if w.created_at else None,
             }
             for r in rows
             if (w := worlds.get(r.world_id)) is not None
@@ -593,6 +599,9 @@ def world_detail(world_id):
             "sample_image_url": w.sample_image_url,
             "coin_price": w.coin_price,
             "is_featured": bool(w.is_featured),
+            "is_instagram_trend": bool(w.is_instagram_trend),
+            "is_iranian_trend": bool(w.is_iranian_trend),
+            "created_at": w.created_at.isoformat() if w.created_at else None,
         }
     )
 
@@ -879,6 +888,8 @@ def _world_admin(w):
         "model_id": w.model_id,
         "coin_price": w.coin_price,
         "is_featured": bool(w.is_featured),
+        "is_instagram_trend": bool(w.is_instagram_trend),
+        "is_iranian_trend": bool(w.is_iranian_trend),
         "is_active": bool(w.is_active),
         "sort_order": w.sort_order,
     }
@@ -912,6 +923,8 @@ def admin_create_world():
         model_id=body["model_id"],
         coin_price=body.get("coin_price", DEFAULT_IMAGE_COINS),
         is_featured=bool(body.get("is_featured", False)),
+        is_instagram_trend=bool(body.get("is_instagram_trend", False)),
+        is_iranian_trend=bool(body.get("is_iranian_trend", False)),
         is_active=bool(body.get("is_active", True)),
         sort_order=body.get("sort_order", 0),
     )
@@ -947,7 +960,7 @@ def admin_update_world(world_id):
     ):
         if field in body:
             setattr(w, field, body[field])
-    for field in ("is_featured", "is_active"):
+    for field in ("is_featured", "is_instagram_trend", "is_iranian_trend", "is_active"):
         if field in body:
             setattr(w, field, bool(body[field]))
     db.session.commit()

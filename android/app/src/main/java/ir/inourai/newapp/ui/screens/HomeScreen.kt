@@ -80,20 +80,38 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
         Favorites.refresh()
     }
 
-    val shown = if (selected == null) {
-        worlds.filter { it.is_featured }
-    } else {
-        worlds.filter { it.category_id == selected }
-    }
-    // «ترندهای ایرانی»: دنیاهای دسته‌ی تاریخی؛ اگر نبود، featuredها.
+    // «ترندهای اینستاگرام»: دنیاهای تیک‌خورده در ادمین؛ اگر هیچ‌کدام تیک
+    // نخورده باشد، همه‌ی دنیاها (رفتار قبلی).
+    val insta = worlds.filter { it.is_instagram_trend }.ifEmpty { worlds }
+    // «ترندهای ایرانی»: اول تیک‌خورده‌ها، بعد دسته‌ی تاریخی، بعد featuredها.
     val tarikhiId = categories.firstOrNull { it.slug == "tarikhi" }?.id
-    val iranian = worlds.filter { it.category_id == tarikhiId }.ifEmpty {
-        worlds.filter { it.is_featured }
+    val iranian = worlds.filter { it.is_iranian_trend }.ifEmpty {
+        worlds.filter { it.category_id == tarikhiId }.ifEmpty {
+            worlds.filter { it.is_featured }
+        }
+    }
+    // «تازه‌های هفته»: دنیاهای ۷ روز اخیر (جدیدترین اول)؛ اگر در این هفته
+    // دنیایی نیامده باشد، ۶ دنیای آخری که وارد شده‌اند.
+    fun createdMillis(w: World): Long {
+        return try {
+            val s = (w.created_at ?: return 0L).replace("Z", "")
+            java.time.LocalDateTime.parse(s).toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
+        } catch (_: Exception) {
+            0L
+        }
+    }
+    val weekAgo = System.currentTimeMillis() - 7L * 24 * 3600 * 1000
+    val fresh = worlds.filter { createdMillis(it) >= weekAgo }.sortedByDescending { createdMillis(it) }
+    val freshFallback = worlds.sortedByDescending { createdMillis(it) }.take(6)
+    val shown = if (selected != null) {
+        worlds.filter { it.category_id == selected }
+    } else {
+        fresh.ifEmpty { freshFallback }
     }
     val trendState = rememberLazyListState()
     val trendIndex by remember {
         derivedStateOf {
-            trendState.firstVisibleItemIndex.coerceIn(0, (worlds.size - 1).coerceAtLeast(0))
+            trendState.firstVisibleItemIndex.coerceIn(0, (insta.size - 1).coerceAtLeast(0))
         }
     }
 
@@ -120,7 +138,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
             }
         }
         // ترندهای اینستاگرام: کاروسل افقی کارت‌های بلند + نقطه‌ها.
-        if (worlds.isNotEmpty()) {
+        if (insta.isNotEmpty()) {
             item {
                 Text("ترندهای اینستاگرام", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
@@ -129,7 +147,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
                     state = trendState,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(worlds) { w ->
+                    items(insta) { w ->
                         WorldCard(w, { onWorld(w.id) }, Modifier.width(160.dp))
                     }
                 }
@@ -140,7 +158,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Spacer(modifier = Modifier.weight(1f))
-                    repeat(worlds.size) { i ->
+                    repeat(insta.size) { i ->
                         Box(
                             modifier = Modifier
                                 .size(if (i == trendIndex) 8.dp else 6.dp)

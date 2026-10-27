@@ -38,6 +38,9 @@ data class World(
     val sample_image_url: String?,
     val coin_price: Int,
     val is_featured: Boolean,
+    val is_instagram_trend: Boolean = false,
+    val is_iranian_trend: Boolean = false,
+    val created_at: String? = null,
 )
 data class GenerationRequest(
     val kind: String,
