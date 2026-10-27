@@ -96,7 +96,35 @@ class MainActivity : ComponentActivity() {
         window.decorView.layoutDirection = android.view.View.LAYOUT_DIRECTION_RTL
         Session.init(this)
         val genId = intent.getLongExtra(EXTRA_GEN_ID, -1L)
-        setContent { App(initialGenId = genId) }
+        // اگر اجرای قبلی کرش کرده، گزارشش را «قبل» از شروع رابط کاربری نشان
+        // بده تا حتی کرشِ موقع بازشدن هم قابل خواندن/کپی باشد. بعد از ادامه،
+        // گزارش پاک می‌شود تا اجرای بعدی دوباره نشان داده نشود.
+        val crash = readCrashLog(this)
+        if (crash != null) {
+            val scroll = android.widget.ScrollView(this)
+            val tv = android.widget.TextView(this)
+            tv.text = crash
+            tv.textSize = 12f
+            tv.setPadding(32, 24, 32, 24)
+            scroll.addView(tv)
+            android.app.AlertDialog.Builder(this)
+                .setTitle("گزارش کرش اجرای قبلی")
+                .setView(scroll)
+                .setPositiveButton("کپی گزارش") { _, _ ->
+                    val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("crash", crash))
+                    clearCrashLog(this)
+                    setContent { App(initialGenId = genId) }
+                }
+                .setNegativeButton("ادامه") { _, _ ->
+                    clearCrashLog(this)
+                    setContent { App(initialGenId = genId) }
+                }
+                .setCancelable(false)
+                .show()
+        } else {
+            setContent { App(initialGenId = genId) }
+        }
     }
 }
 
