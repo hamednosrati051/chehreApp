@@ -10,7 +10,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import android.content.Context
+import ir.inourai.newapp.readCrashLog
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -203,7 +207,7 @@ fun ProfileScreen(onLogin: () -> Unit) {
                     // دعوت به اضافه‌کردن.
                     val coins = balance?.coins ?: 0
                     Text(
-                        if (coins >= 8) "معادل تولید ${coins / 8} تصویر"
+                        if (coins >= 9) "معادل تولید ${coins / 9} تصویر"
                         else "برای ساخت تصویر جدید سکه اضافه کن.",
                         color = Color.White,
                         fontSize = 14.sp,
@@ -478,8 +482,28 @@ fun ProfileScreen(onLogin: () -> Unit) {
         "bug" -> AlertDialog(
             onDismissRequest = { dialog = null },
             title = { Text("گزارش خطا") },
-            text = { Text(pubSettings.bug_report_info.ifBlank { "گزارش خطا به‌زودی فعال می‌شود." }) },
+            text = {
+                val crash = readCrashLog(context)
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(pubSettings.bug_report_info.ifBlank { "برای گزارش خطا، متن خطا را همین‌جا بنویس و برای پشتیبانی بفرست." })
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        if (crash != null) "گزارش کرش اخیر (برای ارسال به پشتیبانی، «کپی گزارش» را بزن):\n$crash"
+                        else "هنوز گزارش کرشی ثبت نشده است.",
+                        fontSize = 12.sp,
+                    )
+                }
+            },
             confirmButton = {
+                val crash = readCrashLog(context)
+                if (crash != null) {
+                    TextButton(onClick = {
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("crash", crash))
+                        notice = "گزارش کرش کپی شد"
+                        dialog = null
+                    }) { Text("کپی گزارش") }
+                }
                 TextButton(onClick = { dialog = null }) { Text("باشه") }
             },
         )
