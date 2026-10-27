@@ -1,4 +1,5 @@
-"""تصویر OpenAI-compatible (مثل Sunburst از AvalAI).
+"""تصویر: OpenAI-compatible (مثل Sunburst از AvalAI) + ویرایش Gemini
+از راه چت (provider_type=chat_image_edit_gemini).
 
 مشخصات مدل (base_url، کلید، نام مدل) از ردیف app_models می‌آید —
 یعنی از بخش «مدل‌ها»ی زیرشاخه‌ی ادمین خود اپ، نه از نورا.
@@ -51,8 +52,77 @@ def _call(model_row, files, data):
     return result
 
 
+def _edit_via_chat(model_row, image_path, prompt):
+    """ویرایش با مدل‌های Gemini از راه v1/chat/completions (مثل نورا).
+
+    پیام چندرسانه‌ای: متن پرامپت + عکس ورودی (base64)؛ خروجی در
+    choices[0].message.images[0].image_url.url برمی‌گردد (data URL).
+    شکل خروجی مثل _call است تا worker بدون تغییر کار کند.
+    """
+    import base64
+
+    api_key, base_url, model_name = _model_creds(model_row)
+    with open(image_path, "rb") as f:
+        raw = f.read()
+    mime = "image/png" if raw[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+    image_b64 = base64.b64encode(raw).decode("ascii")
+    resp = requests.post(
+        f"{base_url}/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model_name,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime};base64,{image_b64}"
+                            },
+                        },
+                    ],
+                }
+            ],
+            "modalities": ["image", "text"],
+        },
+        timeout=300,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"provider http {resp.status_code}: {resp.text[:500]}")
+    payload = resp.json()
+    message = (payload.get("choices") or [{}])[0].get("message") or {}
+    images = message.get("images") or []
+    url = ""
+    if images:
+        url = (images[0].get("image_url") or {}).get("url") or ""
+    if not url:
+        raise RuntimeError("unexpected chat image-edit response")
+    result = {}
+    if url.startswith("data:"):
+        b64 = url.split(",", 1)[1] if "," in url else ""
+        if not b64:
+            raise RuntimeError("unexpected chat image-edit response")
+        result["b64_json"] = b64
+    else:
+        result["url"] = url
+    if payload.get("usage"):
+        result["usage"] = payload["usage"]
+    return result
+
+
 def edit_image(model_row, image_path, prompt):
-    """سلفی + پرامپت مخفی دنیا → تصویر سبک‌دار (کیفیت medium، تصمیم ثابت)."""
+    """سلفی + پرامپت مخفی دنیا → تصویر سبک‌دار.
+
+    مدل‌های Gemini (provider_type=chat_image_edit_gemini) از مسیر چت
+    می‌روند؛ بقیه (openai_compat) از /images/edits مثل قبل.
+    """
+    if (model_row.provider_type or "") == "chat_image_edit_gemini":
+        return _edit_via_chat(model_row, image_path, prompt)
     _, _, model_name = _model_creds(model_row)
     with open(image_path, "rb") as f:
         return _call(

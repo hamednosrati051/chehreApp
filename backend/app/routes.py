@@ -346,7 +346,15 @@ def create_generation():
             return jsonify({"error": "world not found"}), 404
         if not body.get("input_url"):
             return jsonify({"error": "input_url required"}), 400
-        model = AppModel.query.get(world.model_id)
+        # تک‌مدل فعال به‌ازای هر دسته: دنیا دیگر مدل خودش را ندارد؛
+        # همان یک مدل ویرایش فعال استفاده می‌شود (تصمیم مالک، 2026-10-27).
+        model = (
+            AppModel.query.filter_by(
+                kind="image", capability="edit_image", is_active=True
+            )
+            .order_by(AppModel.id)
+            .first()
+        )
         if model is not None and model.kind != "image":
             return jsonify({"error": "model kind mismatch"}), 409
         # تعرفه‌ی دنیا اگر ست شده، وگرنه تعرفه‌ی پیش‌فرض (۵ سکه).
@@ -869,6 +877,15 @@ def admin_update_model(model_id):
         m.capability = body["capability"]
     if "is_active" in body:
         m.is_active = bool(body["is_active"])
+        # تک‌مدل فعال به‌ازای هر دسته: فعال‌کردن یک مدل، بقیه‌ی همان
+        # kind و capability را غیرفعال می‌کند (تصمیم مالک، 2026-10-27).
+        if m.is_active:
+            AppModel.query.filter(
+                AppModel.id != m.id,
+                AppModel.kind == m.kind,
+                AppModel.capability == m.capability,
+                AppModel.is_active.is_(True),
+            ).update({"is_active": False})
     if "config_json" in body and isinstance(body["config_json"], dict):
         incoming = {
             k: v for k, v in body["config_json"].items() if k != _PROVIDER_CREDS_KEY
