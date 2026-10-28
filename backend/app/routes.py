@@ -422,6 +422,7 @@ def get_generation(gen_id):
 def my_generations():
     gens = (
         AppGeneration.query.filter_by(user_id=g.user.id)
+        .filter(AppGeneration.status != "failed")
         .order_by(AppGeneration.id.desc())
         .limit(50)
         .all()
@@ -1186,7 +1187,7 @@ def admin_gallery_delete(row_id):
 @require_admin
 def admin_list_generations():
     """همه‌ی تولیدهای کاربران، جدیدترین اول (برای تب «همه‌ی تولیدها»ی ادمین)."""
-    query = AppGeneration.query.order_by(AppGeneration.id.desc())
+    query = AppGeneration.query.filter(AppGeneration.status != "failed").order_by(AppGeneration.id.desc())
     rows, meta = _paginate(query)
     users = {u.id: u.mobile for u in AppUser.query.all()}
     worlds = {w.id: w.name for w in AppWorld.query.all()}
@@ -1360,6 +1361,13 @@ def admin_get_user(user_id):
     models = {m.id: m.name for m in AppModel.query.all()}
     gens = (
         AppGeneration.query.filter_by(user_id=u.id)
+        .filter(AppGeneration.status != "failed")
+        .order_by(AppGeneration.id.desc())
+        .limit(20)
+        .all()
+    )
+    failed_gens = (
+        AppGeneration.query.filter_by(user_id=u.id, status="failed")
         .order_by(AppGeneration.id.desc())
         .limit(20)
         .all()
@@ -1392,6 +1400,14 @@ def admin_get_user(user_id):
                     "created_at": g.created_at.isoformat() if g.created_at else None,
                 }
                 for g in gens
+            ],
+            "failed_generations": [
+                {
+                    "id": g.id,
+                    "world": worlds.get(g.world_id),
+                    "created_at": g.created_at.isoformat() if g.created_at else None,
+                }
+                for g in failed_gens
             ],
             "ledger": [
                 {

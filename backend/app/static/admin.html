@@ -39,6 +39,9 @@
   #lightbox.on{display:flex;}
   #lightbox img{max-width:92vw; max-height:78vh; border-radius:12px;}
   #lightbox .cap{color:#e2e8f0; font-size:14px; text-align:center;}
+  #failModal{position:fixed; inset:0; background:rgba(0,0,0,.88); display:none; align-items:flex-start; justify-content:center; z-index:50; padding:24px 16px; overflow-y:auto;}
+  #failModal.on{display:flex;}
+  #failModal .card{margin:0; width:100%;}
   #msg{color:#f87171; min-height:20px; margin:8px 0;}
   #msg.ok{color:#4ade80;}
   .muted{color:#94a3b8; font-size:13px;}
@@ -254,6 +257,7 @@
 
   </div>
   <div id="lightbox" onclick="closeLightbox()"><img id="lb-img" onclick="event.stopPropagation()"><div class="cap" id="lb-cap"></div><button class="small gold" onclick="closeLightbox()">بستن</button></div>
+  <div id="failModal" onclick="closeFailModal()"><div class="card" onclick="event.stopPropagation()"><h3>گزارش ناموفق‌ها</h3><div id="fail-list"></div><button class="small gold" onclick="closeFailModal()">بستن</button></div></div>
 </main>
 <script>
 const $ = id => document.getElementById(id);
@@ -273,6 +277,8 @@ function loginToken(e){ e.preventDefault(); const t = $('l-token').value.trim();
 function logout(){ localStorage.removeItem('chehre_admin_token'); localStorage.removeItem('chehre_admin_user'); showLogin(); }
 function openLightbox(src, cap){ $('lb-img').src = src; $('lb-cap').textContent = cap || ''; $('lightbox').classList.add('on'); }
 function closeLightbox(){ $('lightbox').classList.remove('on'); $('lb-img').src = ''; }
+function openFailModal(){ $('fail-list').innerHTML = currentFailed.length ? `<table><tr><th>دنیا</th><th>تاریخ</th><th>id</th></tr>` + currentFailed.map(f => `<tr><td>${esc(f.world)}</td><td class="muted">${esc(f.created_at)}</td><td>${f.id}</td></tr>`).join('') + '</table>' : '<p class="muted">ناموفقی نیست.</p>'; $('failModal').classList.add('on'); }
+function closeFailModal(){ $('failModal').classList.remove('on'); }
 function setMsg(m, ok){ const el = $('msg'); el.textContent = m || ''; el.className = ok ? 'ok' : ''; }
 async function api(path, method, body){
   const r = await fetch('/api/v1' + path, { method: method || 'GET',
@@ -417,10 +423,13 @@ async function loadUsers(){ const q = new URLSearchParams({search: $('u-search')
     res.items.map(u => `<tr><td>${u.id}</td><td>${esc(u.mobile)}</td><td>${esc(u.name)}</td><td>${esc(u.status)}</td><td>${u.free_image_credits}</td><td>${u.balance}</td><td class="muted">${esc(u.last_login_at)}</td><td><button class="small" onclick="loadUserDetail(${u.id})">جزئیات</button> ${u.status === 'blocked' ? `<button class="small gold" onclick="userStatus(${u.id},'active')">رفع مسدود</button>` : `<button class="small danger" onclick="userStatus(${u.id},'blocked')">مسدود</button>`}</td></tr>`).join('') + '</table>' : '<p class="muted">کاربری نیست.</p>';
   $('u-pager').innerHTML = pagerHTML('u', res); }
 async function userStatus(id, st){ try { await api('/admin/users/' + id, 'PATCH', {status: st}); loadUsers(); } catch(err){ setMsg(err.message); } }
+let currentFailed = [];
 async function loadUserDetail(id){ const u = await api('/admin/users/' + id);
+  currentFailed = u.failed_generations || [];
   $('u-detail').innerHTML = `<h3>کاربر ${u.id} — ${esc(u.mobile)}</h3><p>موجودی سکه: <b>${u.balance}</b> | اعتبار رایگان عکس: ${u.free_image_credits} | وضعیت: ${esc(u.status)}</p>
   <form class="grid" onsubmit="coinAdjust(event, ${u.id})"><input id="u-delta" type="number" placeholder="مبلغ تعدیل (مثبت یا منفی)" required><input id="u-reason" placeholder="دلیل (اختیاری)"><button>تعدیل سکه</button></form>
   <h4>تولیدها</h4>` + (u.generations.length ? `<table><tr><th>id</th><th>دنیا</th><th>مدل</th><th>وضعیت</th><th>سکه</th><th>خروجی</th></tr>` + u.generations.map(g => `<tr><td>${g.id}</td><td>${esc(g.world)}</td><td>${esc(g.model)}</td><td>${esc(g.status)}</td><td>${g.coin_cost}</td><td>${g.output_url ? `<img class="thumb" src="${esc(g.output_url)}" data-cap="${esc('دنیا: ' + (g.world || '—') + ' | وضعیت: ' + (g.status || '—'))}" onclick="openLightbox(this.src, this.dataset.cap)" style="cursor:pointer;">` : '—'}</td></tr>`).join('') + '</table>' : '<p class="muted">تولیدی نیست.</p>') +
+  `<h4>گزارش ناموفق‌ها</h4>` + ((u.failed_generations || []).length ? `<button class="small gold" onclick="openFailModal()">گزارش ناموفق‌ها (${(u.failed_generations || []).length})</button>` : '<p class="muted">ناموفقی نیست.</p>') +
   `<h4>دفتر سکه</h4>` + (u.ledger.length ? `<table><tr><th>مبلغ</th><th>دلیل</th><th>تاریخ</th></tr>` + u.ledger.map(r => `<tr><td>${r.delta}</td><td>${esc(r.reason)}</td><td class="muted">${esc(r.created_at)}</td></tr>`).join('') + '</table>' : '<p class="muted">تراکنشی نیست.</p>') +
   `<h4>گالری</h4>` + (u.gallery.length ? u.gallery.map(r => `<img class="thumb" src="${esc(r.image_url)}" title="${esc(r.status)}" data-cap="${esc('وضعیت: ' + (r.status || '—'))}" onclick="openLightbox(this.src, this.dataset.cap)" style="cursor:pointer;">`).join(' ') : '<p class="muted">عکسی نیست.</p>');
   window.scrollTo(0, document.body.scrollHeight); }
