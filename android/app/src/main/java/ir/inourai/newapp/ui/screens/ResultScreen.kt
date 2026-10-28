@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -298,7 +299,8 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
                     shape = RoundedCornerShape(50),
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(bottom = 8.dp),
                 ) {
                     Text("ارسال به گالری چهره‌ساز", fontWeight = FontWeight.Bold)
                 }
@@ -306,7 +308,8 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                 Button(
                     onClick = {},
                     enabled = false,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(bottom = 16.dp),
                 ) {
                     Text("ارسال شده به گالری")
                 }
