@@ -288,7 +288,11 @@ fun App(initialGenId: Long = -1L) {
                     )
                 }
                 composable(Dest.LOGIN) {
-                    LoginScreen(onDone = { nav.navigate(Dest.HOME) })
+                    LoginScreen(onDone = {
+                        nav.navigate(Dest.HOME) {
+                            popUpTo(nav.graph.startDestinationId) { inclusive = true }
+                        }
+                    })
                 }
             }
         }
