@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import ir.inourai.newapp.data.Announcement
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Category
 import ir.inourai.newapp.data.Favorites
@@ -63,6 +64,10 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
     val context = LocalContext.current
     var worlds by remember { mutableStateOf<List<World>>(emptyList()) }
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
+    // اعلان‌های داخل اپ (endpoint عمومی؛ خطا یعنی هیچ بنری).
+    var announcements by remember { mutableStateOf<List<Announcement>>(emptyList()) }
+    // ردشده‌ها فقط برای همین نشست؛ هیچ persistenceای ندارد.
+    var dismissedAnnouncements by remember { mutableStateOf<Set<Long>>(emptySet()) }
     // null یعنی هنوز خوانده نشده یا خواندنش ناموفق بوده (→ ترندهای پیش‌فرض).
     var trends by remember { mutableStateOf<List<Trend>?>(null) }
     // null یعنی «پیشنهادی» (دنیاهای featured).
@@ -137,6 +142,10 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
         } catch (_: Exception) {
             trends = null
         }
+        try {
+            announcements = Api.service.announcements()
+        } catch (_: Exception) {
+        }
         Favorites.refresh()
     }
 
@@ -205,6 +214,36 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        // بنر اعلان‌ها بالای همه‌ی محتوای خانه (بالای ترندها)؛
+        // لیست خالی یعنی هیچ بنری و هیچ تغییری در چیدمان.
+        items(announcements.filter { it.id !in dismissedAnnouncements }) { ann ->
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(ann.title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(ann.body, fontSize = 14.sp)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "✕",
+                        fontSize = 16.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.clickable {
+                            dismissedAnnouncements = dismissedAnnouncements + ann.id
+                        },
+                    )
+                }
+            }
+        }
         item {
             Text(
                 "چهره‌ساز",

@@ -43,6 +43,12 @@ class Config:
     # بدون تایید، سکه شارژ نمی‌شود.
     BAZAAR_RSA_PUBLIC_KEY = os.environ.get("APP_BAZAAR_RSA_PUBLIC_KEY", "")
 
+    # فایل کلید service account فایربیس برای FCM (فقط نام env؛
+    # مقدارش مسیر فایل روی سرور است، نه خود کلید. تا وقتی ست نشده
+    # یا فایل خوانا نباشد، ارسال پوش با خطای fcm_not_configured
+    # رد می‌شود — هرگز کلیدی در کد یا env ساخته/ذخیره نمی‌شود).
+    FCM_SERVICE_ACCOUNT_FILE = os.environ.get("APP_FCM_SERVICE_ACCOUNT_FILE", "")
+
     # توکن ادمین خود اپ (هدر X-Admin-Token). تا وقتی ست نشده،
     # همه‌ی endpointهای ‎/admin بسته‌اند (fail-closed).
     ADMIN_TOKEN = os.environ.get("APP_ADMIN_TOKEN", "")

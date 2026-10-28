@@ -22,7 +22,7 @@ REPOS = [
     "https://repo.maven.apache.org/maven2",
     "https://plugins.gradle.org/m2",
 ]
-OUT = os.path.expanduser("~/workspace/new-app/android/local-repo")
+OUT = os.path.expanduser("~/workspace/chehreApp/android/local-repo")
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 SKIP_SCOPES = {"test", "system"}
 
@@ -254,6 +254,9 @@ def main():
         ("org.jetbrains.kotlin", "kotlin-stdlib", "1.9.23"),
         ("org.jetbrains.kotlin", "kotlin-reflect", "1.9.23"),
         ("org.jetbrains.kotlin", "kotlin-script-runtime", "1.9.23"),
+        ("com.google.gms.google-services", "com.google.gms.google-services.gradle.plugin", "4.4.2"),
+        ("com.google.gms", "google-services", "4.4.2"),
+        ("com.google.firebase", "firebase-messaging", "24.0.1"),
     ]
     queue = deque(seeds)
     seen = set(seeds)

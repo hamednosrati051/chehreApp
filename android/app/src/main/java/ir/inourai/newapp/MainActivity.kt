@@ -1,8 +1,15 @@
 package ir.inourai.newapp
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.google.firebase.messaging.FirebaseMessaging
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -54,6 +61,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import ir.inourai.newapp.billing.BazaarBilling
+import ir.inourai.newapp.data.Api
+import ir.inourai.newapp.data.DeviceTokenRequest
 import ir.inourai.newapp.data.Session
 import ir.inourai.newapp.ui.screens.CreateImageScreen
 import ir.inourai.newapp.ui.screens.GalleryScreen
@@ -145,6 +154,10 @@ fun App(initialGenId: Long = -1L) {
     val showNav = route != Dest.LOGIN && route != Dest.RESULT && !showSplash
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    // فقط نتیجه‌ی درخواست مجوز اعلان؛ ردشدن هیچ کار دیگری نمی‌کند.
+    val notifPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
 
     // اسپلش اول اپ: ۲ ثانیه، یا با ضربه رد می‌شود.
     LaunchedEffect(Unit) {
@@ -162,6 +175,40 @@ fun App(initialGenId: Long = -1L) {
                 } catch (_: Exception) {
                 }
             }
+        }
+    }
+
+    // همگام‌سازی توکن FCM + درخواست یک‌باره‌ی مجوز اعلان (فقط وقتی لاگین کرده باشد).
+    // مجوز فقط وقتی درخواست می‌شود که داده نشده باشد و در این نصب هنوز
+    // درخواست نشده باشد (پرچم chehre_prefs/notif_perm_asked)؛ ردشدن یعنی هیچ‌کاری.
+    // ارسال توکن best-effort است و هرگز UI را مسدود یا کرش نمی‌کند.
+    LaunchedEffect(Session.token) {
+        if (Session.token == null) return@LaunchedEffect
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val granted = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.POST_NOTIFICATIONS,
+                ) == PackageManager.PERMISSION_GRANTED
+                val prefs = context.getSharedPreferences("chehre_prefs", android.content.Context.MODE_PRIVATE)
+                if (!granted && !prefs.getBoolean("notif_perm_asked", false)) {
+                    prefs.edit().putBoolean("notif_perm_asked", true).apply()
+                    notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+        } catch (_: Exception) {
+        }
+        try {
+            FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                if (!task.isSuccessful) return@addOnCompleteListener
+                val fcmToken = task.result ?: return@addOnCompleteListener
+                scope.launch {
+                    try {
+                        Api.service.registerDeviceToken(DeviceTokenRequest(fcmToken))
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        } catch (_: Exception) {
         }
     }
 

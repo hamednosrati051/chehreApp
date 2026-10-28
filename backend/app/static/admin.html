@@ -97,6 +97,7 @@
     <button data-tab="users" onclick="showTab('users')">کاربران</button>
     <button data-tab="admins" onclick="showTab('admins')">ادمین‌ها</button>
     <button data-tab="settings" onclick="showTab('settings')">تنظیمات</button>
+    <button data-tab="notifs" onclick="showTab('notifs')">اعلان‌ها</button>
   </div>
 
   <section id="worlds" class="on">
@@ -269,6 +270,25 @@
     <p class="muted">image_coin_price = قیمت پیش‌فرض هر تصویر (سکه) برای دنیاهای جدید.</p>
   </section>
 
+  <section id="notifs">
+    <h2>اعلان‌ها</h2>
+    <h3>ارسال پوش‌نوتیفیکیشن</h3>
+    <p class="muted">به همه‌ی دستگاه‌های ثبت‌شده فرستاده می‌شود. اگر کلید فایربیس روی سرور پیکربندی نشده باشد، خطای fcm_not_configured می‌گیرید.</p>
+    <form class="grid" onsubmit="sendPush(event)">
+      <input id="n-title" placeholder="عنوان" class="full" required>
+      <textarea id="n-body" placeholder="متن پیام" class="full" required></textarea>
+      <button>ارسال پوش به همه</button>
+    </form>
+    <p id="n-result" class="muted"></p>
+    <h3>اطلاعیه‌ی درون‌برنامه‌ای جدید</h3>
+    <form class="grid" onsubmit="saveAnnouncement(event)">
+      <input id="an-title" placeholder="عنوان" class="full" required>
+      <textarea id="an-body" placeholder="متن" class="full" required></textarea>
+      <button>ساخت اطلاعیه</button>
+    </form>
+    <div id="an-list"></div>
+  </section>
+
   </div>
   <div id="lightbox" onclick="closeLightbox()"><img id="lb-img" onclick="event.stopPropagation()"><div class="cap" id="lb-cap"></div><button class="small gold" onclick="closeLightbox()">بستن</button></div>
   <div id="failModal" onclick="closeFailModal()"><div class="card" onclick="event.stopPropagation()"><h3>گزارش ناموفق‌ها</h3><div id="fail-list"></div><button class="small gold" onclick="closeFailModal()">بستن</button></div></div>
@@ -319,7 +339,7 @@ function showTab(tab){
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === tab));
   ({worlds: loadWorlds, trends: loadTrends, cats: loadCats, packs: loadPacks, models: loadModels,
     purchases: loadPurchases, gallery: loadGallery, ghist: loadGhist, gens: loadGens, users: loadUsers, admins: loadAdmins,
-    settings: loadSettings})[tab]?.().catch(e => setMsg(e.message));
+    settings: loadSettings, notifs: loadNotifs})[tab]?.().catch(e => setMsg(e.message));
 }
 
 let cats = [], models = [], editingWorld = null, editingPack = null, editingCat = null, editingModel = null;
@@ -484,6 +504,14 @@ async function loadPublicSettings(){ try { const ss = await api('/admin/settings
   const m = {}; ss.forEach(s => m[s.key] = s.value);
   $('ps-about').value = m.about_us || ''; $('ps-support').value = m.support_info || ''; $('ps-bug').value = m.bug_report_info || ''; $('ps-rules').value = m.rules_privacy || ''; $('ps-bazaar').value = m.bazaar_url || '';
 } catch(_){} }
+
+async function loadNotifs(){ const rows = await api('/admin/announcements');
+  $('an-list').innerHTML = rows.length ? `<table><tr><th>عنوان</th><th>متن</th><th>فعال</th><th>تاریخ</th><th></th></tr>` +
+    rows.map(a => `<tr><td>${esc(a.title)}</td><td>${esc(a.body)}</td><td>${a.active ? '✓' : '—'}</td><td class="muted">${esc(a.created_at)}</td><td><button class="small" onclick="toggleAnnouncement(${a.id}, ${!a.active})">${a.active ? 'غیرفعال' : 'فعال'}</button> <button class="small danger" onclick="delAnnouncement(${a.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">اطلاعیه‌ای نیست.</p>'; }
+async function saveAnnouncement(e){ e.preventDefault(); try { await api('/admin/announcements', 'POST', {title: $('an-title').value.trim(), body: $('an-body').value.trim()}); setMsg('اطلاعیه ساخته شد.', true); $('an-title').value = ''; $('an-body').value = ''; loadNotifs(); } catch(err){ setMsg(err.message); } }
+async function toggleAnnouncement(id, on){ try { await api('/admin/announcements/' + id, 'PATCH', {active: on}); loadNotifs(); } catch(err){ setMsg(err.message); } }
+async function delAnnouncement(id){ if(!confirm('اطلاعیه حذف شود؟')) return; try { await api('/admin/announcements/' + id, 'DELETE'); loadNotifs(); } catch(err){ setMsg(err.message); } }
+async function sendPush(e){ e.preventDefault(); try { const r = await api('/admin/notifications/send', 'POST', {title: $('n-title').value.trim(), body: $('n-body').value.trim()}); $('n-result').textContent = 'ارسال شد: ' + r.sent + ' موفق، ' + r.failed + ' ناموفق، از مجموع ' + r.total + ' دستگاه.'; setMsg('پوش ارسال شد.', true); } catch(err){ $('n-result').textContent = 'خطا: ' + err.message; setMsg(err.message); } }
 
 bindSearch('w-search', 'w-list'); bindSearch('p-search', 'p-list');
 bindSearch('a-search', 'a-list');

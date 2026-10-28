@@ -303,6 +303,34 @@ class AppTrendWorld(db.Model):
     )
 
 
+class AppDeviceToken(db.Model):
+    """توکن FCM دستگاه کاربر (برای پوش‌نوتیفیکیشن)."""
+
+    __tablename__ = "app_device_tokens"
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.BigInteger, nullable=False, index=True)
+    token = db.Column(db.String(255), unique=True, nullable=False)
+    platform = db.Column(db.String(16), default="android", nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        server_default=db.func.now(),
+        onupdate=db.func.now(),
+        nullable=False,
+    )
+
+
+class AppAnnouncement(db.Model):
+    """اطلاعیه‌ی درون‌برنامه‌ای (نمایش در اپ، بدون نیاز به پوش)."""
+
+    __tablename__ = "app_announcements"
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    title = db.Column(db.String(200), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+
 class AppAdminUser(db.Model):
     """کاربر ادمین خود اپ (ورود یوزر/پسورد به ادمین وب).
 

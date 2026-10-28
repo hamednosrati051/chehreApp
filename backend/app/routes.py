@@ -14,7 +14,9 @@ from werkzeug.utils import secure_filename
 from .extensions import db
 from .models import (
     AppAdminUser,
+    AppAnnouncement,
     AppCategory,
+    AppDeviceToken,
     AppCoinLedger,
     AppCoinPack,
     AppFavorite,
@@ -34,6 +36,7 @@ from .models import (
 )
 from .services import bazaar as bazaar_svc
 from .services import coins as coins_svc
+from .services import fcm as fcm_svc
 from .services import sms as sms_svc
 
 auth_bp = Blueprint("auth", __name__)
@@ -240,6 +243,62 @@ def list_worlds():
             for w in worlds
         ]
     )
+
+
+# ---------------- device tokens + announcements ----------------
+# ثبت توکن FCM دستگاه (برای پوش) و اطلاعیه‌های درون‌برنامه‌ای
+# (عمومی، مثل /worlds: کاربر لاگین‌نکرده هم آن‌ها را می‌بیند).
+
+
+@content_bp.post("/device-tokens/register")
+@require_auth
+def register_device_token():
+    body = request.json or {}
+    token = body.get("token") or ""
+    if not isinstance(token, str) or not token.strip():
+        return jsonify({"error": "token required"}), 400
+    token = token.strip()
+    platform = body.get("platform") or "android"
+    if not isinstance(platform, str):
+        platform = "android"
+    row = AppDeviceToken.query.filter_by(token=token).first()
+    if row is None:
+        db.session.add(
+            AppDeviceToken(
+                user_id=g.user.id, token=token, platform=platform
+            )
+        )
+    else:
+        # upsert بر اساس توکن: مالک و زمان به‌روزرسانی تازه می‌شود
+        # (حتی اگر همان کاربر دوباره ثبت کند).
+        row.user_id = g.user.id
+        row.platform = platform
+        row.updated_at = datetime.datetime.utcnow()
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@content_bp.get("/announcements")
+def list_announcements_public():
+    rows = (
+        AppAnnouncement.query.filter_by(active=True)
+        .order_by(AppAnnouncement.id.desc())
+        .all()
+    )
+    return jsonify([_announcement_public(a) for a in rows])
+
+
+def _announcement_public(a):
+    return {
+        "id": a.id,
+        "title": a.title,
+        "body": a.body,
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+    }
+
+
+def _announcement_admin(a):
+    return {**_announcement_public(a), "active": bool(a.active)}
 
 
 # ---------------- favorites ----------------
@@ -2067,3 +2126,84 @@ def admin_upload_world_sample(world_id):
         fh.write(data)
     url = request.host_url.rstrip("/") + "/static/worlds/" + filename
     return jsonify({"sample_image_url": url})
+
+
+# ---------------- admin: announcements + push notifications ----------------
+
+
+@admin_bp.get("/admin/announcements")
+@require_admin
+def admin_list_announcements():
+    rows = (
+        AppAnnouncement.query.order_by(AppAnnouncement.id.desc()).all()
+    )
+    return jsonify([_announcement_admin(a) for a in rows])
+
+
+@admin_bp.post("/admin/announcements")
+@require_admin
+def admin_create_announcement():
+    body = request.json or {}
+    title = (body.get("title") or "").strip()
+    text = (body.get("body") or "").strip()
+    if not title or not text:
+        return jsonify({"error": "title and body required"}), 400
+    a = AppAnnouncement(title=title, body=text, active=True)
+    db.session.add(a)
+    db.session.commit()
+    return jsonify(_announcement_admin(a)), 201
+
+
+@admin_bp.patch("/admin/announcements/<int:ann_id>")
+@require_admin
+def admin_update_announcement(ann_id):
+    a = AppAnnouncement.query.get(ann_id)
+    if not a:
+        return jsonify({"error": "announcement not found"}), 404
+    body = request.json or {}
+    if "active" not in body:
+        return jsonify({"error": "active required"}), 400
+    a.active = bool(body["active"])
+    db.session.commit()
+    return jsonify(_announcement_admin(a))
+
+
+@admin_bp.delete("/admin/announcements/<int:ann_id>")
+@require_admin
+def admin_delete_announcement(ann_id):
+    a = AppAnnouncement.query.get(ann_id)
+    if not a:
+        return jsonify({"error": "announcement not found"}), 404
+    db.session.delete(a)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@admin_bp.post("/admin/notifications/send")
+@require_admin
+def admin_send_notification():
+    body = request.json or {}
+    title = (body.get("title") or "").strip()
+    text = (body.get("body") or "").strip()
+    if not title or not text:
+        return jsonify({"error": "title and body required"}), 400
+    tokens = [r.token for r in AppDeviceToken.query.all()]
+    try:
+        result = fcm_svc.send_push_to_tokens(tokens, title, text)
+    except fcm_svc.FcmNotConfigured:
+        return jsonify({"error": "fcm_not_configured"}), 503
+    except Exception:
+        return jsonify({"error": "fcm send failed"}), 502
+    stale = result.get("stale_tokens") or []
+    if stale:
+        AppDeviceToken.query.filter(
+            AppDeviceToken.token.in_(stale)
+        ).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify(
+        {
+            "sent": result["sent"],
+            "failed": result["failed"],
+            "total": result["total"],
+        }
+    )

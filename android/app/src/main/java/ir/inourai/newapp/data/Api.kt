@@ -122,6 +122,8 @@ data class LikedGeneration(
 data class GallerySubmitRequest(val generation_id: Long)
 data class GallerySubmitResponse(val id: Long, val status: String)
 data class GalleryItem(val id: Long, val image_url: String, val generation_id: Long? = null)
+data class DeviceTokenRequest(val token: String, val platform: String = "android")
+data class Announcement(val id: Long, val title: String, val body: String, val created_at: String? = null)
 data class PublicSettings(
     val about_us: String = "",
     val support_info: String = "",
@@ -205,6 +207,12 @@ interface ApiService {
 
     @GET("app/settings")
     suspend fun publicSettings(): PublicSettings
+
+    @POST("device-tokens/register")
+    suspend fun registerDeviceToken(@Body b: DeviceTokenRequest): Response<Unit>
+
+    @GET("announcements")
+    suspend fun announcements(): List<Announcement>
 }
 
 object Api {
