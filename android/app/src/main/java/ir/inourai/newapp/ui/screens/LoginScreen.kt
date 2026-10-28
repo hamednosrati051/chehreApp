@@ -15,6 +15,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +43,14 @@ fun LoginScreen(onDone: () -> Unit) {
     var sent by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    // وعده‌ی هدیه فقط وقتی تنظیم روشن است؛ خطا در خواندن یعنی متن فعلی می‌ماند.
+    var giftOn by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        try {
+            val v = Api.service.publicSettings().entry_gift_enabled
+            giftOn = v != "0" && !v.equals("false", ignoreCase = true)
+        } catch (_: Exception) { }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -49,7 +58,8 @@ fun LoginScreen(onDone: () -> Unit) {
     ) {
         Text("ورود با موبایل", fontWeight = FontWeight.Bold, fontSize = 20.sp)
         Text(
-            "شماره موبایلت را وارد کن؛ با اولین ورود ۱ تصویر هدیه می‌گیری.",
+            if (giftOn) "شماره موبایلت را وارد کن؛ با اولین ورود ۱ تصویر هدیه می‌گیری."
+            else "شماره موبایلت را وارد کن.",
             color = Color.Gray,
             fontSize = 14.sp,
         )

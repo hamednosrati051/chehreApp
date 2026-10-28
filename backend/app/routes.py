@@ -62,6 +62,14 @@ def _default_image_coins():
         return DEFAULT_IMAGE_COINS
 
 
+def _entry_gift_enabled():
+    """هدیه‌ی ورود برای کاربران جدید؛ از app_settings وگرنه روشن (رفتار فعلی)."""
+    row = AppSetting.query.get("entry_gift_enabled")
+    if row is None:
+        return True
+    return str(row.value).strip().lower() not in ("0", "false", "no", "off")
+
+
 def _token_for(user):
     payload = {
         # PyJWT 2.8+ «sub» را فقط رشته می‌پذیرد؛ موقع خواندن به int برمی‌گردد.
@@ -179,8 +187,14 @@ def otp_verify():
     user = AppUser.query.filter_by(mobile=mobile).first()
     is_new = user is None
     if user is None:
-        # هدیه‌ی ورود (۱ عکس + ۱ صدا) از defaultهای مدل می‌آید.
-        user = AppUser(mobile=mobile)
+        # هدیه‌ی ورود (۱ عکس + ۱ صدا) فقط وقتی تنظیم روشن است؛
+        # خاموش یعنی کاربر جدید هیچ هدیه‌ای نمی‌گیرد. کاربران قبلی دست نمی‌خورند.
+        gift = _entry_gift_enabled()
+        user = AppUser(
+            mobile=mobile,
+            free_image_credits=1 if gift else 0,
+            free_voice_credits=1 if gift else 0,
+        )
         db.session.add(user)
     user.last_login_at = datetime.datetime.utcnow()
     db.session.commit()
@@ -712,7 +726,7 @@ def public_gallery():
 # ---------------- world detail ----------------
 
 
-PUBLIC_SETTINGS = ("about_us", "support_info", "bug_report_info", "bazaar_url", "rules_privacy")
+PUBLIC_SETTINGS = ("about_us", "support_info", "bug_report_info", "bazaar_url", "rules_privacy", "entry_gift_enabled")
 
 
 @content_bp.get("/app/settings")

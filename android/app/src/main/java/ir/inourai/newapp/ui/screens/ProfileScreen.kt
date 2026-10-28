@@ -224,7 +224,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                     LinkRow(
                         icon = Icons.Rounded.Person,
                         title = "ورود / ساخت حساب",
-                        subtitle = "با اولین ورود، ۱ تصویر هدیه بگیر",
+                        subtitle = if (pubSettings.entry_gift_enabled != "0" && !pubSettings.entry_gift_enabled.equals("false", ignoreCase = true)) "با اولین ورود، ۱ تصویر هدیه بگیر" else "با شماره موبایل وارد شو",
                         onClick = onLogin,
                     )
                 } else {

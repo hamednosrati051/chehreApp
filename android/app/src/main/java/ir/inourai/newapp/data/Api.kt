@@ -130,6 +130,7 @@ data class PublicSettings(
     val bug_report_info: String = "",
     val bazaar_url: String = "",
     val rules_privacy: String = "",
+    val entry_gift_enabled: String = "1",
 )
 
 interface ApiService {

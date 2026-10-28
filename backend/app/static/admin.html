@@ -257,6 +257,10 @@
       <input id="s-val" placeholder="مقدار (مثلا 8)" required>
       <button>ذخیره تنظیم</button>
     </form>
+    <form class="grid" onsubmit="saveGiftToggle(event)">
+      <label><input type="checkbox" id="s-gift"> هدیه‌ی ورود برای کاربران جدید (فعال = کاربر جدید ۱ تصویر + ۱ صدا هدیه می‌گیرد؛ غیرفعال = کاربر جدید هدیه نمی‌گیرد)</label>
+      <button>ذخیره هدیه‌ی ورود</button>
+    </form>
     <form class="grid" onsubmit="savePublicSettings(event)">
       <textarea id="ps-about" rows="3" placeholder="درباره ما (متن نمایشی در پروفایل)"></textarea>
       <textarea id="ps-support" rows="3" placeholder="پشتیبانی (متن نمایشی در پروفایل)"></textarea>
@@ -267,7 +271,7 @@
     </form>
     <p class="muted">این پنج مورد در پروفایل اپ نمایش داده می‌شوند؛ هر کدام خالی باشد، اپ جای آن «به‌زودی» نشان می‌دهد (بازار: لینک خودکار).</p>
     <div id="s-list"></div>
-    <p class="muted">image_coin_price = قیمت پیش‌فرض هر تصویر (سکه) برای دنیاهای جدید.</p>
+    <p class="muted">image_coin_price = قیمت پیش‌فرض هر تصویر (سکه) برای دنیاهای جدید. entry_gift_enabled = هدیه‌ی ورود برای کاربران جدید (۱ = فعال، ۰ = غیرفعال؛ نبودن کلید یعنی فعال).</p>
   </section>
 
   <section id="notifs">
@@ -492,8 +496,11 @@ async function adminToggle(id, on){ try { await api('/admin/admin-users/' + id, 
 async function delAdmin(id){ if(!confirm('ادمین حذف شود؟')) return; try { await api('/admin/admin-users/' + id, 'DELETE'); loadAdmins(); } catch(err){ setMsg(err.message); } }
 
 async function loadSettings(){ loadPublicSettings(); const ss = await api('/admin/settings');
+  const gm = {}; ss.forEach(s => gm[s.key] = s.value);
+  $('s-gift').checked = gm.entry_gift_enabled !== '0' && (gm.entry_gift_enabled || '').toLowerCase() !== 'false';
   $('s-list').innerHTML = ss.length ? `<table><tr><th>کلید</th><th>مقدار</th></tr>` + ss.map(s => `<tr><td>${esc(s.key)}</td><td>${esc(s.value)}</td></tr>`).join('') + '</table>' : '<p class="muted">تنظیمی نیست.</p>'; }
 async function saveSetting(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: $('s-key').value.trim(), value: $('s-val').value.trim()}); setMsg('تنظیم ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
+async function saveGiftToggle(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'entry_gift_enabled', value: $('s-gift').checked ? '1' : '0'}); setMsg('تنظیم هدیه‌ی ورود ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function savePublicSettings(e){ e.preventDefault(); try {
   for (const [k, id] of [['about_us','ps-about'],['support_info','ps-support'],['bug_report_info','ps-bug'],['rules_privacy','ps-rules'],['bazaar_url','ps-bazaar']]) {
     await api('/admin/settings', 'PATCH', {key: k, value: $(id).value.trim()});

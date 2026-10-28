@@ -74,13 +74,19 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
     var selected by remember { mutableStateOf<Long?>(null) }
     val favIds by Favorites.ids
 
-    // پاپ‌آپ هدیه‌ی ورود — فقط یک بار بعد از اولین ورود.
+    // پاپ‌آپ هدیه‌ی ورود — فقط یک بار بعد از اولین ورود، و فقط وقتی هدیه روشن است.
     var showGift by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (Session.justRegistered) {
             Session.justRegistered = false
+            // نبودن تنظیم یعنی روشن (پیش‌فرض بک‌اند)؛ خطا در خواندن یعنی پاپ‌آپ نشان داده نشود
+            // تا وعده‌ی هدیه‌ای داده نشود که ثبت نشده است.
+            val giftOn = try {
+                val v = Api.service.publicSettings().entry_gift_enabled
+                v != "0" && !v.equals("false", ignoreCase = true)
+            } catch (_: Exception) { false }
             val prefs = context.getSharedPreferences("chehre_prefs", Context.MODE_PRIVATE)
-            if (!prefs.getBoolean("gift_popup_shown", false)) {
+            if (giftOn && !prefs.getBoolean("gift_popup_shown", false)) {
                 showGift = true
             }
         }
