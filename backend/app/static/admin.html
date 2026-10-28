@@ -32,6 +32,13 @@
   th, td{border-bottom:1px solid #334155; padding:8px; text-align:right; vertical-align:top;}
   th{color:#93c5fd;}
   img.thumb{width:72px; height:72px; object-fit:cover; border-radius:10px;}
+  .gen-grid{display:flex; flex-wrap:wrap; gap:12px;}
+  .gen-item{width:120px; text-align:center;}
+  .gthumb{width:120px; height:120px; object-fit:cover; border-radius:12px; cursor:pointer;}
+  #lightbox{position:fixed; inset:0; background:rgba(0,0,0,.88); display:none; align-items:center; justify-content:center; flex-direction:column; gap:12px; z-index:50; padding:16px;}
+  #lightbox.on{display:flex;}
+  #lightbox img{max-width:92vw; max-height:78vh; border-radius:12px;}
+  #lightbox .cap{color:#e2e8f0; font-size:14px; text-align:center;}
   #msg{color:#f87171; min-height:20px; margin:8px 0;}
   #msg.ok{color:#4ade80;}
   .muted{color:#94a3b8; font-size:13px;}
@@ -82,6 +89,7 @@
     <button data-tab="purchases" onclick="showTab('purchases')">پرداخت‌ها</button>
     <button data-tab="gallery" onclick="showTab('gallery')">گالری در انتظار</button>
     <button data-tab="ghist" onclick="showTab('ghist')">تاریخچه گالری</button>
+    <button data-tab="gens" onclick="showTab('gens')">همه‌ی تولیدها</button>
     <button data-tab="users" onclick="showTab('users')">کاربران</button>
     <button data-tab="admins" onclick="showTab('admins')">ادمین‌ها</button>
     <button data-tab="settings" onclick="showTab('settings')">تنظیمات</button>
@@ -193,6 +201,13 @@
     <div id="gh-pager"></div>
   </section>
 
+  <section id="gens">
+    <h2>همه‌ی تولیدها</h2>
+    <p class="muted">روی هر عکس بزنید تا بزرگ شود.</p>
+    <div id="gen-list"></div>
+    <div id="gen-pager"></div>
+  </section>
+
   <section id="users">
     <h2>کاربران</h2>
     <form class="grid" onsubmit="applyUserFilter(event)">
@@ -238,6 +253,7 @@
   </section>
 
   </div>
+  <div id="lightbox" onclick="closeLightbox()"><img id="lb-img" onclick="event.stopPropagation()"><div class="cap" id="lb-cap"></div><button class="small gold" onclick="closeLightbox()">بستن</button></div>
 </main>
 <script>
 const $ = id => document.getElementById(id);
@@ -255,6 +271,8 @@ async function login(e){ e.preventDefault();
 function loginToken(e){ e.preventDefault(); const t = $('l-token').value.trim(); if(!t) return;
   localStorage.setItem('chehre_admin_token', t); localStorage.removeItem('chehre_admin_user'); showMain(); }
 function logout(){ localStorage.removeItem('chehre_admin_token'); localStorage.removeItem('chehre_admin_user'); showLogin(); }
+function openLightbox(src, cap){ $('lb-img').src = src; $('lb-cap').textContent = cap || ''; $('lightbox').classList.add('on'); }
+function closeLightbox(){ $('lightbox').classList.remove('on'); $('lb-img').src = ''; }
 function setMsg(m, ok){ const el = $('msg'); el.textContent = m || ''; el.className = ok ? 'ok' : ''; }
 async function api(path, method, body){
   const r = await fetch('/api/v1' + path, { method: method || 'GET',
@@ -280,7 +298,7 @@ function showTab(tab){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === tab));
   ({worlds: loadWorlds, cats: loadCats, packs: loadPacks, models: loadModels,
-    purchases: loadPurchases, gallery: loadGallery, ghist: loadGhist, users: loadUsers, admins: loadAdmins,
+    purchases: loadPurchases, gallery: loadGallery, ghist: loadGhist, gens: loadGens, users: loadUsers, admins: loadAdmins,
     settings: loadSettings})[tab]?.().catch(e => setMsg(e.message));
 }
 
@@ -366,7 +384,7 @@ async function loadPurchaseDetail(id){ const r = await api('/admin/purchases/' +
   $('pu-detail').innerHTML = `<h3>پرداخت ${r.id}</h3><p>موبایل: ${esc(r.mobile)} | پک: ${esc(r.pack_name)} (${r.pack_coins} سکه) | مبلغ: ${r.amount_irr.toLocaleString('fa-IR')} ریال | وضعیت: ${purchaseFa[r.status] || esc(r.status)} | توکن: <span class="muted">${esc(r.token_tail)}</span> | تأیید: ${esc(r.verified_at)} | ثبت: ${esc(r.created_at)}</p>`; }
 
 async function loadGallery(){ const rows = await api('/admin/gallery/pending');
-  $('g-list').innerHTML = rows.length ? rows.map(r => `<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;"><img class="thumb" src="${esc(r.image_url)}"><div>موبایل: ${esc(r.mobile)}<br><span class="muted">generation: ${r.generation_id}</span></div><button class="small gold" onclick="galleryAct(${r.id},'approve')">تأیید</button><input id="gr-${r.id}" placeholder="دلیل رد (اختیاری)" style="min-width:180px;"><button class="small danger" onclick="galleryReject(${r.id})">رد</button></div>`).join('') : '<p class="muted">عکس در انتظاری نیست.</p>'; }
+  $('g-list').innerHTML = rows.length ? rows.map(r => `<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;"><img class="thumb" src="${esc(r.image_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | generation: ' + r.generation_id)}" onclick="openLightbox(this.src, this.dataset.cap)" style="cursor:pointer;"><div>موبایل: ${esc(r.mobile)}<br><span class="muted">generation: ${r.generation_id}</span></div><button class="small gold" onclick="galleryAct(${r.id},'approve')">تأیید</button><input id="gr-${r.id}" placeholder="دلیل رد (اختیاری)" style="min-width:180px;"><button class="small danger" onclick="galleryReject(${r.id})">رد</button></div>`).join('') : '<p class="muted">عکس در انتظاری نیست.</p>'; }
 async function galleryAct(id, act){ try { await api('/admin/gallery/' + id + '/' + act, 'POST'); loadGallery(); } catch(err){ setMsg(err.message); } }
 async function galleryReject(id){ try { await api('/admin/gallery/' + id + '/reject', 'POST', {reason: $('gr-' + id).value.trim() || null}); loadGallery(); } catch(err){ setMsg(err.message); } }
 
@@ -377,8 +395,14 @@ const galleryFa = {pending: 'در انتظار', approved: 'تأییدشده', r
 async function loadGhist(){ const q = new URLSearchParams({status: $('gh-status').value, page: ghPageNo});
   const res = await api('/admin/gallery?' + q);
   $('gh-list').innerHTML = res.items.length ? `<table><tr><th>عکس</th><th>موبایل</th><th>وضعیت</th><th>در گالری اپ</th><th>بازبین</th><th>دلیل رد</th><th>تاریخ</th><th></th></tr>` +
-    res.items.map(r => `<tr><td><img class="thumb" src="${esc(r.image_url)}"></td><td>${esc(r.mobile)}</td><td>${galleryFa[r.status] || esc(r.status)}</td><td>${r.published_in_app ? '✓' : '—'}</td><td>${esc(r.reviewed_by)}</td><td>${esc(r.rejection_reason)}</td><td class="muted">${esc(r.created_at)}</td><td>${r.status === 'pending' ? '' : `<button class="small gold" onclick="galleryRequeue(${r.id})">بازگشت به انتظار</button> <button class="small danger" onclick="galleryDelete(${r.id})">حذف</button>`}</td></tr>`).join('') + '</table>' : '<p class="muted">عکسی نیست.</p>';
+    res.items.map(r => `<tr><td><img class="thumb" src="${esc(r.image_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | ' + (galleryFa[r.status] || r.status) + ' | ' + (r.created_at || ''))}" onclick="openLightbox(this.src, this.dataset.cap)" style="cursor:pointer;"></td><td>${esc(r.mobile)}</td><td>${galleryFa[r.status] || esc(r.status)}</td><td>${r.published_in_app ? '✓' : '—'}</td><td>${esc(r.reviewed_by)}</td><td>${esc(r.rejection_reason)}</td><td class="muted">${esc(r.created_at)}</td><td>${r.status === 'pending' ? '' : `<button class="small gold" onclick="galleryRequeue(${r.id})">بازگشت به انتظار</button> <button class="small danger" onclick="galleryDelete(${r.id})">حذف</button>`}</td></tr>`).join('') + '</table>' : '<p class="muted">عکسی نیست.</p>';
   $('gh-pager').innerHTML = pagerHTML('gh', res); }
+let genPageNo = 1;
+function genPage(n){ if(n < 1) return; genPageNo = n; loadGens(); }
+const genFa = {queued: 'در صف', processing: 'در حال ساخت', done: 'تمام‌شده', failed: 'ناموفق'};
+async function loadGens(){ const res = await api('/admin/generations?page=' + genPageNo);
+  $('gen-list').innerHTML = res.items.length ? `<div class="gen-grid">` + res.items.map(g => g.output_url ? `<div class="gen-item"><img class="gthumb" src="${esc(g.output_url)}" data-cap="${esc('موبایل: ' + (g.mobile || '—') + ' | دنیا: ' + (g.world || '—') + ' | ' + (g.created_at || ''))}" onclick="openLightbox(this.src, this.dataset.cap)"><div class="muted">${esc(g.mobile || '—')}<br>${esc(g.world || '—')}</div></div>` : `<div class="gen-item"><div class="gthumb" style="display:flex;align-items:center;justify-content:center;background:#0f172a;color:#94a3b8;font-size:13px;cursor:default;">${genFa[g.status] || esc(g.status)}</div><div class="muted">${esc(g.mobile || '—')}<br>${esc(g.world || '—')}</div></div>`).join('') + `</div>` : '<p class="muted">تولیدی نیست.</p>';
+  $('gen-pager').innerHTML = pagerHTML('gen', res); }
 async function galleryRequeue(id){ try { await api('/admin/gallery/' + id + '/requeue', 'POST'); loadGhist(); } catch(err){ setMsg(err.message); } }
 async function galleryDelete(id){ if(!confirm('ردیف گالری حذف شود؟')) return; try { await api('/admin/gallery/' + id, 'DELETE'); loadGhist(); } catch(err){ setMsg(err.message); } }
 
@@ -398,7 +422,7 @@ async function loadUserDetail(id){ const u = await api('/admin/users/' + id);
   <form class="grid" onsubmit="coinAdjust(event, ${u.id})"><input id="u-delta" type="number" placeholder="مبلغ تعدیل (مثبت یا منفی)" required><input id="u-reason" placeholder="دلیل (اختیاری)"><button>تعدیل سکه</button></form>
   <h4>تولیدها</h4>` + (u.generations.length ? `<table><tr><th>id</th><th>دنیا</th><th>مدل</th><th>وضعیت</th><th>سکه</th><th>خروجی</th></tr>` + u.generations.map(g => `<tr><td>${g.id}</td><td>${esc(g.world)}</td><td>${esc(g.model)}</td><td>${esc(g.status)}</td><td>${g.coin_cost}</td><td>${g.output_url ? `<a href="${esc(g.output_url)}" target="_blank">مشاهده</a>` : '—'}</td></tr>`).join('') + '</table>' : '<p class="muted">تولیدی نیست.</p>') +
   `<h4>دفتر سکه</h4>` + (u.ledger.length ? `<table><tr><th>مبلغ</th><th>دلیل</th><th>تاریخ</th></tr>` + u.ledger.map(r => `<tr><td>${r.delta}</td><td>${esc(r.reason)}</td><td class="muted">${esc(r.created_at)}</td></tr>`).join('') + '</table>' : '<p class="muted">تراکنشی نیست.</p>') +
-  `<h4>گالری</h4>` + (u.gallery.length ? u.gallery.map(r => `<img class="thumb" src="${esc(r.image_url)}" title="${esc(r.status)}">`).join(' ') : '<p class="muted">عکسی نیست.</p>');
+  `<h4>گالری</h4>` + (u.gallery.length ? u.gallery.map(r => `<img class="thumb" src="${esc(r.image_url)}" title="${esc(r.status)}" data-cap="${esc('وضعیت: ' + (r.status || '—'))}" onclick="openLightbox(this.src, this.dataset.cap)" style="cursor:pointer;">`).join(' ') : '<p class="muted">عکسی نیست.</p>');
   window.scrollTo(0, document.body.scrollHeight); }
 async function coinAdjust(e, id){ e.preventDefault(); try { const r = await api('/admin/users/' + id + '/coin-adjust', 'POST', {delta: +$('u-delta').value, reason: $('u-reason').value.trim() || null}); setMsg('موجودی جدید: ' + r.balance + ' سکه.', true); loadUserDetail(id); loadUsers(); } catch(err){ setMsg(err.message); } }
 

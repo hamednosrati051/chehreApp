@@ -1182,6 +1182,33 @@ def admin_gallery_delete(row_id):
     return jsonify({"ok": True})
 
 
+@admin_bp.get("/admin/generations")
+@require_admin
+def admin_list_generations():
+    """همه‌ی تولیدهای کاربران، جدیدترین اول (برای تب «همه‌ی تولیدها»ی ادمین)."""
+    query = AppGeneration.query.order_by(AppGeneration.id.desc())
+    rows, meta = _paginate(query)
+    users = {u.id: u.mobile for u in AppUser.query.all()}
+    worlds = {w.id: w.name for w in AppWorld.query.all()}
+    models = {m.id: m.name for m in AppModel.query.all()}
+    out = []
+    for r in rows:
+        out.append(
+            {
+                "id": r.id,
+                "user_id": r.user_id,
+                "mobile": users.get(r.user_id),
+                "world": worlds.get(r.world_id),
+                "model": models.get(r.model_id),
+                "status": r.status,
+                "coin_cost": r.coin_cost,
+                "output_url": r.output_url,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+        )
+    return jsonify({"items": out, **meta})
+
+
 # ---------------- admin: categories ----------------
 
 

@@ -241,6 +241,22 @@ fun CreateImageScreen(
         }
     }
 
+    // جمله‌های انتظار هنگام ساخت: هر ۲۰ ثانیه عوض می‌شوند؛ درصد تقلبی ندارد.
+    val waitLines = listOf(
+        "چهره‌ات را با فضای دنیا ترکیب می‌کنیم…",
+        "نور و رنگ صحنه را تنظیم می‌کنیم…",
+        "تصویرت دارد آماده می‌شود…",
+    )
+    var waitIndex by remember { mutableStateOf(0) }
+    LaunchedEffect(jobId != null) {
+        if (jobId != null) {
+            while (true) {
+                delay(20000)
+                waitIndex = (waitIndex + 1) % waitLines.size
+            }
+        }
+    }
+
     val cost = world?.coin_price ?: 0
     val isWorking = jobId != null
     // سکه‌ی ناکافی: لاگین‌کرده، عکس انتخاب‌شده، هدیه‌ی تصویری ندارد و
@@ -354,7 +370,27 @@ fun CreateImageScreen(
                                 CircularProgressIndicator(color = Color.White)
                             }
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("در حال تحلیل و پردازش...", color = Color.White, fontSize = 14.sp)
+                            Text(
+                                "داریم تو را وارد ${world?.name?.let { "دنیای $it" } ?: "دنیا"} می‌کنیم…",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                textAlign = TextAlign.Center,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "ساخت تصویر معمولاً ۳۰ ثانیه تا ۲ دقیقه طول می‌کشد.",
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                waitLines[waitIndex],
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center,
+                            )
                         }
                     }
                 } else {

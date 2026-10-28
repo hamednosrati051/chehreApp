@@ -135,22 +135,6 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
         }
     }
 
-    // پیام‌های انتظار هنگام ساخت تصویر: هر ۲۰ ثانیه عوض می‌شوند؛
-    // درصد تقلبی ندارد و زمان واقعی (۳۰ ثانیه تا ۲ دقیقه) گفته می‌شود.
-    val waitLines = listOf(
-        "چهره‌ات را با فضای دنیا ترکیب می‌کنیم…",
-        "نور و رنگ صحنه را تنظیم می‌کنیم…",
-        "تصویرت دارد آماده می‌شود…",
-    )
-    var waitIndex by remember { mutableStateOf(0) }
-    LaunchedEffect(outputUrl == null) {
-        if (outputUrl == null) {
-            while (true) {
-                delay(20000)
-                waitIndex = (waitIndex + 1) % waitLines.size
-            }
-        }
-    }
 
     fun share() {
         val url = outputUrl ?: return
@@ -241,25 +225,6 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                     modifier = Modifier.padding(24.dp),
                 ) {
                     CircularProgressIndicator(color = Color.White)
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        "داریم تو را وارد ${worldName?.let { "دنیای $it" } ?: "دنیا"} می‌کنیم…",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "ساخت تصویر معمولاً ۳۰ ثانیه تا ۲ دقیقه طول می‌کشد.",
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 14.sp,
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        waitLines[waitIndex],
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 14.sp,
-                    )
                 }
             }
         }
