@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -92,6 +93,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
     var worldName by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var submitted by remember { mutableStateOf(false) }
+    var showGalleryConfirm by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var ratingDismissed by remember { mutableStateOf(false) }
     val likedIds by ImageLikes.ids
@@ -250,22 +252,12 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
             }
             if (!submitted) {
                 Button(
-                    onClick = {
-                        scope.launch {
-                            try {
-                                Api.service.gallerySubmit(GallerySubmitRequest(genId))
-                                submitted = true
-                                notice = "برای نمایش عمومی، در صف تایید گالری چهره‌ساز قرار گرفت"
-                            } catch (e: Exception) {
-                                notice = e.message
-                            }
-                        }
-                    },
+                    onClick = { showGalleryConfirm = true },
                     colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
                     shape = RoundedCornerShape(50),
                     modifier = Modifier.fillMaxWidth(0.5f).padding(bottom = 8.dp),
                 ) {
-                    Text("ارسال به گالری چهره‌ساز", fontWeight = FontWeight.Bold)
+                    Text("ارسال به گالری عمومی چهره‌ساز", fontWeight = FontWeight.Bold)
                 }
             } else {
                 Button(
@@ -293,6 +285,44 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                 Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
             }
         }
+    }
+
+    // تایید ارسال به گالری عمومی: با زدن دکمه، اول این دیالوگ می‌آید؛
+    // «ارسال» همان ارسال قبلی را اجرا می‌کند، «انصراف» هیچ کاری نمی‌کند.
+    if (showGalleryConfirm) {
+        AlertDialog(
+            onDismissRequest = { showGalleryConfirm = false },
+            containerColor = Color(0xFF222222),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
+            title = { Text("ارسال به گالری عمومی؟", fontWeight = FontWeight.Bold) },
+            text = { Text("با زدن «ارسال»، این عکس به گالری عمومی چهره‌ساز می‌رود و همه‌ی کاربران می‌توانند آن را ببینند.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showGalleryConfirm = false
+                        scope.launch {
+                            try {
+                                Api.service.gallerySubmit(GallerySubmitRequest(genId))
+                                submitted = true
+                                notice = "برای نمایش عمومی، در صف تایید گالری چهره‌ساز قرار گرفت"
+                            } catch (e: Exception) {
+                                notice = e.message
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
+                    shape = RoundedCornerShape(50),
+                ) {
+                    Text("ارسال", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGalleryConfirm = false }) {
+                    Text("انصراف", color = Color.White)
+                }
+            },
+        )
     }
 
     // شیت امتیاز بعد از ساخت (فقط برای ساخت تازه، یک بار).
