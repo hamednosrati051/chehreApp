@@ -1,6 +1,6 @@
 package ir.inourai.newapp.ui.screens
 
-import android.widget.Toast
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +23,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,13 +65,56 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
     // null یعنی «پیشنهادی» (دنیاهای featured).
     var selected by remember { mutableStateOf<Long?>(null) }
 
-    // توست هدیه‌ی ورود (مثل رقیب) — فقط یک بار بعد از اولین ورود.
+    // پاپ‌آپ هدیه‌ی ورود — فقط یک بار بعد از اولین ورود.
+    var showGift by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (Session.justRegistered) {
             Session.justRegistered = false
-            Toast.makeText(
-                context, "🎁 ۱ تصویر هدیه به حسابت اضافه شد", Toast.LENGTH_LONG
-            ).show()
+            val prefs = context.getSharedPreferences("chehre_prefs", Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("gift_popup_shown", false)) {
+                showGift = true
+            }
+        }
+    }
+    if (showGift) {
+        val dismissGift: () -> Unit = {
+            context.getSharedPreferences("chehre_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("gift_popup_shown", true).apply()
+            showGift = false
+        }
+        Dialog(onDismissRequest = dismissGift) {
+            Card(
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("🎁", fontSize = 48.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "۱ تصویر رایگان هدیه گرفتید!",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "اولین تصویرت رایگان است؛ یک دنیا انتخاب کن و عکست را بده.",
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        onClick = dismissGift,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(50),
+                    ) {
+                        Text("شروع کن", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
     // بارگذاری داده؛ با هر pull-to-refresh (RefreshBus.tick) دوباره خوانده می‌شود.

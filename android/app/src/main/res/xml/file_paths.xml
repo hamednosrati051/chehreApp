@@ -3,4 +3,6 @@
     <!-- اشتراک‌گذاری تصویر نتیجه + عکس دوربین (فقط کش خود اپ). -->
     <cache-path name="shared" path="shared/" />
     <cache-path name="camera" path="camera/" />
+    <!-- عکس آخری (filesDir) تا بین دنیاها و بعد از ری‌استارت بماند. -->
+    <files-path name="last_photo" path="." />
 </paths>

@@ -263,7 +263,7 @@ fun App(initialGenId: Long = -1L) {
                         entry.arguments?.getString("worldId")?.toLongOrNull() ?: 0L
                     CreateImageScreen(
                         worldId = worldId,
-                        onBack = { nav.popBackStack() },
+                        onBack = { if (!nav.popBackStack()) nav.navigate(Dest.HOME) },
                         onLogin = { nav.navigate(Dest.LOGIN) },
                         onDone = { genId ->
                             nav.navigate("result/$genId?fresh=true")

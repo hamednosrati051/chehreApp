@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Image
@@ -90,6 +91,35 @@ private fun uriToFile(context: Context, uri: Uri): File {
     return out
 }
 
+// عکس آخری: کپی بایت‌ها در filesDir تا بین دنیاها و بعد از ری‌استارت بماند.
+// (فقط Uri ذخیره نمی‌شود چون دسترسی GetContent موقتی است و بعد از ری‌استارت از بین می‌رود.)
+private fun saveLastPhoto(context: Context, uri: Uri) {
+    try {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            File(context.filesDir, "last_photo.jpg").outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+    } catch (_: Exception) {
+    }
+}
+
+// Uri قابل‌نمایش/آپلود برای عکس آخری ذخیره‌شده؛ اگر فایلی نباشد null.
+private fun lastPhotoUri(context: Context): Uri? {
+    return try {
+        val file = File(context.filesDir, "last_photo.jpg")
+        if (file.exists()) {
+            FileProvider.getUriForFile(
+                context, "${context.packageName}.fileprovider", file
+            )
+        } else {
+            null
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
 private fun friendlyError(e: Exception): String {
     if (e.message?.contains("content_policy_violation") == true || e.message?.contains("safety system") == true) {
         return "ساخت این تصویر به‌خاطر محدودیت ایمنی مدل رد شد. عکس یا دنیای دیگری را امتحان کن؛ سکه و هدیه‌ات کم نشده است."
@@ -130,6 +160,7 @@ fun CreateImageScreen(
     ) { uri ->
         if (uri != null) {
             picked = uri
+            saveLastPhoto(context, uri)
             error = null
         }
         showPicker = false
@@ -139,6 +170,7 @@ fun CreateImageScreen(
     ) { ok ->
         if (ok) {
             picked = cameraUri
+            cameraUri?.let { saveLastPhoto(context, it) }
             error = null
         }
         showPicker = false
@@ -165,6 +197,11 @@ fun CreateImageScreen(
     ) { }
 
     LaunchedEffect(worldId) {
+        // عکس آخری ذخیره‌شده (از دنیای قبلی) را پیش‌فرض بگذار؛
+        // دکمه‌ی X فقط همین صفحه را خالی می‌کند و فایل را پاک نمی‌کند.
+        if (picked == null) {
+            lastPhotoUri(context)?.let { picked = it }
+        }
         try {
             world = Api.service.world(worldId)
         } catch (_: Exception) {
@@ -348,6 +385,9 @@ fun CreateImageScreen(
                             TextButton(onClick = { showPicker = true }) {
                                 Text("تغییر تصویر", color = Color.White)
                             }
+                            IconButton(onClick = { picked = null }) {
+                                Icon(Icons.Rounded.Close, contentDescription = null, tint = Color.White)
+                            }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(
@@ -393,6 +433,9 @@ fun CreateImageScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             TextButton(onClick = { showPicker = true }) {
                                 Text("تغییر تصویر", color = Color.White)
+                            }
+                            IconButton(onClick = { picked = null }) {
+                                Icon(Icons.Rounded.Close, contentDescription = null, tint = Color.White)
                             }
                             Spacer(modifier = Modifier.weight(1f))
                             Button(
