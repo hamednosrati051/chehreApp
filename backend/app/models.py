@@ -257,6 +257,52 @@ class AppFavorite(db.Model):
     )
 
 
+class AppImageLike(db.Model):
+    """تصاویر لایک‌شده‌ی کاربر (قلب روی خروجی‌ها).
+
+    بدون قید خارجی (مثل تصمیم این راند): فقط شناسه‌ها نگه داشته
+    می‌شوند تا حذف کاربر/تولید، ردیف لایک را قفل نکند.
+    """
+
+    __tablename__ = "app_image_likes"
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.BigInteger, nullable=False, index=True)
+    generation_id = db.Column(db.BigInteger, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id", "generation_id", name="uq_like_user_generation"
+        ),
+    )
+
+
+class AppTrend(db.Model):
+    """ترند مستقل (لیست دنیاها)؛ ۴ ردیف seeded با key، بقیه key=NULL."""
+
+    __tablename__ = "app_trends"
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(100), nullable=False)
+    key = db.Column(db.String(100), unique=True)
+    sort_order = db.Column(db.Integer, default=0, nullable=False)
+    display_type = db.Column(db.String(16), default="card", nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+
+class AppTrendWorld(db.Model):
+    """عضویت دنیا در ترند."""
+
+    __tablename__ = "app_trend_worlds"
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    trend_id = db.Column(db.BigInteger, nullable=False, index=True)
+    world_id = db.Column(db.BigInteger, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("trend_id", "world_id", name="uq_trend_world"),
+    )
+
+
 class AppAdminUser(db.Model):
     """کاربر ادمین خود اپ (ورود یوزر/پسورد به ادمین وب).
 

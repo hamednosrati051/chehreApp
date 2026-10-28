@@ -11,7 +11,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -59,7 +58,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import ir.inourai.newapp.data.Api
-import ir.inourai.newapp.data.Favorites
+import ir.inourai.newapp.data.ImageLikes
 import ir.inourai.newapp.data.GallerySubmitRequest
 import ir.inourai.newapp.data.Session
 import java.io.File
@@ -91,12 +90,11 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
     var status by remember { mutableStateOf("loading") }
     var outputUrl by remember { mutableStateOf<String?>(null) }
     var worldName by remember { mutableStateOf<String?>(null) }
-    var worldId by remember { mutableStateOf<Long?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var submitted by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var ratingDismissed by remember { mutableStateOf(false) }
-    val favIds by Favorites.ids
+    val likedIds by ImageLikes.ids
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -105,7 +103,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
     LaunchedEffect(genId) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel(genId.toInt())
-        Favorites.refresh()
+        ImageLikes.refresh()
         try {
             submitted = Api.service.myGallery().any { it.generation_id == genId }
         } catch (_: Exception) {
@@ -116,7 +114,6 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                 status = st.status
                 outputUrl = st.output_url
                 worldName = st.world_name
-                worldId = st.world_id
                 if (st.status == "failed") error = friendlyGenerationError(st.error)
                 if (st.status == "done" || st.status == "failed") break
             } catch (e: Exception) {
@@ -185,6 +182,9 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
+            // ستون به‌طور پیش‌فرض فرزندان را به start (= راست در RTL)
+            // می‌چسباند؛ وسط‌چین‌کردن، دکمه‌ی گالری را زیر دکمه‌ها وسط می‌آورد.
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -200,13 +200,12 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                 fontSize = 18.sp,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )
-            val wid = worldId
-            if (wid != null && Session.token != null) {
-                IconButton(onClick = { scope.launch { Favorites.toggle(wid) } }) {
+            if (Session.token != null) {
+                IconButton(onClick = { scope.launch { ImageLikes.toggle(genId) } }) {
                     Icon(
-                        if (wid in favIds) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                        if (genId in likedIds) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                         contentDescription = null,
-                        tint = if (wid in favIds) Color(0xFFFF5A5A) else Color.White,
+                        tint = if (genId in likedIds) Color(0xFFFF5A5A) else Color.White,
                     )
                 }
             }
@@ -264,8 +263,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
                     shape = RoundedCornerShape(50),
-                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp),
-                    modifier = Modifier.padding(bottom = 8.dp),
+                    modifier = Modifier.fillMaxWidth(0.5f).padding(bottom = 8.dp),
                 ) {
                     Text("ارسال به گالری چهره‌ساز", fontWeight = FontWeight.Bold)
                 }
@@ -273,10 +271,11 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                 Button(
                     onClick = {},
                     enabled = false,
-                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp),
-                    modifier = Modifier.padding(bottom = 16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.fillMaxWidth(0.5f).padding(bottom = 16.dp),
                 ) {
-                    Text("ارسال شده به گالری")
+                    Text("ارسال شده به گالری", fontWeight = FontWeight.Bold)
                 }
             }
         }

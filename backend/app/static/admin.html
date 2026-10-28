@@ -86,6 +86,7 @@
   <div id="msg"></div>
   <div id="tabs">
     <button data-tab="worlds" class="on" onclick="showTab('worlds')">دنیاها</button>
+    <button data-tab="trends" onclick="showTab('trends')">ترندها</button>
     <button data-tab="cats" onclick="showTab('cats')">دسته‌ها</button>
     <button data-tab="packs" onclick="showTab('packs')">پک‌ها</button>
     <button data-tab="models" onclick="showTab('models')">مدل‌ها</button>
@@ -119,6 +120,19 @@
     </form>
     <input id="w-search" class="search" placeholder="جستجو در دنیاها…">
     <div id="w-list"></div>
+  </section>
+
+  <section id="trends">
+    <h2>ترندها</h2>
+    <p class="muted">ترندهای seeded (اینستاگرام، ایرانی، ورزشی، فصلی) به پرچم‌های دنیا وصل‌اند؛ اضافه/حذف دنیا در آن‌ها پرچم دنیا را هم همگام می‌کند.</p>
+    <p class="muted">«ترتیب نمایش بخش‌ها» یعنی ترتیب خود بخش‌ها در خانه (۱ = اولین بخش، ۲ = دومین بخش، …)؛ ترتیب دنیاها «داخل» هر بخش را تغییر نمی‌دهد. فهرست زیر هم به همین ترتیب چیده شده است.</p>
+    <form class="grid" onsubmit="saveTrend(event)">
+      <input id="t-name" placeholder="نام ترند (مثلا ترند جدید)" required>
+      <input id="t-sort" type="number" placeholder="ترتیب نمایش بخش‌ها (۱ = اولین بخش، ۲ = دومین بخش، …؛ خالی = آخر)">
+      <select id="t-type"><option value="card">کارت (card)</option><option value="round">دایره‌ای (round)</option></select>
+      <button>ساخت ترند</button>
+    </form>
+    <div id="t-list"></div>
   </section>
 
   <section id="cats">
@@ -303,7 +317,7 @@ function applyFilter(listEl){ if (listEl === 'w-list') { wPage = 1; renderWorlds
 function showTab(tab){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === tab));
-  ({worlds: loadWorlds, cats: loadCats, packs: loadPacks, models: loadModels,
+  ({worlds: loadWorlds, trends: loadTrends, cats: loadCats, packs: loadPacks, models: loadModels,
     purchases: loadPurchases, gallery: loadGallery, ghist: loadGhist, gens: loadGens, users: loadUsers, admins: loadAdmins,
     settings: loadSettings})[tab]?.().catch(e => setMsg(e.message));
 }
@@ -345,6 +359,19 @@ async function saveWorld(e){ e.preventDefault(); const body = {name: $('w-name')
       await api('/admin/worlds/' + saved.id, 'PATCH', {sample_image_url: up.sample_image_url}); }
     setMsg('دنیا ذخیره شد.', true); resetWorldForm(); loadWorlds(); } catch(err){ setMsg(err.message); } }
 async function delWorld(id){ if(!confirm('دنیا حذف شود؟')) return; try { await api('/admin/worlds/' + id, 'DELETE'); loadWorlds(); } catch(err){ setMsg(err.message); } }
+
+async function loadTrends(){ const trends = (await api('/admin/trends')).sort((a, b) => (a.sort_order - b.sort_order) || (a.id - b.id));
+  if(!allWs.length){ try { allWs = await api('/admin/worlds'); } catch(_){} }
+  const opts = allWs.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('');
+  $('t-list').innerHTML = trends.length ? trends.map(t => `<div style="border-bottom:1px solid #334155; padding:12px 0;"><b>${esc(t.name)}</b>${t.key ? ` <span class="muted">(${esc(t.key)})</span>` : ''} <span class="muted">— ${t.member_count} دنیا | ترتیب بخش: ${t.sort_order} | نمایش: ${esc(t.display_type)}</span>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin:6px 0;"><label class="muted">ترتیب نمایش بخش: <input id="te-sort-${t.id}" type="number" value="${t.sort_order}" style="width:80px;"></label><label class="muted">نمایش: <select id="te-type-${t.id}"><option value="card" ${t.display_type === 'card' ? 'selected' : ''}>کارت (card)</option><option value="round" ${t.display_type === 'round' ? 'selected' : ''}>دایره‌ای (round)</option></select></label><button class="small" onclick="saveTrendEdit(${t.id})">ذخیره ترتیب/نمایش</button></div>
+    <div style="margin:6px 0;">${(t.worlds || []).length ? t.worlds.map(w => `<span style="display:inline-block; margin:2px;">${esc(w.name)} <button class="small danger" onclick="detachTrendWorld(${t.id}, ${w.id})">حذف</button></span>`).join(' ') : '<span class="muted">دنیایی نیست.</span>'}</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;"><select id="tw-${t.id}"><option value="">انتخاب دنیا…</option>${opts}</select><button class="small" onclick="attachTrendWorld(${t.id})">اضافه کردن دنیا</button><button class="small danger" onclick="delTrend(${t.id})">حذف ترند</button></div></div>`).join('') : '<p class="muted">ترندی نیست.</p>'; }
+async function saveTrend(e){ e.preventDefault(); try { const body = {name: $('t-name').value.trim(), display_type: $('t-type').value}; const s = $('t-sort').value.trim(); if(s !== '') body.sort_order = +s; await api('/admin/trends', 'POST', body); setMsg('ترند ساخته شد.', true); $('t-name').value = ''; $('t-sort').value = ''; $('t-type').value = 'card'; loadTrends(); } catch(err){ setMsg(err.message); } }
+async function saveTrendEdit(id){ try { await api('/admin/trends/' + id, 'PUT', {sort_order: +$('te-sort-' + id).value, display_type: $('te-type-' + id).value}); setMsg('ترند به‌روز شد.', true); loadTrends(); } catch(err){ setMsg(err.message); } }
+async function attachTrendWorld(id){ const sel = $('tw-' + id); if(!sel.value) return; try { await api('/admin/trends/' + id + '/worlds', 'POST', {world_id: +sel.value}); setMsg('دنیا به ترند اضافه شد.', true); loadTrends(); } catch(err){ setMsg(err.message); } }
+async function detachTrendWorld(tid, wid){ try { await api('/admin/trends/' + tid + '/worlds/' + wid, 'DELETE'); loadTrends(); } catch(err){ setMsg(err.message); } }
+async function delTrend(id){ if(!confirm('ترند و همه‌ی عضویت‌هایش حذف شود؟')) return; try { await api('/admin/trends/' + id, 'DELETE'); loadTrends(); } catch(err){ setMsg(err.message); } }
 
 async function loadCats(){ cats = await api('/admin/categories');
   $('c-list').innerHTML = cats.length ? `<table><tr><th>نام</th><th>اسلاگ</th><th>ترتیب</th><th>فعال</th><th></th></tr>` +

@@ -20,12 +20,15 @@ from .models import (
     AppFavorite,
     AppGallery,
     AppGeneration,
+    AppImageLike,
     AppModel,
     AppOtpCode,
     AppPricing,
     AppPurchase,
     AppSetting,
     AppSinger,
+    AppTrend,
+    AppTrendWorld,
     AppUser,
     AppWorld,
 )
@@ -304,6 +307,91 @@ def remove_favorite(world_id):
     ).first()
     if fav is not None:
         db.session.delete(fav)
+        db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ---------------- image likes ----------------
+# قلب روی خروجی‌های تصویر (مثل favorites ولی روی generation):
+# لیست، افزودن (idempotent)، حذف (idempotent). مالکیت generation
+# در افزودن/حذف بررسی می‌شود، وگرنه 404.
+
+
+@content_bp.get("/image-likes")
+@require_auth
+def list_image_likes():
+    rows = (
+        AppImageLike.query.filter_by(user_id=g.user.id)
+        .order_by(AppImageLike.id.desc())
+        .all()
+    )
+    if not rows:
+        return jsonify([])
+    gens = {
+        gen.id: gen
+        for gen in AppGeneration.query.filter(
+            AppGeneration.id.in_([r.generation_id for r in rows]),
+            AppGeneration.output_url.isnot(None),
+        ).all()
+    }
+    worlds = {
+        w.id: w
+        for w in AppWorld.query.filter(
+            AppWorld.id.in_(
+                [gen.world_id for gen in gens.values() if gen.world_id]
+            )
+        ).all()
+    }
+    out = []
+    for r in rows:
+        gen = gens.get(r.generation_id)
+        if gen is None:
+            continue
+        out.append(
+            {
+                "id": gen.id,
+                "output_url": gen.output_url,
+                "world_name": (
+                    worlds[gen.world_id].name
+                    if gen.world_id in worlds
+                    else None
+                ),
+                "world_id": gen.world_id,
+                "created_at": (
+                    gen.created_at.isoformat() if gen.created_at else None
+                ),
+                "status": gen.status,
+            }
+        )
+    return jsonify(out[:50])
+
+
+@content_bp.post("/image-likes")
+@require_auth
+def add_image_like():
+    gen = AppGeneration.query.get((request.json or {}).get("generation_id"))
+    if not gen or gen.user_id != g.user.id:
+        return jsonify({"error": "generation not found"}), 404
+    like = AppImageLike.query.filter_by(
+        user_id=g.user.id, generation_id=gen.id
+    ).first()
+    if like is None:
+        db.session.add(AppImageLike(user_id=g.user.id, generation_id=gen.id))
+        db.session.commit()
+    return jsonify({"ok": True, "generation_id": gen.id})
+
+
+@content_bp.delete("/image-likes/<int:generation_id>")
+@require_auth
+def remove_image_like(generation_id):
+    gen = AppGeneration.query.get(generation_id)
+    if not gen or gen.user_id != g.user.id:
+        return jsonify({"error": "generation not found"}), 404
+    like = AppImageLike.query.filter_by(
+        user_id=g.user.id, generation_id=generation_id
+    ).first()
+    if like is not None:
+        db.session.delete(like)
         db.session.commit()
     return jsonify({"ok": True})
 
@@ -904,6 +992,225 @@ def admin_update_model(model_id):
     return jsonify(_model_public(m))
 
 
+# ---------------- public trends (home, no auth) ----------------
+
+
+@content_bp.get("/trends")
+def list_trends_public():
+    """ترندها برای خانه‌ی اپ؛ بدون احراز هویت (کاربر لاگین‌نکرده هم
+    خانه را می‌بیند). مرتب بر اساس sort_order؛ world_ids به ترتیب
+    پایدار عضویت (id ردیف عضویت)."""
+    trends = AppTrend.query.order_by(AppTrend.sort_order, AppTrend.id).all()
+    out = []
+    for t in trends:
+        rows = (
+            AppTrendWorld.query.filter_by(trend_id=t.id)
+            .order_by(AppTrendWorld.id)
+            .all()
+        )
+        out.append(
+            {
+                "id": t.id,
+                "name": t.name,
+                "key": t.key,
+                "sort_order": t.sort_order,
+                "display_type": t.display_type,
+                "world_ids": [r.world_id for r in rows],
+            }
+        )
+    return jsonify(out)
+
+
+# ---------------- admin: trends ----------------
+# ترند مستقل + همگام‌سازی پرچم‌های دنیا: ۴ ترند seeded با key به
+# پرچم‌های is_*_trend دنیا وصل‌اند. بخش‌های خانه از روی پرچم‌ها
+# خوانده می‌شوند، پس attach/detach/delete ترند seeded و ذخیره‌ی
+# دنیا از راه فرم، هر دو طرف (پرچم و عضویت) را همگام نگه می‌دارند.
+
+SEEDED_TREND_FLAGS = {
+    "instagram": "is_instagram_trend",
+    "iranian": "is_iranian_trend",
+    "sport": "is_sport_trend",
+    "seasonal": "is_seasonal_trend",
+}
+
+
+def _trend_admin(t):
+    rows = AppTrendWorld.query.filter_by(trend_id=t.id).all()
+    worlds = (
+        {w.id: w for w in AppWorld.query.filter(
+            AppWorld.id.in_([r.world_id for r in rows])
+        ).all()}
+        if rows
+        else {}
+    )
+    members = [
+        {"id": r.world_id, "name": worlds[r.world_id].name}
+        for r in rows
+        if r.world_id in worlds
+    ]
+    return {
+        "id": t.id,
+        "name": t.name,
+        "key": t.key,
+        "sort_order": t.sort_order,
+        "display_type": t.display_type,
+        "created_at": t.created_at.isoformat() if t.created_at else None,
+        "world_ids": [m["id"] for m in members],
+        "worlds": members,
+        "member_count": len(members),
+    }
+
+
+def _valid_display_type(value):
+    return value in ("card", "round")
+
+
+def _sync_world_trend_memberships(world):
+    """عضویت‌های ۴ ترند seeded را با پرچم‌های فعلی دنیا همگام می‌کند.
+
+    فقط وقتی ردیف ترند seeded وجود دارد کاری می‌کند؛ نبودنش (پیش از
+    مهاجرت/seed) یعنی هیچ عضویتی ساخته/حذف نمی‌شود.
+    """
+    for key, flag in SEEDED_TREND_FLAGS.items():
+        trend = AppTrend.query.filter_by(key=key).first()
+        if not trend:
+            continue
+        member = AppTrendWorld.query.filter_by(
+            trend_id=trend.id, world_id=world.id
+        ).first()
+        if getattr(world, flag):
+            if member is None:
+                db.session.add(
+                    AppTrendWorld(trend_id=trend.id, world_id=world.id)
+                )
+        elif member is not None:
+            db.session.delete(member)
+
+
+def _set_world_trend_flag(world, trend_key, value):
+    flag = SEEDED_TREND_FLAGS.get(trend_key)
+    if flag:
+        setattr(world, flag, bool(value))
+
+
+@admin_bp.get("/admin/trends")
+@require_admin
+def admin_list_trends():
+    # ترتیب بخش‌ها: sort_order صعودی، بعد id (تعیین‌کننده برای تساوی‌ها).
+    # این همان ترتیبی است که GET /trends عمومی هم برمی‌گرداند.
+    trends = AppTrend.query.order_by(AppTrend.sort_order, AppTrend.id).all()
+    return jsonify([_trend_admin(t) for t in trends])
+
+
+@admin_bp.post("/admin/trends")
+@require_admin
+def admin_create_trend():
+    body = request.json or {}
+    if not (body.get("name") or "").strip():
+        return jsonify({"error": "name required"}), 400
+    display_type = body.get("display_type", "card")
+    if not _valid_display_type(display_type):
+        return jsonify({"error": "display_type must be card or round"}), 400
+    if body.get("sort_order") is None:
+        max_order = db.session.query(db.func.max(AppTrend.sort_order)).scalar()
+        sort_order = (max_order or 0) + 1
+    else:
+        try:
+            sort_order = int(body["sort_order"])
+        except (TypeError, ValueError):
+            return jsonify({"error": "sort_order must be int"}), 400
+    t = AppTrend(
+        name=body["name"].strip(),
+        key=None,
+        sort_order=sort_order,
+        display_type=display_type,
+    )
+    db.session.add(t)
+    db.session.commit()
+    return jsonify(_trend_admin(t)), 201
+
+
+@admin_bp.put("/admin/trends/<int:trend_id>")
+@require_admin
+def admin_update_trend(trend_id):
+    t = AppTrend.query.get(trend_id)
+    if not t:
+        return jsonify({"error": "trend not found"}), 404
+    body = request.json or {}
+    if "name" in body:
+        if not (body["name"] or "").strip():
+            return jsonify({"error": "name required"}), 400
+        t.name = body["name"].strip()
+    if "display_type" in body:
+        if not _valid_display_type(body["display_type"]):
+            return jsonify({"error": "display_type must be card or round"}), 400
+        t.display_type = body["display_type"]
+    if "sort_order" in body:
+        try:
+            t.sort_order = int(body["sort_order"])
+        except (TypeError, ValueError):
+            return jsonify({"error": "sort_order must be int"}), 400
+    db.session.commit()
+    return jsonify(_trend_admin(t))
+
+
+@admin_bp.post("/admin/trends/<int:trend_id>/worlds")
+@require_admin
+def admin_trend_attach_world(trend_id):
+    t = AppTrend.query.get(trend_id)
+    if not t:
+        return jsonify({"error": "trend not found"}), 404
+    world = AppWorld.query.get((request.json or {}).get("world_id"))
+    if not world:
+        return jsonify({"error": "world not found"}), 404
+    if AppTrendWorld.query.filter_by(
+        trend_id=t.id, world_id=world.id
+    ).first() is None:
+        db.session.add(AppTrendWorld(trend_id=t.id, world_id=world.id))
+    _set_world_trend_flag(world, t.key, True)
+    db.session.commit()
+    return jsonify(_trend_admin(t))
+
+
+@admin_bp.delete("/admin/trends/<int:trend_id>/worlds/<int:world_id>")
+@require_admin
+def admin_trend_detach_world(trend_id, world_id):
+    t = AppTrend.query.get(trend_id)
+    if not t:
+        return jsonify({"error": "trend not found"}), 404
+    world = AppWorld.query.get(world_id)
+    if not world:
+        return jsonify({"error": "world not found"}), 404
+    member = AppTrendWorld.query.filter_by(
+        trend_id=t.id, world_id=world.id
+    ).first()
+    if member is not None:
+        db.session.delete(member)
+    _set_world_trend_flag(world, t.key, False)
+    db.session.commit()
+    return jsonify(_trend_admin(t))
+
+
+@admin_bp.delete("/admin/trends/<int:trend_id>")
+@require_admin
+def admin_delete_trend(trend_id):
+    t = AppTrend.query.get(trend_id)
+    if not t:
+        return jsonify({"error": "trend not found"}), 404
+    members = AppTrendWorld.query.filter_by(trend_id=t.id).all()
+    if t.key in SEEDED_TREND_FLAGS:
+        for m in members:
+            world = AppWorld.query.get(m.world_id)
+            if world:
+                _set_world_trend_flag(world, t.key, False)
+    for m in members:
+        db.session.delete(m)
+    db.session.delete(t)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 # ---------------- admin: worlds ----------------
 
 
@@ -963,6 +1270,8 @@ def admin_create_world():
         sort_order=body.get("sort_order", 0),
     )
     db.session.add(w)
+    db.session.flush()
+    _sync_world_trend_memberships(w)
     db.session.commit()
     return jsonify(_world_admin(w)), 201
 
@@ -997,6 +1306,7 @@ def admin_update_world(world_id):
     for field in ("is_featured", "is_instagram_trend", "is_iranian_trend", "is_sport_trend", "is_seasonal_trend", "is_active"):
         if field in body:
             setattr(w, field, bool(body[field]))
+    _sync_world_trend_memberships(w)
     db.session.commit()
     return jsonify(_world_admin(w))
 

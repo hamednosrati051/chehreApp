@@ -43,6 +43,15 @@ data class World(
     val is_seasonal_trend: Boolean = false,
     val created_at: String? = null,
 )
+data class Trend(
+    val id: Long,
+    val name: String,
+    val key: String?,
+    val sort_order: Int,
+    val display_type: String,
+    // nullable دفاعی: اگر بک‌اند برای ترندی world_ids نفرستد، خالی حساب می‌شود.
+    val world_ids: List<Long>? = null,
+)
 data class GenerationRequest(
     val kind: String,
     val world_id: Long? = null,
@@ -101,6 +110,15 @@ data class PaymentItem(
     val status: String,
     val created_at: String?,
 )
+data class ImageLikeRequest(val generation_id: Long)
+data class LikedGeneration(
+    val id: Long,
+    val output_url: String?,
+    val world_name: String?,
+    val world_id: Long?,
+    val created_at: String?,
+    val status: String?,
+)
 data class GallerySubmitRequest(val generation_id: Long)
 data class GallerySubmitResponse(val id: Long, val status: String)
 data class GalleryItem(val id: Long, val image_url: String, val generation_id: Long? = null)
@@ -131,6 +149,9 @@ interface ApiService {
     @GET("worlds/{id}")
     suspend fun world(@Path("id") id: Long): World
 
+    @GET("trends")
+    suspend fun trends(): List<Trend>
+
     @GET("favorites")
     suspend fun favorites(): List<World>
 
@@ -139,6 +160,15 @@ interface ApiService {
 
     @DELETE("favorites/{worldId}")
     suspend fun removeFavorite(@Path("worldId") worldId: Long): Response<Unit>
+
+    @GET("image-likes")
+    suspend fun imageLikes(): List<LikedGeneration>
+
+    @POST("image-likes")
+    suspend fun likeImage(@Body b: ImageLikeRequest): Response<Unit>
+
+    @DELETE("image-likes/{generationId}")
+    suspend fun unlikeImage(@Path("generationId") generationId: Long): Response<Unit>
 
     @POST("generations")
     suspend fun createGeneration(@Body b: GenerationRequest): GenerationCreated

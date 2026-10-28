@@ -53,6 +53,7 @@ import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Category
 import ir.inourai.newapp.data.Favorites
 import ir.inourai.newapp.data.Session
+import ir.inourai.newapp.data.Trend
 import ir.inourai.newapp.data.World
 
 /** خانه، هم‌شکل اپ مرجع: سربرگ برند + چیپ دسته‌ها + ردیف ترندها
@@ -62,8 +63,11 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
     val context = LocalContext.current
     var worlds by remember { mutableStateOf<List<World>>(emptyList()) }
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
+    // null یعنی هنوز خوانده نشده یا خواندنش ناموفق بوده (→ ترندهای پیش‌فرض).
+    var trends by remember { mutableStateOf<List<Trend>?>(null) }
     // null یعنی «پیشنهادی» (دنیاهای featured).
     var selected by remember { mutableStateOf<Long?>(null) }
+    val favIds by Favorites.ids
 
     // پاپ‌آپ هدیه‌ی ورود — فقط یک بار بعد از اولین ورود.
     var showGift by remember { mutableStateOf(false) }
@@ -128,23 +132,47 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
             categories = Api.service.categories()
         } catch (_: Exception) {
         }
+        try {
+            trends = Api.service.trends()
+        } catch (_: Exception) {
+            trends = null
+        }
         Favorites.refresh()
     }
 
-    // «ترندهای اینستاگرام»: دنیاهای تیک‌خورده در ادمین؛ اگر هیچ‌کدام تیک
-    // نخورده باشد، همه‌ی دنیاها (رفتار قبلی).
-    val insta = worlds.filter { it.is_instagram_trend }.ifEmpty { worlds }
-    // «ترندهای ایرانی»: اول تیک‌خورده‌ها، بعد دسته‌ی تاریخی، بعد featuredها.
+    // ترندهای داینامیک از GET /trends (مرتب با sort_order)؛ اگر خواندنش
+    // ناموفق باشد، ۴ ترند پیش‌فرض از روی فلگ‌های دنیا ساخته می‌شود تا
+    // خانه هیچ‌وقت خالی نماند (رفتار قبلی حفظ می‌شود).
     val tarikhiId = categories.firstOrNull { it.slug == "tarikhi" }?.id
-    val iranian = worlds.filter { it.is_iranian_trend }.ifEmpty {
-        worlds.filter { it.category_id == tarikhiId }.ifEmpty {
-            worlds.filter { it.is_featured }
+    val effectiveTrends: List<Trend> = trends?.sortedBy { it.sort_order } ?: listOf(
+        Trend(0, "ترندهای اینستاگرام", "instagram", 1, "card",
+            worlds.filter { it.is_instagram_trend }.map { it.id }),
+        Trend(0, "ترندهای ایرانی", "iranian", 2, "round",
+            worlds.filter { it.is_iranian_trend }.map { it.id }),
+        Trend(0, "ترند ورزشی", "sport", 3, "round",
+            worlds.filter { it.is_sport_trend }.map { it.id }),
+        Trend(0, "ترند فصلی", "seasonal", 4, "round",
+            worlds.filter { it.is_seasonal_trend }.map { it.id }),
+    )
+    // عضویت هر ترند: ترتیب دنیاها همان ترتیب worlds است (filter ترتیب
+    // را حفظ می‌کند). ترند خالی: اینستاگرام → همه‌ی دنیاها؛ ایرانی →
+    // تاریخی → featured؛ ورزشی/فصلی/سفارشی (کلید null) → پنهان.
+    fun trendMembers(t: Trend): List<World> {
+        val ids = (t.world_ids ?: emptyList()).toSet()
+        val members = worlds.filter { it.id in ids }
+        if (members.isNotEmpty()) return members
+        val key = (t.key ?: "").lowercase()
+        return when {
+            "instagram" in key -> worlds
+            "iranian" in key -> worlds.filter { it.category_id == tarikhiId }
+                .ifEmpty { worlds.filter { it.is_featured } }
+            else -> emptyList()
         }
     }
-    // «ترند ورزشی» و «ترند فصلی»: فقط تیک‌خورده‌های ادمین؛ اگر
-    // هیچ‌کدام تیک نخورده باشد، ردیف نشان داده نمی‌شود.
-    val sport = worlds.filter { it.is_sport_trend }
-    val seasonal = worlds.filter { it.is_seasonal_trend }
+    val renderedTrends = effectiveTrends.mapNotNull { t ->
+        trendMembers(t).takeIf { it.isNotEmpty() }?.let { t to it }
+    }
+    val favWorlds = worlds.filter { it.id in favIds }
     // «تازه‌های هفته»: دنیاهای ۷ روز اخیر (جدیدترین اول)، حداکثر ۹ تا؛
     // اگر در این هفته دنیایی نیامده باشد، ۶ دنیای آخری که وارد شده‌اند.
     fun createdMillis(w: World): Long {
@@ -163,10 +191,12 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
     } else {
         fresh.ifEmpty { freshFallback }
     }
+    // حالت کاروسل مال ردیف اول است، هر ترندی که باشد.
     val trendState = rememberLazyListState()
-    val trendIndex by remember {
+    val firstTrendSize = renderedTrends.firstOrNull()?.second?.size ?: 0
+    val trendIndex by remember(trendState, firstTrendSize) {
         derivedStateOf {
-            trendState.firstVisibleItemIndex.coerceIn(0, (insta.size - 1).coerceAtLeast(0))
+            trendState.firstVisibleItemIndex.coerceIn(0, (firstTrendSize - 1).coerceAtLeast(0))
         }
     }
 
@@ -196,130 +226,97 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
         // ترندها و تازه‌های هفته فقط در «پیشنهادی»؛ در دسته‌ها
         // فقط دنیاهای همان دسته نشان داده می‌شود.
         if (selected == null) {
-                // ترندهای اینستاگرام: کاروسل افقی کارت‌های بلند + نقطه‌ها.
-        if (insta.isNotEmpty()) {
+        // ترندهای داینامیک به ترتیب sort_order؛ فقط در «پیشنهادی».
+        // اسکرول کاروسل + نقطه‌ها فقط مال ردیف اول است (موقعیتی، نه
+        // وابسته به کلید ترند)؛ بقیه ردیف‌های ساده‌اند. شکل آیتم از
+        // display_type می‌آید: card → کارت مستطیلی، round → آواتار دایره‌ای.
+        // علاقه‌مندی‌ها زیر اولین ترند رندرشده می‌آید و اگر هیچ ترندی
+        // رندر نشود، بالای بخش‌هاست.
+        if (renderedTrends.isEmpty() && favWorlds.isNotEmpty()) {
             item {
-                Text("ترندهای اینستاگرام", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("علاقه‌مندی‌ها", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
             item {
-                LazyRow(
-                    state = trendState,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(insta) { w ->
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(favWorlds) { w ->
                         WorldCard(w, { onWorld(w.id) }, Modifier.width(160.dp))
                     }
                 }
             }
-            item {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Spacer(modifier = Modifier.weight(1f))
-                    repeat(insta.size) { i ->
-                        Box(
-                            modifier = Modifier
-                                .size(if (i == trendIndex) 8.dp else 6.dp)
-                                .background(
-                                    if (i == trendIndex) MaterialTheme.colorScheme.primary
-                                    else Color.LightGray,
-                                    CircleShape,
-                                ),
-                        )
-                    }
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
         }
-        // ترندهای ایرانی: آواتارهای دایره‌ای.
-        if (iranian.isNotEmpty()) {
+        renderedTrends.forEachIndexed { index, (trend, members) ->
             item {
-                Text("ترندهای ایرانی", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(trend.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
             item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(iranian) { w ->
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.width(76.dp).clickable { onWorld(w.id) },
-                        ) {
-                            AsyncImage(
-                                model = w.sample_image_url,
-                                contentDescription = w.name,
-                                modifier = Modifier.size(72.dp).clip(CircleShape),
-                                contentScale = ContentScale.Crop,
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                w.name,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center,
-                            )
+                if (trend.display_type == "round") {
+                    LazyRow(
+                        state = if (index == 0) trendState else rememberLazyListState(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        items(members) { w ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.width(76.dp).clickable { onWorld(w.id) },
+                            ) {
+                                AsyncImage(
+                                    model = w.sample_image_url,
+                                    contentDescription = w.name,
+                                    modifier = Modifier.size(72.dp).clip(CircleShape),
+                                    contentScale = ContentScale.Crop,
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    w.name,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    LazyRow(
+                        state = if (index == 0) trendState else rememberLazyListState(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(members) { w ->
+                            WorldCard(w, { onWorld(w.id) }, Modifier.width(160.dp))
                         }
                     }
                 }
             }
-        }
-        // ترند ورزشی: آواتارهای دایره‌ای.
-        if (sport.isNotEmpty()) {
-            item {
-                Text("ترند ورزشی", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            }
-            item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(sport) { w ->
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.width(76.dp).clickable { onWorld(w.id) },
-                        ) {
-                            AsyncImage(
-                                model = w.sample_image_url,
-                                contentDescription = w.name,
-                                modifier = Modifier.size(72.dp).clip(CircleShape),
-                                contentScale = ContentScale.Crop,
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                w.name,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center,
+            if (index == 0) {
+                item {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Spacer(modifier = Modifier.weight(1f))
+                        repeat(firstTrendSize) { i ->
+                            Box(
+                                modifier = Modifier
+                                    .size(if (i == trendIndex) 8.dp else 6.dp)
+                                    .background(
+                                        if (i == trendIndex) MaterialTheme.colorScheme.primary
+                                        else Color.LightGray,
+                                        CircleShape,
+                                    ),
                             )
                         }
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
-            }
-        }
-        // ترند فصلی: آواتارهای دایره‌ای.
-        if (seasonal.isNotEmpty()) {
-            item {
-                Text("ترند فصلی", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            }
-            item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(seasonal) { w ->
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.width(76.dp).clickable { onWorld(w.id) },
-                        ) {
-                            AsyncImage(
-                                model = w.sample_image_url,
-                                contentDescription = w.name,
-                                modifier = Modifier.size(72.dp).clip(CircleShape),
-                                contentScale = ContentScale.Crop,
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                w.name,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center,
-                            )
+                if (favWorlds.isNotEmpty()) {
+                    item {
+                        Text("علاقه‌مندی‌ها", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+                    item {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            items(favWorlds) { w ->
+                                WorldCard(w, { onWorld(w.id) }, Modifier.width(160.dp))
+                            }
                         }
                     }
                 }

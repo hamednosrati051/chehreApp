@@ -46,8 +46,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.GenerationStatus
+import ir.inourai.newapp.data.LikedGeneration
 import ir.inourai.newapp.data.Session
-import ir.inourai.newapp.data.World
 import kotlinx.coroutines.launch
 
 /** تصاویر من (مثل رقیب): سگمنت قلب | عکس؛ تب قلب دنیاهای نشان‌شده را
@@ -62,7 +62,7 @@ fun MyMediaScreen(
 ) {
     var tab by remember { mutableStateOf(1) } // 0 = قلب، 1 = عکس
     var images by remember { mutableStateOf<List<GenerationStatus>>(emptyList()) }
-    var favorites by remember { mutableStateOf<List<World>>(emptyList()) }
+    var liked by remember { mutableStateOf<List<LikedGeneration>>(emptyList()) }
     var submitted by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var notice by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -76,7 +76,7 @@ fun MyMediaScreen(
             } catch (_: Exception) {
             }
             try {
-                favorites = Api.service.favorites()
+                liked = Api.service.imageLikes()
             } catch (_: Exception) {
             }
             try {
@@ -161,7 +161,10 @@ fun MyMediaScreen(
         }
 
         if (tab == 0) {
-            if (favorites.isEmpty()) {
+            // تب قلب حالا تصویرهای لایک‌شده را نشان می‌دهد (نه دنیاها)؛
+            // آیتم‌ها هم‌شکل تب عکس‌اند و با لمس، جزئیات همان تصویر باز می‌شود.
+            val likedDone = liked.filter { it.output_url != null }
+            if (likedDone.isEmpty()) {
                 // خالی‌نمای علاقه‌مندی‌ها، با همان متن‌های رقیب.
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(32.dp),
@@ -175,13 +178,13 @@ fun MyMediaScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        "هنوز دنیایی را نپسندیده‌ای",
+                        "هنوز تصویری را نپسندیده‌ای",
                         fontWeight = FontWeight.Bold,
                         fontSize = 17.sp,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "قلب بالای هر دنیا را بزن تا اینجا بماند و بعداً سراغش بیایی",
+                        "قلب بالای هر تصویر را بزن تا اینجا بماند و بعداً سراغش بیایی",
                         color = Color.Gray,
                         fontSize = 14.sp,
                     )
@@ -195,10 +198,30 @@ fun MyMediaScreen(
                     columns = GridCells.Fixed(2),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 ) {
-                    items(favorites) { w ->
-                        WorldCard(w, { onWorld(w.id) })
+                    items(likedDone) { item ->
+                        Box(
+                            modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable { onImage(item.id) },
+                        ) {
+                            AsyncImage(
+                                model = item.output_url,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                            if (item.id in submitted) {
+                                Box(
+                                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                                        .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                ) {
+                                    Text("✓ گالری", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
                 }
             }

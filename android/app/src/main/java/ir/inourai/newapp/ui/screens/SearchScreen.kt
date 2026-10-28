@@ -42,6 +42,9 @@ fun SearchScreen(onWorld: (Long) -> Unit, onGoHome: () -> Unit) {
     var worlds by remember { mutableStateOf<List<World>>(emptyList()) }
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
     var selected by remember { mutableStateOf<Long?>(null) }
+    // «همه»: جستجو بدون فیلتر دسته (برخلاف «پیشنهادی» که فقط featuredهاست).
+    // پیش‌فرض «همه» است تا جستجو از ابتدا در همه‌ی دسته‌ها باشد.
+    var showAll by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         try {
@@ -56,7 +59,7 @@ fun SearchScreen(onWorld: (Long) -> Unit, onGoHome: () -> Unit) {
     }
 
     val shown = worlds.filter { w ->
-        (selected == null && w.is_featured || selected != null && w.category_id == selected) &&
+        (showAll || selected == null && w.is_featured || selected != null && w.category_id == selected) &&
             (query.isBlank() || w.name.contains(query))
     }
 
@@ -81,10 +84,13 @@ fun SearchScreen(onWorld: (Long) -> Unit, onGoHome: () -> Unit) {
             modifier = Modifier.padding(top = 12.dp),
         ) {
             item {
-                SearchChip("پیشنهادی", selected == null) { selected = null }
+                SearchChip("همه", showAll) { showAll = true }
+            }
+            item {
+                SearchChip("پیشنهادی", !showAll && selected == null) { showAll = false; selected = null }
             }
             items(categories) { c ->
-                SearchChip(c.name, selected == c.id) { selected = c.id }
+                SearchChip(c.name, !showAll && selected == c.id) { showAll = false; selected = c.id }
             }
         }
         LazyVerticalGrid(
