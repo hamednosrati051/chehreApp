@@ -243,7 +243,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                 }
             }
             if (!submitted) {
-                TextButton(
+                Button(
                     onClick = {
                         scope.launch {
                             try {
@@ -255,9 +255,11 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                             }
                         }
                     },
+                    colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
+                    shape = RoundedCornerShape(50),
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                 ) {
-                    Text("ارسال به گالری چهره‌ساز", color = Color.White)
+                    Text("ارسال به گالری چهره‌ساز", fontWeight = FontWeight.Bold)
                 }
             } else {
                 Button(
