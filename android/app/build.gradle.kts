@@ -32,6 +32,10 @@ android {
             isMinifyEnabled = false
         }
     }
+    lint {
+        // lintVital نسخه‌ی انتشاراتی برای دانلود ابزار lint به شبکه نیاز دارد؛ در بیلد آفلاین می‌شکند. این فقط بررسی ایستاست و روی خروجی اثری ندارد.
+        checkReleaseBuilds = false
+    }
 
     buildFeatures {
         compose = true
