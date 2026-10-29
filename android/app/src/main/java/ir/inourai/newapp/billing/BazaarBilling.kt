@@ -10,7 +10,9 @@ import android.os.IBinder
 import android.os.Parcel
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.PurchaseVerifyRequest
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -216,10 +218,17 @@ object BazaarBilling {
     private const val API_VERSION = 3
     private const val TYPE_INAPP = "inapp"
 
+    /** سقف انتظار برای اتصال به سرویس بازار؛ بیشتر از این یعنی بازار
+     *  جواب نمی‌دهد و به‌جای سکوتِ بی‌پایان، خطای قابل‌نمایش برمی‌گردد. */
+    private const val BIND_TIMEOUT_MS = 15_000L
+
     private suspend fun <T> withService(
         context: Context,
         block: (BazaarServiceProxy) -> T,
-    ): T = suspendCancellableCoroutine { cont ->
+    ): T {
+        try {
+            return withTimeout(BIND_TIMEOUT_MS) {
+                suspendCancellableCoroutine { cont ->
         val conn = object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
                 try {
@@ -254,6 +263,11 @@ object BazaarBilling {
                 context.unbindService(conn)
             } catch (_: Exception) {
             }
+        }
+                }
+            }
+        } catch (e: TimeoutCancellationException) {
+            throw IllegalStateException("bazaar service timeout")
         }
     }
 
