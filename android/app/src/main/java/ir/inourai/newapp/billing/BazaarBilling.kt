@@ -248,7 +248,9 @@ object BazaarBilling {
 
             override fun onServiceDisconnected(name: ComponentName?) {}
         }
-        val intent = Intent("com.android.vending.billing.InAppBillingService.BIND")
+        // اکشن مخصوص خود بازار (مثل نورا)؛ اکشن گوگل‌پلی روی سرویس
+        // بازار این گوشی جواب نمی‌دهد و bindService همان اول false می‌دهد.
+        val intent = Intent("ir.cafebazaar.pardakht.InAppBillingService.BIND")
         intent.setPackage(BAZAAR_PACKAGE)
         val bound = context.bindService(intent, conn, Context.BIND_AUTO_CREATE)
         if (!bound) {
