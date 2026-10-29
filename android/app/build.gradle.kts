@@ -18,6 +18,21 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("../../chehre-release.keystore")
+            storePassword = (project.findProperty("CHEHRE_STORE_PASSWORD") as String?) ?: System.getenv("CHEHRE_STORE_PASSWORD")
+            keyAlias = "chehresaz"
+            keyPassword = (project.findProperty("CHEHRE_KEY_PASSWORD") as String?) ?: System.getenv("CHEHRE_KEY_PASSWORD")
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+        }
+    }
+
     buildFeatures {
         compose = true
     }

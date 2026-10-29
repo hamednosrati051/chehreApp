@@ -21,7 +21,7 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 
 // TODO: با آدرس واقعی بک‌اند خود اپ عوض شود.
-private const val BASE_URL = "http://171.22.25.152:5001/api/v1/"
+private const val BASE_URL = "https://chehre.inourai.ir/api/v1/"
 
 data class OtpRequest(val mobile: String)
 data class OtpVerify(val mobile: String, val code: String)
