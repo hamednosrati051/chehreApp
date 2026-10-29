@@ -58,7 +58,6 @@ fun PacksSheet(
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var packs by remember { mutableStateOf<List<Pack>>(emptyList()) }
-    var sheetError by remember { mutableStateOf<String?>(null) }
     var buyingSku by remember { mutableStateOf<String?>(null) }
     val loggedIn = Session.token != null
 
@@ -77,13 +76,11 @@ fun PacksSheet(
         scope.launch {
             try {
                 if (result.resultCode != Activity.RESULT_OK) {
-                    sheetError = "خرید لغو شد"
                     onError("خرید لغو شد")
                     return@launch
                 }
                 val purchase = BazaarBilling.parsePurchaseResult(result.data)
                     ?: run {
-                        sheetError = "نتیجه‌ی خرید خوانا نبود"
                         onError("نتیجه‌ی خرید خوانا نبود")
                         return@launch
                     }
@@ -91,9 +88,7 @@ fun PacksSheet(
                 onPurchased()
                 onDismiss()
             } catch (e: Exception) {
-                val msg = e.message ?: "خطایی پیش آمد"
-                sheetError = msg
-                onError(msg)
+                onError(e.message ?: "خطایی پیش آمد")
             }
         }
     }
@@ -106,15 +101,12 @@ fun PacksSheet(
             return
         }
         scope.launch {
-            sheetError = null
             buyingSku = p.bazaar_sku
             try {
                 val sender = BazaarBilling.getBuyIntentSender(context, p.bazaar_sku)
                 buyLauncher.launch(IntentSenderRequest.Builder(sender).build())
             } catch (e: Exception) {
-                val msg = e.message ?: "خطایی پیش آمد"
-                sheetError = msg
-                onError(msg)
+                onError(e.message ?: "خطایی پیش آمد")
             } finally {
                 buyingSku = null
             }
@@ -134,10 +126,6 @@ fun PacksSheet(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("بسته‌های سکه", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(modifier = Modifier.height(12.dp))
-                sheetError?.let {
-                    Text(it, color = Color.Red, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
                 if (packs.isEmpty()) {
                     Text("بسته‌ای نیست.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
