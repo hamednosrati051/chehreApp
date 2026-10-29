@@ -4,8 +4,33 @@
     android:viewportWidth="24"
     android:viewportHeight="24"
     android:tint="?attr/colorControlNormal">
-    <!-- جرقه‌ی چهارپر برای آیکون نوتیفیکیشن (تک‌رنگ سفید). -->
+    <!-- نشان نئونی مغز + جرقه برای آیکون نوتیفیکیشن (تک‌رنگ سفید، نسخه‌ی ساده‌شده‌ی آیکون ارسالی کاربر). -->
+    <!-- مغز: خط محیطی ابری + سه گره -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M10.8,6.2 C9.0,4.2 5.8,4.6 4.8,6.8 C3.2,7.4 2.4,9.4 3.4,11.0 C2.2,12.4 2.8,14.8 4.8,15.4 C4.8,17.8 7.6,19.4 9.8,18.2 C11.2,17.6 11.6,15.8 11.0,14.6 L11.0,9.0 C11.0,7.4 11.2,6.8 10.8,6.2 Z" />
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M12,1 L14.5,9.5 L23,12 L14.5,14.5 L12,23 L9.5,14.5 L1,12 L9.5,9.5 Z" />
+        android:pathData="M5.4,9.5 a1.1,1.1 0 1,0 2.2,0 a1.1,1.1 0 1,0 -2.2,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M4.4,13.5 a1.1,1.1 0 1,0 2.2,0 a1.1,1.1 0 1,0 -2.2,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M6.9,15.8 a1.1,1.1 0 1,0 2.2,0 a1.1,1.1 0 1,0 -2.2,0" />
+    <!-- جرقه‌ی بزرگ -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M17.5,2.5 C18.2,8.5 19.0,10.5 22,12.5 C19.0,14.5 18.2,16.5 17.5,21.5 C16.8,16.5 16.0,14.5 13,12.5 C16.0,10.5 16.8,8.5 17.5,2.5 Z" />
+    <!-- دو جرقه‌ی کوچک -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M20.3,3.8 L20.8,4.8 L21.8,5.3 L20.8,5.8 L20.3,6.8 L19.8,5.8 L18.8,5.3 L19.8,4.8 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M20.3,17.8 L20.8,18.8 L21.8,19.3 L20.8,19.8 L20.3,20.8 L19.8,19.8 L18.8,19.3 L19.8,18.8 Z" />
 </vector>
