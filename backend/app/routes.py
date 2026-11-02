@@ -665,10 +665,24 @@ def coin_purchase():
     pack = AppCoinPack.query.get(body.get("pack_id"))
     if not pack or not pack.is_active:
         return jsonify({"error": "pack not found"}), 404
+    token = body.get("purchase_token")
+    if token:
+        # همان توکن نباید دو ردیف pending بسازد؛ ردیف قبلی برگردد.
+        existing = (
+            AppPurchase.query.filter_by(bazaar_purchase_token=token)
+            .order_by(AppPurchase.id)
+            .first()
+        )
+        if existing is not None:
+            if existing.user_id != g.user.id:
+                return jsonify(
+                    {"error": "purchase token belongs to another user"}
+                ), 400
+            return jsonify({"id": existing.id, "status": existing.status}), 201
     purchase = AppPurchase(
         user_id=g.user.id,
         pack_id=pack.id,
-        bazaar_purchase_token=body.get("purchase_token"),
+        bazaar_purchase_token=token,
         amount_irr=pack.price_toman * 10,
         status="pending",
     )

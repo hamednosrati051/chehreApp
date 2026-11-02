@@ -177,7 +177,7 @@ class AppPurchase(db.Model):
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     user_id = db.Column(db.BigInteger, db.ForeignKey("app_users.id"), nullable=False)
     pack_id = db.Column(db.BigInteger, db.ForeignKey("app_coin_packs.id"), nullable=False)
-    bazaar_purchase_token = db.Column(db.String(500))
+    bazaar_purchase_token = db.Column(db.String(500), unique=True)
     amount_irr = db.Column(db.BigInteger, nullable=False)
     status = db.Column(
         db.Enum("pending", "verified", "consumed", name="purchase_status"),

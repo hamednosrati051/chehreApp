@@ -171,7 +171,8 @@ CREATE TABLE app_purchases (
   verified_at TIMESTAMP NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES app_users(id),
-  FOREIGN KEY (pack_id) REFERENCES app_coin_packs(id)
+  FOREIGN KEY (pack_id) REFERENCES app_coin_packs(id),
+  UNIQUE KEY uq_bazaar_purchase_token (bazaar_purchase_token)
 ) ENGINE=InnoDB;
 
 -- صف تولید (عکس و صدا) — سکه فقط موقع تحویل موفق کم می‌شود

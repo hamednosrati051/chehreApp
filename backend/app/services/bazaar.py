@@ -3,8 +3,11 @@
 قوانین:
 - بدون کلید RSA پیکربندی‌شده، تایید همیشه fail می‌شود؛ خرید pending
   می‌ماند تا کلید ست شود و بازیابی (recovery) آن را وریفای کند.
-- purchase_token یکتا است: یک توکن هرگز دوبار شارژ نمی‌شود
-  (idempotency) — خرید تکراری همان ردیف قبلی را برمی‌گرداند.
+- purchase_token یکتا است (قید دیتابیسی + برگرداندن برنده در race):
+  یک توکن هرگز دوبار شارژ نمی‌شود (idempotency) — خرید تکراری همان ردیف
+  قبلی را برمی‌گرداند.
+- فقط خرید با purchaseState==0 (خرید موفق) وریفای می‌شود؛ خرید لغوشده
+  یا برگشتی رد می‌شود.
 - بعد از وریفای موفق، سکه شارژ و خرید consumed می‌شود تا همان پک
   بلافاصله دوباره قابل خرید باشد (پک‌ها consumable هستند).
 """
@@ -13,6 +16,7 @@ import base64
 import json
 
 from flask import current_app
+from sqlalchemy.exc import IntegrityError
 
 from ..extensions import db
 from ..models import AppCoinPack, AppPurchase
@@ -68,9 +72,13 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature):
         raise ValueError("purchase_token required")
 
     # Idempotency: همین توکن قبلاً وریفای/مصرف شده؟ شارژ مجدد ممنوع.
-    existing = AppPurchase.query.filter_by(
-        bazaar_purchase_token=purchase_token
-    ).first()
+    # ترتیب id ثابت است تا اگر به هر دلیلی ردیف تکراری بود، همیشه
+    # قدیمی‌ترین (همان که مصرف شده) برگردد.
+    existing = (
+        AppPurchase.query.filter_by(bazaar_purchase_token=purchase_token)
+        .order_by(AppPurchase.id)
+        .first()
+    )
     # مالکیت توکن مقدم بر وضعیت آن است: توکن مصرف‌شده‌ی کاربر دیگر
     # نباید برای کاربر فعلی «موفق» برگردد.
     if existing is not None and existing.user_id != user.id:
@@ -88,6 +96,16 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature):
             data = json.loads(purchase_data)
         except ValueError:
             raise ValueError("purchase_data is not valid JSON")
+        # فقط خرید موفق (state==0) وریفای می‌شود؛ لغوشده (1) یا برگشتی
+        # (2) با امضای معتبر هم نباید سکه بدهد.
+        state = data.get("purchaseState")
+        if state is not None:
+            try:
+                state = int(state)
+            except (TypeError, ValueError):
+                raise ValueError("invalid purchaseState")
+            if state != 0:
+                raise ValueError("purchase not completed")
         sku = data.get("productId") or data.get("sku")
         if sku and pack is not None and sku != pack.bazaar_sku:
             raise ValueError("purchase sku does not match pack")
@@ -109,7 +127,28 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature):
             status="pending",
         )
         db.session.add(existing)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Race: یک وریفای هم‌زمان همین توکن را اول ثبت کرد. برنده را
+            # برگردان تا ۵۰۰ نشود؛ اگر هنوز pending است یعنی برنده دارد
+            # شارژ می‌کند — دوباره شارژ نکن، pending برگردان تا مشتری
+            # بعداً (recovery) همان ردیف مصرف‌شده را بگیرد.
+            db.session.rollback()
+            existing = (
+                AppPurchase.query.filter_by(
+                    bazaar_purchase_token=purchase_token
+                )
+                .order_by(AppPurchase.id)
+                .first()
+            )
+            if existing is None:
+                raise
+            if existing.user_id != user.id:
+                raise ValueError("purchase token belongs to another user")
+            if existing.status in ("verified", "consumed"):
+                return existing, True
+            return existing, False
 
     # شارژ سکه و تغییر وضعیت در یک تراکنش: اگر بین آن دو خطا رخ دهد،
     # نه سکه‌ای بی‌سند شارژ می‌شود و نه خریدی pending می‌ماند که بعداً
