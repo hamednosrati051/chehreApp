@@ -52,6 +52,30 @@ OTP_MAX_PER_HOUR = 5
 TOKEN_DAYS = 30
 DEFAULT_IMAGE_COINS = 10
 
+_FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+
+
+def _fa_dt(dt):
+    """UTC naive -> شمسی + ساعت تهران (HH:MM)، ارقام فارسی.
+
+    فقط برای نمایش است؛ مقدار ذخیره‌شده همان UTC می‌ماند. اگر jdatetime
+    نصب نباشد یا تبدیل خطا بدهد، همان ISO برمی‌گردد تا endpoint نخوابد.
+    """
+    if not dt:
+        return None
+    try:
+        import jdatetime
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        tehran = dt.astimezone(
+            datetime.timezone(datetime.timedelta(hours=3, minutes=30))
+        )
+        jd = jdatetime.datetime.fromgregorian(datetime=tehran.replace(tzinfo=None))
+        return jd.strftime("%Y/%m/%d %H:%M").translate(_FA_DIGITS)
+    except Exception:
+        return dt.isoformat() if hasattr(dt, "isoformat") else None
+
 
 def _default_image_coins():
     """تعرفه‌ی پیش‌فرض هر تصویر (سکه)؛ از app_settings وگرنه DEFAULT_IMAGE_COINS."""
@@ -897,6 +921,7 @@ def my_purchases():
                 "amount_irr": r.amount_irr,
                 "status": r.status,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
+                "created_at_fa": _fa_dt(r.created_at),
             }
             for r in rows
         ]

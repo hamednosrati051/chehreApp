@@ -400,7 +400,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                                     Column {
                                         Text(pay.pack_name, fontWeight = FontWeight.Bold)
                                         Text("${pay.coins} سکه", color = Color.Gray, fontSize = 14.sp)
-                                        Text(pay.created_at?.take(10) ?: "", color = Color.Gray, fontSize = 13.sp)
+                                        Text(pay.created_at_fa ?: pay.created_at?.take(10) ?: "", color = Color.Gray, fontSize = 13.sp)
                                     }
                                     Column(horizontalAlignment = Alignment.End) {
                                         Text("${pay.amount_irr / 10} تومان", fontWeight = FontWeight.Bold)

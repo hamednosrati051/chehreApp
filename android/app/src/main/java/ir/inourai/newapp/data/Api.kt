@@ -109,6 +109,7 @@ data class PaymentItem(
     val amount_irr: Long,
     val status: String,
     val created_at: String?,
+    val created_at_fa: String? = null,
 )
 data class ImageLikeRequest(val generation_id: Long)
 data class LikedGeneration(
