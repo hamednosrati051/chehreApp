@@ -101,11 +101,20 @@ def process_image_job(generation_id):
                 gen.usage_json = out["usage"]
                 gen.cost_usd = _cost_usd_from_usage(out["usage"])
             gen.status = "done"
-            user = AppUser.query.get(gen.user_id)
-            gen.charged = coins_svc.spend_for_generation(user, gen)
+            if not gen.charged:
+                # Jobهای ثبت‌شده قبل از تغییر رزرو: شارژ موقع تحویل مثل قبل.
+                user = AppUser.query.get(gen.user_id)
+                gen.charged = coins_svc.spend_for_generation(user, gen)
         except Exception as exc:  # noqa: BLE001 — خطا در ردیف ذخیره می‌شود
             gen.status = "failed"
             gen.error_message = str(exc)[:500]
+            if gen.charged:
+                # رزرو موقع ثبت برگردد تا خروجی ناموفق پولی نگیرد.
+                try:
+                    user = AppUser.query.get(gen.user_id)
+                    coins_svc.refund_reservation(user, gen)
+                except Exception:  # noqa: BLE001 — خطای refund نباید خطای اصلی را بپوشاند
+                    gen.error_message = (gen.error_message + " | refund failed")[:500]
         gen.completed_at = db.func.now()
         db.session.commit()
 
@@ -117,7 +126,8 @@ def process_voice_job(generation_id):
     app = create_app()
     with app.app_context():
         from .extensions import db
-        from .models import AppGeneration
+        from .models import AppGeneration, AppUser
+        from .services import coins as coins_svc
         from .services import voice as voice_svc
 
         gen = AppGeneration.query.get(generation_id)
@@ -129,8 +139,20 @@ def process_voice_job(generation_id):
             converter = voice_svc.get_converter("pending-route-choice")
             gen.output_url = converter.convert(gen.input_url, {})
             gen.status = "done"
+            if not gen.charged:
+                # Jobهای ثبت‌شده قبل از تغییر رزرو: شارژ موقع تحویل مثل قبل.
+                # (قبل از این تغییر، مسیر صدا موقع تحویل اصلاً کسر نمی‌کرد.)
+                user = AppUser.query.get(gen.user_id)
+                gen.charged = coins_svc.spend_for_generation(user, gen)
         except Exception as exc:  # noqa: BLE001
             gen.status = "failed"
             gen.error_message = str(exc)[:500]
+            if gen.charged:
+                # رزرو موقع ثبت برگردد تا خروجی ناموفق پولی نگیرد.
+                try:
+                    user = AppUser.query.get(gen.user_id)
+                    coins_svc.refund_reservation(user, gen)
+                except Exception:  # noqa: BLE001
+                    gen.error_message = (gen.error_message + " | refund failed")[:500]
         gen.completed_at = db.func.now()
         db.session.commit()

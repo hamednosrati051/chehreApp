@@ -532,8 +532,6 @@ def create_generation():
         cost = singer.coin_price
     if not model or not model.is_active:
         return jsonify({"error": "model not active"}), 409
-    if not coins_svc.can_afford(g.user, kind, cost):
-        return jsonify({"error": "insufficient coins"}), 402
     gen = AppGeneration(
         user_id=g.user.id,
         kind=kind,
@@ -544,6 +542,16 @@ def create_generation():
         coin_cost=cost,
     )
     db.session.add(gen)
+    db.session.commit()
+    # رزرو اتمیک موقع ثبت (به‌جای چک خالی can_afford): بدون رزرو، دو job
+    # هم‌زمان با یک اعتبار/موجودی قبول می‌شدند و هر دو تحویل می‌گرفتند.
+    # charged=True یعنی پرداخت رزرو شده است، نه تحویل‌شده.
+    source = coins_svc.reserve_for_generation(g.user, kind, cost, gen.id)
+    if source is None:
+        db.session.delete(gen)
+        db.session.commit()
+        return jsonify({"error": "insufficient coins"}), 402
+    gen.charged = True
     db.session.commit()
     # صف: worker با send_task برمی‌دارد (نام تسک در worker.py).
     from .worker import celery_app
