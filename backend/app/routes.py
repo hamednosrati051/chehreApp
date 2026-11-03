@@ -719,6 +719,15 @@ def coin_purchase():
 
 # ---------------- uploads ----------------
 
+_HEIF_BRANDS = {b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1"}
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+
+def _is_heif(raw: bytes) -> bool:
+    # HEIF/HEIC را از روی محتوا تشخیص بده، نه اسم فایل (اسم‌ها دروغ می‌گویند:
+    # فایل HEIC با اسم jpg هم دیده شده). ساختار: «ftyp» در آفست ۴ + برند در آفست ۸.
+    return len(raw) >= 12 and raw[4:8] == b"ftyp" and raw[8:12] in _HEIF_BRANDS
+
 
 @uploads_bp.post("/uploads")
 @require_auth
@@ -728,7 +737,29 @@ def upload():
         return jsonify({"error": "file required"}), 400
     from .services import storage as storage_svc
 
-    url = storage_svc.upload_bytes(f.read(), f.filename or "upload.bin")
+    raw = f.read()
+    if len(raw) > MAX_UPLOAD_BYTES:
+        return jsonify({"error": "file too large"}), 400
+    filename = f.filename or "upload.bin"
+    if _is_heif(raw):
+        # آیفون HEIC می‌فرستد و ارائه‌دهنده قبولش نمی‌کند؛ همان‌جا به JPEG
+        # تبدیلش کن تا نسل بعداً با Invalid image data نگیرد. بقیه‌ی نوع‌ها
+        # دست‌نخورده عبور می‌کنند و داور نهایی ارائه‌دهنده است.
+        try:
+            import io as _io
+
+            from PIL import Image, ImageOps
+            import pillow_heif
+
+            pillow_heif.register_heif_opener()
+            img = ImageOps.exif_transpose(Image.open(_io.BytesIO(raw))).convert("RGB")
+            buf = _io.BytesIO()
+            img.save(buf, format="JPEG", quality=90)
+            raw = buf.getvalue()
+            filename = os.path.splitext(filename)[0] + ".jpg"
+        except Exception:
+            return jsonify({"error": "heic conversion failed"}), 400
+    url = storage_svc.upload_bytes(raw, filename)
     return jsonify({"url": url})
 
 
