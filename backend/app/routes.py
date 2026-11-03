@@ -7,7 +7,7 @@ from functools import wraps
 
 import jwt
 from flask import Blueprint, current_app, g, jsonify, request
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -1638,6 +1638,114 @@ def admin_list_generations():
             }
         )
     return jsonify({"items": out, **meta})
+
+
+@admin_bp.get("/admin/inputs")
+@require_admin
+def admin_list_inputs():
+    """عکس‌های ورودی کاربران (سلفی‌ها)، جدیدترین اول — برای تب «ورودی‌ها»ی ادمین.
+    هر ردیف یک آدرس ورودی متمایز است با شمار استفاده (تعداد نسل‌هایی که از آن
+    استفاده کرده‌اند). فقط آدرس است؛ فایل روی دیسک خود سرور است."""
+    grouped = (
+        db.session.query(
+            AppGeneration.input_url.label("input_url"),
+            AppGeneration.user_id.label("user_id"),
+            func.count(AppGeneration.id).label("uses"),
+            func.min(AppGeneration.created_at).label("first_used"),
+            func.max(AppGeneration.created_at).label("last_used"),
+        )
+        .filter(AppGeneration.input_url.isnot(None))
+        .group_by(AppGeneration.input_url, AppGeneration.user_id)
+        .order_by(func.max(AppGeneration.created_at).desc())
+    )
+    try:
+        page = max(int(request.args.get("page", 1)), 1)
+    except ValueError:
+        page = 1
+    try:
+        page_size = min(max(int(request.args.get("page_size", 50)), 1), 200)
+    except ValueError:
+        page_size = 50
+    total = db.session.query(func.count()).select_from(grouped.subquery()).scalar()
+    rows = grouped.offset((page - 1) * page_size).limit(page_size).all()
+    users = {u.id: u.mobile for u in AppUser.query.all()}
+    items = [
+        {
+            "input_url": r.input_url,
+            "user_id": r.user_id,
+            "mobile": users.get(r.user_id),
+            "uses": r.uses,
+            "first_used": r.first_used.isoformat() if r.first_used else None,
+            "last_used": r.last_used.isoformat() if r.last_used else None,
+        }
+        for r in rows
+    ]
+    usages = (
+        db.session.query(func.count(AppGeneration.id))
+        .filter(AppGeneration.input_url.isnot(None))
+        .scalar()
+    )
+    users_count = (
+        db.session.query(func.count(func.distinct(AppGeneration.user_id)))
+        .filter(AppGeneration.input_url.isnot(None))
+        .scalar()
+    )
+    return jsonify(
+        {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "totals": {
+                "distinct_inputs": total,
+                "usages": usages,
+                "users": users_count,
+            },
+        }
+    )
+
+
+@admin_bp.delete("/admin/inputs")
+@require_admin
+def admin_delete_input():
+    """حذف فیزیکی یک عکس ورودی از روی سرور + خالی‌کردن آدرس آن در نسل‌ها.
+    خروجی‌ها، تاریخچه و سکه دست نمی‌خورند. قانون عدم حذف فقط شامل عکس‌های
+    تولیدشده است، نه ورودی‌های کاربر."""
+    from urllib.parse import urlparse
+
+    data = request.get_json(silent=True) or {}
+    input_url = (data.get("input_url") or "").strip()
+    if not input_url:
+        return jsonify({"error": "input_url required"}), 400
+    if current_app.config.get("S3_ENDPOINT"):
+        return jsonify({"error": "S3-backed storage: file delete not supported here"}), 400
+    parsed = urlparse(input_url)
+    if parsed.netloc not in ("", "chehre.inourai.ir", "171.22.25.152:5001") or not parsed.path.startswith(
+        "/static/uploads/"
+    ):
+        return jsonify({"error": "only local upload files can be deleted"}), 400
+    filename = os.path.basename(parsed.path)
+    if not filename or filename in (".", "..") or "/" in filename or "\\" in filename:
+        return jsonify({"error": "bad filename"}), 400
+    busy = AppGeneration.query.filter(
+        AppGeneration.input_url == input_url,
+        AppGeneration.status.in_(["processing", "queued"]),
+    ).first()
+    if busy:
+        return jsonify({"error": "input in use by an in-flight generation"}), 409
+    uploads_dir = os.path.realpath(os.path.join(current_app.static_folder, "uploads"))
+    path = os.path.realpath(os.path.join(uploads_dir, filename))
+    if os.path.commonpath([path, uploads_dir]) != uploads_dir:
+        return jsonify({"error": "bad path"}), 400
+    deleted_file = False
+    if os.path.exists(path):
+        os.unlink(path)
+        deleted_file = True
+    nulled = AppGeneration.query.filter(AppGeneration.input_url == input_url).update(
+        {"input_url": None}
+    )
+    db.session.commit()
+    return jsonify({"ok": True, "deleted_file": deleted_file, "nulled": nulled})
 
 
 # ---------------- admin: categories ----------------

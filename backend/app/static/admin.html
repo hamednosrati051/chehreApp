@@ -94,6 +94,7 @@
     <button data-tab="gallery" onclick="showTab('gallery')">گالری در انتظار</button>
     <button data-tab="ghist" onclick="showTab('ghist')">تاریخچه گالری</button>
     <button data-tab="gens" onclick="showTab('gens')">همه‌ی تولیدها</button>
+    <button data-tab="inputs" onclick="showTab('inputs')">ورودی‌ها</button>
     <button data-tab="users" onclick="showTab('users')">کاربران</button>
     <button data-tab="admins" onclick="showTab('admins')">ادمین‌ها</button>
     <button data-tab="settings" onclick="showTab('settings')">تنظیمات</button>
@@ -226,6 +227,14 @@
     <div id="gen-pager"></div>
   </section>
 
+  <section id="inputs">
+    <h2>عکس‌های ورودی کاربران</h2>
+    <p class="muted">روی هر عکس بزنید تا بزرگ شود. حذف، فایل را از روی سرور پاک می‌کند و آدرس آن را در نسل‌ها خالی می‌کند؛ خروجی‌ها دست نمی‌خورند.</p>
+    <div id="in-summary"></div>
+    <div id="in-list"></div>
+    <div id="in-pager"></div>
+  </section>
+
   <section id="users">
     <h2>کاربران</h2>
     <form class="grid" onsubmit="applyUserFilter(event)">
@@ -351,7 +360,7 @@ function showTab(tab){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === tab));
   ({worlds: loadWorlds, trends: loadTrends, cats: loadCats, packs: loadPacks, models: loadModels,
-    purchases: loadPurchases, gallery: loadGallery, ghist: loadGhist, gens: loadGens, users: loadUsers, admins: loadAdmins,
+    purchases: loadPurchases, gallery: loadGallery, ghist: loadGhist, gens: loadGens, inputs: loadInputs, users: loadUsers, admins: loadAdmins,
     settings: loadSettings, notifs: loadNotifs})[tab]?.().catch(e => setMsg(e.message));
 }
 
@@ -470,6 +479,14 @@ const genFa = {queued: 'در صف', processing: 'در حال ساخت', done: '�
 async function loadGens(){ const res = await api('/admin/generations?page=' + genPageNo);
   $('gen-list').innerHTML = res.items.length ? `<div class="gen-grid">` + res.items.map(g => g.output_url ? `<div class="gen-item"><img class="gthumb" src="${esc(g.output_url)}" data-cap="${esc('موبایل: ' + (g.mobile || '—') + ' | دنیا: ' + (g.world || '—') + ' | ' + (g.created_at ? faDate(g.created_at) : ''))}" onclick="openLightbox(this.src, this.dataset.cap)"><div class="muted">${esc(g.mobile || '—')}<br>${esc(g.world || '—')}</div></div>` : `<div class="gen-item"><div class="gthumb" style="display:flex;align-items:center;justify-content:center;background:#0f172a;color:#94a3b8;font-size:13px;cursor:default;">${genFa[g.status] || esc(g.status)}</div><div class="muted">${esc(g.mobile || '—')}<br>${esc(g.world || '—')}</div></div>`).join('') + `</div>` : '<p class="muted">تولیدی نیست.</p>';
   $('gen-pager').innerHTML = pagerHTML('gen', res); }
+let inPageNo = 1;
+function inPage(n){ if(n < 1) return; inPageNo = n; loadInputs(); }
+async function loadInputs(){ const res = await api('/admin/inputs?page=' + inPageNo);
+  const t = res.totals || {};
+  $('in-summary').innerHTML = `<p class="muted">مجموع ${t.distinct_inputs ?? res.total} عکس ورودی از ${t.users ?? '—'} کاربر | مجموع ${t.usages ?? '—'} استفاده</p>`;
+  $('in-list').innerHTML = res.items.length ? `<div class="gen-grid">` + res.items.map(r => `<div class="gen-item"><img class="gthumb" src="${esc(r.input_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | استفاده: ' + r.uses + ' | ' + (r.last_used ? faDate(r.last_used) : ''))}" onclick="openLightbox(this.src, this.dataset.cap)"><div class="muted">${esc(r.mobile || '—')}<br>استفاده: ${r.uses}</div><button class="small danger" data-url="${esc(r.input_url)}" onclick="inputDelete(this.dataset.url)">حذف</button></div>`).join('') + `</div>` : '<p class="muted">عکس ورودی نیست.</p>';
+  $('in-pager').innerHTML = pagerHTML('in', res); }
+async function inputDelete(url){ if(!confirm('عکس ورودی از روی سرور حذف شود؟ خروجی‌ها دست نمی‌خورند.')) return; try { await api('/admin/inputs', 'DELETE', {input_url: url}); loadInputs(); } catch(err){ setMsg(err.message); } }
 async function galleryRequeue(id){ try { await api('/admin/gallery/' + id + '/requeue', 'POST'); loadGhist(); } catch(err){ setMsg(err.message); } }
 async function galleryDelete(id){ if(!confirm('ردیف گالری حذف شود؟')) return; try { await api('/admin/gallery/' + id, 'DELETE'); loadGhist(); } catch(err){ setMsg(err.message); } }
 
