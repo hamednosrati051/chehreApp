@@ -84,12 +84,24 @@ def process_image_job(generation_id):
                 out = image_svc.edit_image(model, local, world.hidden_prompt)
             finally:
                 os.unlink(local)
+            from .services import storage as storage_svc
+
             if out.get("url"):
-                gen.output_url = out["url"]
+                # قانون: عکس ذخیره شود، نه URL — خروجی URLدار را دانلود
+                # و محلی ذخیره کن؛ اگر دانلود نشد، نسل ناموفق می‌شود
+                # (بدون شارژ) و لینک خارجی هرگز ذخیره نمی‌شود.
+                tmp_out = _download_to_temp(out["url"])
+                try:
+                    with open(tmp_out, "rb") as f:
+                        data = f.read()
+                    ext = os.path.splitext(tmp_out)[1] or ".png"
+                    gen.output_url = storage_svc.upload_bytes(
+                        data, f"result{ext}"
+                    )
+                finally:
+                    os.unlink(tmp_out)
             elif out.get("b64_json"):
                 import base64
-
-                from .services import storage as storage_svc
 
                 gen.output_url = storage_svc.upload_bytes(
                     base64.b64decode(out["b64_json"]), "result.png"
