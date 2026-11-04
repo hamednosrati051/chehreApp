@@ -286,6 +286,9 @@ class AppTrend(db.Model):
     key = db.Column(db.String(100), unique=True)
     sort_order = db.Column(db.Integer, default=0, nullable=False)
     display_type = db.Column(db.String(16), default="card", nullable=False)
+    # حلقه‌ی دور دایره‌های ترند دایره‌ای (نسخه‌ی ۱۰؛ پیش‌فرض روشن).
+    # فقط ترندهای round را تحت تأثیر قرار می‌دهد؛ cardها بی‌اثرند.
+    show_ring = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
 

@@ -55,6 +55,10 @@ data class Trend(
     val display_type: String,
     // nullable دفاعی: اگر بک‌اند برای ترندی world_ids نفرستد، خالی حساب می‌شود.
     val world_ids: List<Long>? = null,
+    // حلقه‌ی ترندهای دایره‌ای (نسخه‌ی ۱۰، افزایشی): null یعنی پیش‌فرض
+    // روشن؛ چون Gson فیلدِ غایبِ Boolean غیر-null را false می‌کند،
+    // nullable گرفته شده تا نبودن فیلد، حلقه را خاموش نکند.
+    val show_ring: Boolean? = null,
 )
 data class GenerationRequest(
     val kind: String,

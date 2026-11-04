@@ -1183,6 +1183,8 @@ def list_trends_public():
                 "key": t.key,
                 "sort_order": t.sort_order,
                 "display_type": t.display_type,
+                # نسخه‌ی ۱۰، افزایشی: اپ‌های قدیمی نمی‌شناسند و دایره‌ی ساده نشان می‌دهند.
+                "show_ring": bool(t.show_ring),
                 "world_ids": [r.world_id for r in rows],
             }
         )
@@ -1227,6 +1229,7 @@ def _trend_admin(t):
         "key": t.key,
         "sort_order": t.sort_order,
         "display_type": t.display_type,
+        "show_ring": bool(t.show_ring),
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "world_ids": [m["id"] for m in members],
         "worlds": members,
@@ -1312,6 +1315,7 @@ def admin_create_trend():
         key=None,
         sort_order=sort_order,
         display_type=display_type,
+        show_ring=bool(body.get("show_ring", True)),
     )
     db.session.add(t)
     db.session.commit()
@@ -1333,6 +1337,8 @@ def admin_update_trend(trend_id):
         if not _valid_display_type(body["display_type"]):
             return jsonify({"error": "display_type must be card or round"}), 400
         t.display_type = body["display_type"]
+    if "show_ring" in body:
+        t.show_ring = bool(body["show_ring"])
     if "sort_order" in body:
         try:
             t.sort_order = int(body["sort_order"])
