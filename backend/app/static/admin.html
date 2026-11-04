@@ -142,11 +142,11 @@
     <h2>تازه‌های هفته</h2>
     <p class="muted">فهرست خودکار: دنیاهای ۷ روز اخیر، جدیدترین اول، حداکثر ۲۷ تا (اگر هیچی نباشد، ۱۸ تای آخر). دخالت شما فقط استثناست: «سنجاق» یعنی همیشه در تازه‌ها، «پنهان» یعنی هرگز در تازه‌ها؛ بقیه همچنان خودکار وارد و خارج می‌شوند. تعویض = یکی را پنهان + دیگری را سنجاق کن.</p>
     <div id="fresh-current"></div>
-    <h3 style="margin-top:16px;">افزودن با جستجو</h3>
+    <h3 style="margin-top:16px;">افزودن به تازه‌ها</h3>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <input id="fresh-search" placeholder="جستجوی نام دنیا…" oninput="renderFreshSearch()">
+      <input id="fresh-search" placeholder="جستجوی نام دنیا…" oninput="renderFreshAdd()">
     </div>
-    <div id="fresh-search-rows"></div>
+    <div id="fresh-add-rows" style="max-height:400px; overflow-y:auto; border:1px solid #334155; border-radius:8px; padding:8px; margin-top:8px;"></div>
     <h3 style="margin-top:16px;">دخالت‌های فعلی</h3>
     <div id="fresh-overrides"></div>
   </section>
@@ -438,6 +438,7 @@ async function saveTrendOrder(tid){ const box = $('tw-chips-' + tid); const ids 
 async function delTrend(id){ if(!confirm('ترند و همه‌ی عضویت‌هایش حذف شود؟')) return; try { await api('/admin/trends/' + id, 'DELETE'); loadTrends(); } catch(err){ setMsg(err.message); } }
 let freshWorlds = [];
 let freshCats = {};
+let freshOv = {};
 async function loadFresh(){
   const worlds = await fetch('/api/v1/worlds').then(r => r.json());
   const overrides = await api('/admin/fresh');
@@ -446,7 +447,7 @@ async function loadFresh(){
   const byId = {}; worlds.forEach(w => byId[w.id] = w);
   const catById = {}; cats.forEach(c => catById[c.id] = c.name);
   const ov = {}; overrides.forEach(o => ov[o.world_id] = o.action);
-  freshWorlds = worlds; freshCats = catById;
+  freshWorlds = worlds; freshCats = catById; freshOv = ov;
   // همان منطق اپ نسخه‌ی ۱۰: سنجاق‌ها اول (به ترتیب /worlds)، بعد خودکار ۷ روز اخیر، حداکثر ۲۷؛ اگر هیچی نبود، ۱۸ تای آخر بدون پنهان‌ها.
   const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
   const pinned = worlds.filter(w => ov[w.id] === 'pin');
@@ -465,14 +466,21 @@ async function loadFresh(){
   };
   $('fresh-current').innerHTML = '<b>تازه‌های هفته‌ی فعلی:</b>' + (fresh.length ? fresh.map(w => `<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;"><span>${esc(w.name)}${ov[w.id] === 'pin' ? ' 📌' : ''}</span> ${rowBtns(w)}</div>`).join('') : '<p class="muted">خالی است.</p>');
   $('fresh-overrides').innerHTML = overrides.length ? overrides.map(o => `<div>${esc((byId[o.world_id] || {}).name || ('دنیا ' + o.world_id))} — ${o.action === 'pin' ? 'سنجاق' : 'پنهان'} <button class="small danger" onclick="clearFresh(${o.world_id})">حذف (برگشت به خودکار)</button></div>`).join('') : '<p class="muted">دخالتی نیست؛ همه‌چیز خودکار است.</p>';
-  renderFreshSearch();
+  renderFreshAdd();
 }
-function renderFreshSearch(){
-  const box = $('fresh-search-rows'); if(!box) return;
+function renderFreshAdd(){
+  const box = $('fresh-add-rows'); if(!box) return;
   const q = ($('fresh-search') ? $('fresh-search').value : '').trim();
-  if(!q){ box.innerHTML = ''; return; }
-  const matches = freshWorlds.filter(w => w.name.includes(q)).slice(0, 20);
-  box.innerHTML = matches.length ? matches.map(w => `<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;"><span>${esc(w.name)}${freshCats[w.category_id] ? ' — ' + esc(freshCats[w.category_id]) : ''}</span> <button class="small" onclick="setFresh('pin', ${w.id})">سنجاق</button> <button class="small danger" onclick="setFresh('hide', ${w.id})">پنهان</button></div>`).join('') : '<p class="muted">چیزی پیدا نشد.</p>';
+  // جستجوی خالی = کل فهرست (بدون سقف)؛ با تایپ، همان فهرست درجا فیلتر می‌شود.
+  const rows = freshWorlds.filter(w => !q || w.name.includes(q));
+  box.innerHTML = rows.length ? rows.map(w => {
+    const isPin = freshOv[w.id] === 'pin';
+    const isHide = freshOv[w.id] === 'hide';
+    const btn = isPin
+      ? `<button class="small" disabled>سنجاق شده ✓</button>`
+      : `<button class="small" onclick="setFresh('pin', ${w.id})">افزودن</button>`;
+    return `<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;"><span>${esc(w.name)}${freshCats[w.category_id] ? ' — ' + esc(freshCats[w.category_id]) : ''}${isPin ? ' 📌' : ''}${isHide ? ' (پنهان شده)' : ''}</span> ${btn}</div>`;
+  }).join('') : '<p class="muted">چیزی پیدا نشد.</p>';
 }
 async function setFresh(action, wid){ if(!wid) return; try { await api('/admin/fresh', 'POST', {world_id: +wid, action}); setMsg('ذخیره شد.', true); loadFresh(); } catch(err){ setMsg(err.message); } }
 async function clearFresh(wid){ try { await api('/admin/fresh/' + wid, 'DELETE'); setMsg('به خودکار برگشت.', true); loadFresh(); } catch(err){ setMsg(err.message); } }
