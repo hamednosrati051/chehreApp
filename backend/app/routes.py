@@ -212,13 +212,16 @@ def otp_verify():
     user = AppUser.query.filter_by(mobile=mobile).first()
     is_new = user is None
     if user is None:
-        # هدیه‌ی ورود (۱ عکس + ۱ صدا) فقط وقتی تنظیم روشن است؛
-        # خاموش یعنی کاربر جدید هیچ هدیه‌ای نمی‌گیرد. کاربران قبلی دست نمی‌خورند.
+        # هدیه‌ی ورود فقط وقتی تنظیم روشن است؛ خاموش یعنی کاربر جدید
+        # هیچ هدیه‌ای نمی‌گیرد. کاربران قبلی دست نمی‌خورند.
+        # صدا: اپ هیچ قابلیت صوتی ندارد (صفر تولید صوتی تا امروز) —
+        # هدیه‌ی صدا داده‌ی مرده بود؛ از نسخه‌ی ۱۰، کاربر جدید همیشه
+        # free_voice_credits=0 می‌گیرد، مستقل از تنظیم هدیه.
         gift = _entry_gift_enabled()
         user = AppUser(
             mobile=mobile,
             free_image_credits=1 if gift else 0,
-            free_voice_credits=1 if gift else 0,
+            free_voice_credits=0,
         )
         db.session.add(user)
     user.last_login_at = datetime.datetime.utcnow()
