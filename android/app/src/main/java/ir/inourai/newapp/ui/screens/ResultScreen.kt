@@ -213,7 +213,16 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )
             if (Session.token != null) {
-                IconButton(onClick = { scope.launch { ImageLikes.toggle(genId) } }) {
+                IconButton(onClick = {
+                    scope.launch {
+                        val wasLiked = genId in likedIds
+                        val ok = ImageLikes.toggle(genId)
+                        if (!ok) {
+                            notice = if (wasLiked) "لغو پسند ناموفق بود؛ دوباره تلاش کن"
+                            else "پسندیدن ناموفق بود؛ دوباره تلاش کن"
+                        }
+                    }
+                }) {
                     Icon(
                         if (genId in likedIds) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                         contentDescription = null,
@@ -267,7 +276,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                     shape = RoundedCornerShape(50),
                     modifier = Modifier.fillMaxWidth(0.5f).padding(bottom = 8.dp),
                 ) {
-                    Text("ارسال به گالری عمومی چهره‌ساز", fontWeight = FontWeight.Bold)
+                    Text("ارسال به نگارخانه عمومی چهره‌ساز", fontWeight = FontWeight.Bold)
                 }
             } else {
                 Button(
@@ -277,7 +286,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                     shape = RoundedCornerShape(50),
                     modifier = Modifier.fillMaxWidth(0.5f).padding(bottom = 16.dp),
                 ) {
-                    Text("ارسال شده به گالری", fontWeight = FontWeight.Bold)
+                    Text("ارسال شده به نگارخانه", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -305,8 +314,8 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
             containerColor = Color(0xFF222222),
             titleContentColor = Color.White,
             textContentColor = Color.White,
-            title = { Text("ارسال به گالری عمومی؟", fontWeight = FontWeight.Bold) },
-            text = { Text("با زدن «ارسال»، این عکس به گالری عمومی چهره‌ساز می‌رود و همه‌ی کاربران می‌توانند آن را ببینند.") },
+            title = { Text("ارسال به نگارخانه عمومی؟", fontWeight = FontWeight.Bold) },
+            text = { Text("با زدن «ارسال»، این عکس به نگارخانه عمومی چهره‌ساز می‌رود و همه‌ی کاربران می‌توانند آن را ببینند.") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -315,9 +324,9 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                             try {
                                 Api.service.gallerySubmit(GallerySubmitRequest(genId))
                                 submitted = true
-                                notice = "برای نمایش عمومی، در صف تایید گالری چهره‌ساز قرار گرفت"
+                                notice = "برای نمایش عمومی، در صف تایید نگارخانه چهره‌ساز قرار گرفت"
                             } catch (_: Exception) {
-                                notice = "ارسال به گالری ناموفق بود؛ دوباره تلاش کن"
+                                notice = "ارسال به نگارخانه ناموفق بود؛ دوباره تلاش کن"
                             }
                         }
                     },

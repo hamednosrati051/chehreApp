@@ -6,33 +6,31 @@ import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,54 +41,56 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import ir.inourai.newapp.data.Api
+import ir.inourai.newapp.data.GallerySubmitRequest
 import ir.inourai.newapp.data.ImageLikes
 import java.io.File
 import kotlinx.coroutines.launch
 
 private val GalleryViewerBg = Color(0xFF0F172A)
 
-/** یک عکس گالری برای نمایشگر: خروجی + نام دنیا + تاریخ شمسی زیرنویس. */
+/** یک عکس گالری برای نمایشگر: شناسه‌ی نمایشی + خروجی + شناسه‌ی
+ *  generation (برای قلب؛ در گالری عمومی ممکن است null باشد و آن‌وقت
+ *  قلبی نشان داده نمی‌شود). */
 data class GalleryPhoto(
     val id: Long,
     val outputUrl: String,
-    val worldName: String?,
-    val dateFa: String?,
+    val generationId: Long? = null,
 )
 
-/** نمایشگر تمام‌صفحه‌ی گالری (نسخه‌ی ۱۰): ورق‌زدن بین عکس‌ها +
- *  دانلود + اشتراک‌گذاری هر عکس + لغزنده‌ی قبل/بعد (سلفی در برابر خروجی).
- *  منطق دانلود/اشتراک‌گذاری عمداً همین‌جا تکرار شده تا صفحه‌ی نتیجه
- *  دست نخورد؛ تغییر یکی، دیگری را نمی‌شکند. */
+/** نمایشگر تمام‌صفحه‌ی گالری: فقط عکس + ورق‌زدن بین عکس‌ها + دانلود +
+ *  اشتراک‌گذاری + دکمه‌ی برگشت بالای عکس. در «تصاویر من» و فقط برای
+ *  عکس‌های ساخته‌شده‌ی خود کاربر که هنوز ارسال نشده‌اند، یک دکمه‌ی
+ *  ارسال به گالری عمومی هم هست (همان منطق صفحه‌ی نتیجه: اول دیالوگ
+ *  تایید، بعد از ارسال موفق دکمه دیگر به‌صورت ارسال‌نشده برنمی‌گردد).
+ *  در گالری عمومی، وقتی generationId عکس معلوم باشد، قلب هم هست
+ *  (بدون generationId قلبی نیست؛ قلب فقط با پاسخ موفق سرور عوض می‌شود
+ *  وگرنه خطای کوتاه نشان داده می‌شود). منطق دانلود/اشتراک‌گذاری
+ *  عمداً همین‌جا تکرار شده تا صفحه‌ی نتیجه دست نخورد؛ تغییر یکی،
+ *  دیگری را نمی‌شکند. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GalleryViewer(
     photos: List<GalleryPhoto>,
     startIndex: Int,
     onClose: () -> Unit,
+    showSendButton: Boolean = false,
+    submittedIds: Set<Long> = emptySet(),
+    onSent: (Long) -> Unit = {},
+    showHeart: Boolean = false,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val likedIds by ImageLikes.ids
     var notice by remember { mutableStateOf<String?>(null) }
-    // ورودی (سلفی) هر عکس با بهترین تلاش خوانده می‌شود: جزئیات generation
-    // فقط برای صاحبش input_url دارد؛ برای بقیه (مثلاً لایک‌شده‌ی دیگران)
-    // ۴۰۴ می‌شود و لغزنده همان صفحه پنهان می‌ماند.
-    var inputUrls by remember { mutableStateOf<Map<Long, String?>>(emptyMap()) }
+    var showSendConfirm by remember { mutableStateOf(false) }
 
     BackHandler { onClose() }
 
@@ -105,17 +105,6 @@ fun GalleryViewer(
         initialPage = startIndex.coerceIn(0, (photos.size - 1).coerceAtLeast(0)),
     ) { photos.size }
     val current = photos.getOrNull(pagerState.currentPage)
-
-    LaunchedEffect(current?.id) {
-        val id = current?.id ?: return@LaunchedEffect
-        if (id !in inputUrls) {
-            inputUrls = inputUrls + (id to try {
-                Api.service.generation(id).input_url
-            } catch (_: Exception) {
-                null
-            })
-        }
-    }
 
     fun sharePhoto(photo: GalleryPhoto) {
         scope.launch {
@@ -168,44 +157,22 @@ fun GalleryViewer(
                 IconButton(onClick = onClose) {
                     Icon(Icons.Rounded.ArrowForward, contentDescription = null, tint = Color.White)
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        current?.worldName ?: "",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                    )
-                    if (current?.dateFa != null) {
-                        Text(current.dateFa, color = Color.LightGray, fontSize = 12.sp)
-                    }
-                }
-                Text(
-                    "${pagerState.currentPage + 1} / ${photos.size}",
-                    color = Color.LightGray,
-                    fontSize = 13.sp,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
             }
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             ) { page ->
                 val photo = photos[page]
-                val inputUrl = inputUrls[photo.id]
                 Box(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (inputUrl != null) {
-                        BeforeAfterSlider(inputUrl = inputUrl, outputUrl = photo.outputUrl)
-                    } else {
-                        AsyncImage(
-                            model = photo.outputUrl,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)),
-                            contentScale = ContentScale.FillWidth,
-                        )
-                    }
+                    AsyncImage(
+                        model = photo.outputUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)),
+                        contentScale = ContentScale.FillWidth,
+                    )
                 }
             }
             Row(
@@ -219,13 +186,30 @@ fun GalleryViewer(
                     Icon(Icons.Rounded.Share, contentDescription = null, tint = Color.White)
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                if (current != null) {
-                    IconButton(onClick = { scope.launch { ImageLikes.toggle(current.id) } }) {
-                        Icon(
-                            if (current.id in likedIds) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                            contentDescription = null,
-                            tint = if (current.id in likedIds) Color(0xFFFF5A5A) else Color.White,
-                        )
+                if (showSendButton && current != null && current.id !in submittedIds) {
+                    IconButton(onClick = { showSendConfirm = true }) {
+                        Icon(Icons.Rounded.Send, contentDescription = null, tint = Color.White)
+                    }
+                }
+                if (showHeart) {
+                    val heartId = current?.generationId
+                    if (heartId != null) {
+                        IconButton(onClick = {
+                            scope.launch {
+                                val wasLiked = heartId in likedIds
+                                val ok = ImageLikes.toggle(heartId)
+                                if (!ok) {
+                                    notice = if (wasLiked) "لغو پسند ناموفق بود؛ دوباره تلاش کن"
+                                    else "پسندیدن ناموفق بود؛ دوباره تلاش کن"
+                                }
+                            }
+                        }) {
+                            Icon(
+                                if (heartId in likedIds) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                contentDescription = null,
+                                tint = if (heartId in likedIds) Color(0xFFFF5A5A) else Color.White,
+                            )
+                        }
                     }
                 }
             }
@@ -240,76 +224,42 @@ fun GalleryViewer(
             }
         }
     }
-}
 
-/** لغزنده‌ی قبل/بعد: سلفی زیر، خروجی رو؛ کشیدن افقی، خط جداکننده را
- *  با انگشت حرکت می‌دهد. برچسب‌ها به سمت محتوایشان چسبیده‌اند:
- *  «نتیجه» سمت خروجی (چپ پیکسلی)، «سلفی» سمت ورودی (راست پیکسلی). */
-@Composable
-private fun BeforeAfterSlider(inputUrl: String, outputUrl: String) {
-    var fraction by remember { mutableStateOf(0.5f) }
-    var widthPx by remember { mutableStateOf(0) }
-    Box(
-        modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .onSizeChanged { widthPx = it.width }
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { _, dragAmount ->
-                    if (widthPx > 0) {
-                        fraction = (fraction + dragAmount / widthPx).coerceIn(0f, 1f)
-                    }
+    // تایید ارسال به گالری عمومی (همان دیالوگ صفحه‌ی نتیجه).
+    if (showSendConfirm && current != null) {
+        AlertDialog(
+            onDismissRequest = { showSendConfirm = false },
+            containerColor = Color(0xFF222222),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
+            title = { Text("ارسال به نگارخانه عمومی؟", fontWeight = FontWeight.Bold) },
+            text = { Text("با زدن «ارسال»، این عکس به نگارخانه عمومی چهره‌ساز می‌رود و همه‌ی کاربران می‌توانند آن را ببینند.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSendConfirm = false
+                        current?.let { photo ->
+                            scope.launch {
+                                try {
+                                    Api.service.gallerySubmit(GallerySubmitRequest(photo.id))
+                                    onSent(photo.id)
+                                    notice = "برای نمایش عمومی، در صف تایید نگارخانه چهره‌ساز قرار گرفت"
+                                } catch (_: Exception) {
+                                    notice = "ارسال به نگارخانه ناموفق بود؛ دوباره تلاش کن"
+                                }
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(50),
+                ) {
+                    Text("ارسال", fontWeight = FontWeight.Bold)
                 }
             },
-    ) {
-        AsyncImage(
-            model = inputUrl,
-            contentDescription = null,
-            modifier = Modifier.fillMaxWidth(),
-            contentScale = ContentScale.FillWidth,
-        )
-        AsyncImage(
-            model = outputUrl,
-            contentDescription = null,
-            modifier = Modifier.fillMaxWidth().drawWithContent {
-                clipRect(right = size.width * fraction) {
-                    this@drawWithContent.drawContent()
+            dismissButton = {
+                TextButton(onClick = { showSendConfirm = false }) {
+                    Text("انصراف", color = Color.White)
                 }
             },
-            contentScale = ContentScale.FillWidth,
         )
-        // خط جداکننده + دستگیره‌ی گرد که دقیقاً رویش سوار است.
-        val density = LocalDensity.current
-        val handleHalfPx = with(density) { 18.dp.toPx() }
-        Box(
-            modifier = Modifier.fillMaxHeight().width(36.dp)
-                .offset { IntOffset((widthPx * fraction - handleHalfPx).toInt(), 0) },
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                modifier = Modifier.fillMaxHeight().width(2.dp)
-                    .background(Color.White),
-            )
-            Box(
-                modifier = Modifier.size(36.dp)
-                    .background(Color.White, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("↔", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-        Box(
-            modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
-                .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
-                .padding(horizontal = 8.dp, vertical = 3.dp),
-        ) {
-            Text("نتیجه", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        }
-        Box(
-            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
-                .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
-                .padding(horizontal = 8.dp, vertical = 3.dp),
-        ) {
-            Text("سلفی", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        }
     }
 }

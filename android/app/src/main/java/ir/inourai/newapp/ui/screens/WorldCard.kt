@@ -36,9 +36,10 @@ import ir.inourai.newapp.data.World
 import kotlinx.coroutines.launch
 
 /** کارت دنیا، هم‌شکل طرح مرجع: نام روی پایین عکس + نشان سکه روی عکس
- *  + قلب علاقه‌مندی (فقط وقتی لاگین است). */
+ *  + قلب علاقه‌مندی (فقط وقتی لاگین است). نسبت پیش‌فرض ۳:۴ است؛
+ *  «تازه‌های هفته» در خانه با نسبت کوتاه‌تر (یک‌پنجم کوتاه‌تر) می‌آید. */
 @Composable
-fun WorldCard(world: World, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun WorldCard(world: World, onClick: () -> Unit, modifier: Modifier = Modifier, aspectRatio: Float = 3f / 4f) {
     val favIds by Favorites.ids
     val scope = rememberCoroutineScope()
     Card(
@@ -50,7 +51,7 @@ fun WorldCard(world: World, onClick: () -> Unit, modifier: Modifier = Modifier) 
             AsyncImage(
                 model = world.sample_image_url,
                 contentDescription = world.name,
-                modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f),
+                modifier = Modifier.fillMaxWidth().aspectRatio(aspectRatio),
                 contentScale = ContentScale.Crop,
             )
             // سایه‌ی ملایم پایین عکس برای خوانایی نام.

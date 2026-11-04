@@ -194,8 +194,8 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
         trendMembers(t).takeIf { it.isNotEmpty() }?.let { t to it }
     }
     val favWorlds = worlds.filter { it.id in favIds }
-    // «تازه‌های هفته»: دنیاهای ۷ روز اخیر (جدیدترین اول)، حداکثر ۹ تا؛
-    // اگر در این هفته دنیایی نیامده باشد، ۶ دنیای آخری که وارد شده‌اند.
+    // «تازه‌های هفته»: دنیاهای ۷ روز اخیر (جدیدترین اول)، حداکثر ۲۷ تا؛
+    // اگر در این هفته دنیایی نیامده باشد، ۱۸ دنیای آخری که وارد شده‌اند.
     fun createdMillis(w: World): Long {
         return try {
             val s = (w.created_at ?: return 0L).replace("Z", "")
@@ -206,17 +206,17 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
     }
     val weekAgo = System.currentTimeMillis() - 7L * 24 * 3600 * 1000
     // «تازه‌های هفته» با دخالت ادمین (نسخه‌ی ۱۰): سنجاق‌ها همیشه اول
-    // (به ترتیب /worlds)، بعد خودکار ۷ روز اخیر، حداکثر ۹ تا؛ پنهان‌ها
+    // (به ترتیب /worlds)، بعد خودکار ۷ روز اخیر، حداکثر ۲۷ تا؛ پنهان‌ها
     // هرگز نمی‌آیند. اگر هیچی نبود (نه سنجاق، نه تازه‌ی خودکار)،
-    // ۶ دنیای آخر بدون پنهان‌ها. بدون دخالت ادمین، دقیقاً مثل قبل است.
+    // ۱۸ دنیای آخر بدون پنهان‌ها. بدون دخالت ادمین، دقیقاً مثل قبل است.
     val freshPinned = worlds.filter { it.is_fresh_pinned }
     val freshAuto = worlds.filter {
         !it.is_fresh_pinned && !it.is_fresh_hidden && createdMillis(it) >= weekAgo
     }.sortedByDescending { createdMillis(it) }
-    val fresh = (freshPinned + freshAuto).take(9)
+    val fresh = (freshPinned + freshAuto).take(27)
     val freshFallback = worlds.filter {
         !it.is_fresh_hidden
-    }.sortedByDescending { createdMillis(it) }.take(6)
+    }.sortedByDescending { createdMillis(it) }.take(18)
     val shown = if (selected != null) {
         worlds.filter { it.category_id == selected }
     } else {
@@ -312,8 +312,8 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
             item {
                 if (trend.display_type == "round") {
                     // حلقه‌ی ترندهای دایره‌ای (نسخه‌ی ۱۰): گرادیان آبی
-                    // (#3b82f6→#06b6d4) به‌صورت قاب ۲ پیکسلی جدا، با ۴
-                    // پیکسل فاصله از دایره؛ دایره‌ی بیرونی ۸۸، تصویر ۷۶.
+                    // تم (#1D6FE0→#0B3D91) به‌صورت قاب ۲ پیکسلی جدا، با ۱
+                    // پیکسل فاصله از دایره؛ دایره‌ی بیرونی ۸۸، تصویر ۸۲.
                     // null یعنی پیش‌فرض روشن؛ خاموش = دایره‌ی ساده‌ی قبلی.
                     val ringOn = trend.show_ring != false
                     LazyRow(
@@ -331,7 +331,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
                                             .border(
                                                 2.dp,
                                                 Brush.linearGradient(
-                                                    listOf(Color(0xFF3B82F6), Color(0xFF06B6D4)),
+                                                    listOf(Color(0xFF1D6FE0), Color(0xFF0B3D91)),
                                                 ),
                                                 CircleShape,
                                             ),
@@ -340,7 +340,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
                                         AsyncImage(
                                             model = w.sample_image_url,
                                             contentDescription = w.name,
-                                            modifier = Modifier.size(76.dp).clip(CircleShape),
+                                            modifier = Modifier.size(82.dp).clip(CircleShape),
                                             contentScale = ContentScale.Crop,
                                         )
                                     }
@@ -419,12 +419,13 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
             }
         } else {
             item {
-                // ارتفاع شبکه از روی نسبت ۳:۴ کارت حساب می‌شود تا اسکرول
+                // ارتفاع شبکه از روی نسبت کارت حساب می‌شود تا اسکرول
                 // تودرتو پیش نیاید (پیشنهادی ۳ ستون، دسته‌ها ۲ ستون).
+                // در «پیشنهادی» (تازه‌ها) کارت‌ها یک‌پنجم کوتاه‌ترند.
                 val cols = if (selected == null) 3 else 2
                 val screenW = LocalConfiguration.current.screenWidthDp.dp
                 val cardW = (screenW - 32.dp - 12.dp * (cols - 1)) / cols
-                val cardH = cardW * 4 / 3
+                val cardH = cardW * 4 / 3 * if (selected == null) 0.8f else 1f
                 val rows = (shown.size + cols - 1) / cols
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(cols),
@@ -435,7 +436,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
                     ),
                 ) {
                     items(shown) { w ->
-                        WorldCard(w, { onWorld(w.id) })
+                        WorldCard(w, { onWorld(w.id) }, aspectRatio = if (selected == null) 0.9375f else 3f / 4f)
                     }
                 }
             }

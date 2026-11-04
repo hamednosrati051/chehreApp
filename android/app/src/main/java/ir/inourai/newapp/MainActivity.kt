@@ -65,9 +65,11 @@ import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.DeviceTokenRequest
 import ir.inourai.newapp.data.Session
 import ir.inourai.newapp.ui.screens.CreateImageScreen
+import ir.inourai.newapp.ui.screens.GalleryReset
 import ir.inourai.newapp.ui.screens.GalleryScreen
 import ir.inourai.newapp.ui.screens.HomeScreen
 import ir.inourai.newapp.ui.screens.LoginScreen
+import ir.inourai.newapp.ui.screens.MyMediaReset
 import ir.inourai.newapp.ui.screens.MyMediaScreen
 import ir.inourai.newapp.ui.screens.ProfileScreen
 import ir.inourai.newapp.ui.screens.ResultScreen
@@ -242,8 +244,8 @@ fun App(initialGenId: Long = -1L) {
                             ) {
                                 NavTab(Icons.Rounded.Home, "خانه", route == Dest.HOME) { navToTab(Dest.HOME) }
                                 NavTab(Icons.Rounded.Search, "جستجو", route == Dest.SEARCH) { navToTab(Dest.SEARCH) }
-                                NavTab(Icons.Rounded.PhotoLibrary, "گالری", route == Dest.GALLERY) { navToTab(Dest.GALLERY) }
-                                NavTab(Icons.Rounded.Image, "تصاویر من", route == Dest.MY_MEDIA) { navToTab(Dest.MY_MEDIA) }
+                                NavTab(Icons.Rounded.PhotoLibrary, "نگارخانه", route == Dest.GALLERY) { GalleryReset.request(); navToTab(Dest.GALLERY) }
+                                NavTab(Icons.Rounded.Image, "تصاویر من", route == Dest.MY_MEDIA || route == Dest.WORLDS) { MyMediaReset.request(); navToTab(Dest.MY_MEDIA) }
                                 NavTab(Icons.Rounded.Person, "پروفایل", route == Dest.PROFILE) { navToTab(Dest.PROFILE) }
                             }
                         }
@@ -302,7 +304,6 @@ fun App(initialGenId: Long = -1L) {
                         onWorld = { worldId ->
                             nav.navigate("create_image/$worldId")
                         },
-                        onGoHome = { navToTab(Dest.HOME) },
                     )
                 }
                 composable(Dest.CREATE_IMAGE) { entry ->

@@ -19,44 +19,75 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Category
 import ir.inourai.newapp.data.Favorites
 import ir.inourai.newapp.data.World
+import kotlinx.coroutines.launch
 
+/** صفحه‌ی انتخاب دنیا برای ساخت عکس (فقط از «تصاویر من» با دکمه‌ی
+ *  «+ ساخت عکس جدید» باز می‌شود): پیش‌فرض «همه» است تا همه‌ی دنیا‌ها
+ *  همان اول دیده شوند، نه فقط ویژه‌ها؛ کشیدن به پایین هم همین فهرست را
+ *  تازه می‌کند و دیگر کاربر را به خانه پرت نمی‌کند. */
 @Composable
-fun WorldsScreen(onWorld: (Long) -> Unit, onGoHome: () -> Unit) {
+fun WorldsScreen(onWorld: (Long) -> Unit) {
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
     var worlds by remember { mutableStateOf<List<World>>(emptyList()) }
-    // null = تب «پیشنهادی» (برچسب، نه دسته‌ی واقعی).
-    var selectedCategory by remember { mutableStateOf<Long?>(null) }
+    // انتخاب بخش: 0 = «همه» (پیش‌فرض: همه‌ی دنیا‌ها)، ‎-1‎ = «پیشنهادی»
+    // (فقط ویژه‌ها)، جز آن = شناسه‌ی دسته.
+    var selected by remember { mutableStateOf(0L) }
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
-        try {
-            categories = Api.service.categories()
-            worlds = Api.service.worlds()
-        } catch (_: Exception) {
+    fun load() {
+        scope.launch {
+            try {
+                categories = Api.service.categories()
+                worlds = Api.service.worlds()
+            } catch (_: Exception) {
+            }
+            Favorites.refresh()
         }
-        Favorites.refresh()
     }
 
-    val shown = if (selectedCategory == null) {
-        worlds.filter { it.is_featured }
-    } else {
-        worlds.filter { it.category_id == selectedCategory }
+    LaunchedEffect(Unit) { load() }
+
+    val shown = when (selected) {
+        0L -> worlds
+        -1L -> worlds.filter { it.is_featured }
+        else -> worlds.filter { it.category_id == selected }
     }
 
-    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); onGoHome() }) {
+    PullRefreshLayout(onRefresh = { load(); RefreshBus.refresh() }) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text(
+            "انتخاب دنیا برای ساخت عکس",
+            fontWeight = FontWeight.Bold,
+            fontSize = 19.sp,
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 FilterChip(
-                    selected = selectedCategory == null,
-                    onClick = { selectedCategory = null },
+                    selected = selected == 0L,
+                    onClick = { selected = 0L },
+                    label = { Text("همه") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.secondary,
+                        selectedLabelColor = Color.White,
+                    ),
+                )
+            }
+            item {
+                FilterChip(
+                    selected = selected == -1L,
+                    onClick = { selected = -1L },
                     label = { Text("پیشنهادی") },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.secondary,
@@ -66,8 +97,8 @@ fun WorldsScreen(onWorld: (Long) -> Unit, onGoHome: () -> Unit) {
             }
             items(categories) { c ->
                 FilterChip(
-                    selected = selectedCategory == c.id,
-                    onClick = { selectedCategory = c.id },
+                    selected = selected == c.id,
+                    onClick = { selected = c.id },
                     label = { Text(c.name) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.secondary,

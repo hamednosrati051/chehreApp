@@ -14,10 +14,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.items
-import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -41,7 +42,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -66,11 +66,24 @@ fun MyMediaScreen(
     var liked by remember { mutableStateOf<List<LikedGeneration>>(emptyList()) }
     var submitted by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var notice by remember { mutableStateOf<String?>(null) }
-    // نمایشگر تمام‌صفحه‌ی گالری (نسخه‌ی ۱۰): null یعنی بسته است.
+    // نمایشگر تمام‌صفحه‌ی گالری: null یعنی بسته است. دکمه‌ی ارسال به گالری
+    // فقط برای عکس‌های ساخته‌شده‌ی خود کاربر (تب عکس) فعال است، نه تب قلب.
     var viewerPhotos by remember { mutableStateOf<List<GalleryPhoto>?>(null) }
     var viewerIndex by remember { mutableStateOf(0) }
+    var viewerCanSend by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val loggedIn = Session.token != null
+
+    // ضربه به تب «تصاویر من» وقتی همین صفحه بالاست، در ناوبری
+    // launchSingleTop هیچ کاری نمی‌کند؛ پس با این سیگنال، نمایشگر باز
+    // بسته و شبکه‌ی عکس‌ها نشان داده می‌شود تا کاربر روی همان صفحه گیر نکند.
+    val resetTick = MyMediaReset.tick
+    LaunchedEffect(resetTick) {
+        if (resetTick > 0) {
+            viewerPhotos = null
+            tab = 1
+        }
+    }
 
     fun refresh() {
         scope.launch {
@@ -198,65 +211,46 @@ fun MyMediaScreen(
                     }
                 }
             } else {
-                LazyVerticalStaggeredGrid(
-                    columns = StaggeredGridCells.Fixed(2),
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalItemSpacing = 12.dp,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 ) {
                     itemsIndexed(likedDone) { index, item ->
-                        Column(
-                            modifier = Modifier.fillMaxWidth()
+                        Box(
+                            modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                                .clip(RoundedCornerShape(20.dp))
                                 .clickable {
-                                    viewerPhotos = likedDone.map {
-                                        GalleryPhoto(it.id, it.output_url!!, it.world_name, it.created_at_fa)
-                                    }
+                                    viewerPhotos = likedDone.map { GalleryPhoto(it.id, it.output_url!!, it.id) }
                                     viewerIndex = index
+                                    viewerCanSend = false
                                 },
                         ) {
-                            Box(
-                                modifier = Modifier.fillMaxWidth()
-                                    .aspectRatio(if (index % 3 == 0) 0.75f else 1f)
-                                    .clip(RoundedCornerShape(20.dp)),
-                            ) {
-                                AsyncImage(
-                                    model = item.output_url,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop,
-                                )
-                                if (item.id in submitted) {
-                                    Box(
-                                        modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
-                                            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
-                                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                                    ) {
-                                        Text("✓ گالری", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
+                            AsyncImage(
+                                model = item.output_url,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                            if (item.id in submitted) {
+                                Box(
+                                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                                        .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                ) {
+                                    Text("✓ نگارخانه", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
-                            }
-                            if (item.world_name != null) {
-                                Text(
-                                    item.world_name,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(top = 6.dp),
-                                )
-                            }
-                            if (item.created_at_fa != null) {
-                                Text(item.created_at_fa, fontSize = 11.sp, color = Color.Gray)
                             }
                         }
                     }
                 }
             }
         } else {
-            LazyVerticalStaggeredGrid(
-                columns = StaggeredGridCells.Fixed(2),
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalItemSpacing = 12.dp,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
             ) {
                 val pending = images.filter { it.status == "queued" || it.status == "processing" }
@@ -282,48 +276,29 @@ fun MyMediaScreen(
                     }
                 }
                 itemsIndexed(done) { index, item ->
-                    Column(
-                        modifier = Modifier.fillMaxWidth()
+                    Box(
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                            .clip(RoundedCornerShape(20.dp))
                             .clickable {
-                                viewerPhotos = done.map {
-                                    GalleryPhoto(it.id, it.output_url!!, it.world_name, it.created_at_fa)
-                                }
+                                viewerPhotos = done.map { GalleryPhoto(it.id, it.output_url!!, it.id) }
                                 viewerIndex = index
+                                viewerCanSend = true
                             },
                     ) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth()
-                                .aspectRatio(if (index % 3 == 0) 0.75f else 1f)
-                                .clip(RoundedCornerShape(20.dp)),
-                        ) {
-                            AsyncImage(
-                                model = item.output_url,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                            )
-                            if (item.id in submitted) {
-                                Box(
-                                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
-                                        .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                                ) {
-                                    Text("✓ گالری", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
+                        AsyncImage(
+                            model = item.output_url,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                        if (item.id in submitted) {
+                            Box(
+                                modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                            ) {
+                                Text("✓ نگارخانه", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
-                        }
-                        if (item.world_name != null) {
-                            Text(
-                                item.world_name,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(top = 6.dp),
-                            )
-                        }
-                        if (item.created_at_fa != null) {
-                            Text(item.created_at_fa, fontSize = 11.sp, color = Color.Gray)
                         }
                     }
                 }
@@ -354,6 +329,9 @@ fun MyMediaScreen(
                 photos = photos,
                 startIndex = viewerIndex,
                 onClose = { viewerPhotos = null },
+                showSendButton = viewerCanSend,
+                submittedIds = submitted,
+                onSent = { id -> submitted = submitted + id },
             )
         }
     }

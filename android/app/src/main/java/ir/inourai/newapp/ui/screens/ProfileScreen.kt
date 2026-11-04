@@ -312,6 +312,9 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                 item { Text(it) }
             }
         }
+        // فاصله‌ی ۱۶ پیکسلی تهِ پروفایل تا جعبه‌ی پشتیبانی و لینک‌ها
+        // به لبه‌ی پایین صفحه نچسبند.
+        item { Spacer(modifier = Modifier.height(16.dp)) }
     }
     }
 

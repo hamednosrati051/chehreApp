@@ -140,14 +140,13 @@
 
   <section id="fresh">
     <h2>تازه‌های هفته</h2>
-    <p class="muted">فهرست خودکار: دنیاهای ۷ روز اخیر، جدیدترین اول، حداکثر ۹ تا (اگر هیچی نباشد، ۶ تای آخر). دخالت شما فقط استثناست: «سنجاق» یعنی همیشه در تازه‌ها، «پنهان» یعنی هرگز در تازه‌ها؛ بقیه همچنان خودکار وارد و خارج می‌شوند. تعویض = یکی را پنهان + دیگری را سنجاق کن.</p>
+    <p class="muted">فهرست خودکار: دنیاهای ۷ روز اخیر، جدیدترین اول، حداکثر ۲۷ تا (اگر هیچی نباشد، ۱۸ تای آخر). دخالت شما فقط استثناست: «سنجاق» یعنی همیشه در تازه‌ها، «پنهان» یعنی هرگز در تازه‌ها؛ بقیه همچنان خودکار وارد و خارج می‌شوند. تعویض = یکی را پنهان + دیگری را سنجاق کن.</p>
     <div id="fresh-current"></div>
-    <h3 style="margin-top:16px;">سنجاق / پنهان کردن</h3>
+    <h3 style="margin-top:16px;">افزودن با جستجو</h3>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <select id="fresh-world"><option value="">انتخاب دنیا…</option></select>
-      <button class="small" onclick="setFresh('pin')">سنجاق (همیشه در تازه‌ها)</button>
-      <button class="small" onclick="setFresh('hide')">پنهان (هرگز در تازه‌ها)</button>
+      <input id="fresh-search" placeholder="جستجوی نام دنیا…" oninput="renderFreshSearch()">
     </div>
+    <div id="fresh-search-rows"></div>
     <h3 style="margin-top:16px;">دخالت‌های فعلی</h3>
     <div id="fresh-overrides"></div>
   </section>
@@ -437,24 +436,45 @@ function trendDragOver(e){ e.preventDefault(); e.dataTransfer.dropEffect = 'move
 function trendDrop(e, tid){ e.preventDefault(); const box = $('tw-chips-' + tid); const dragged = box.querySelector(`[data-wid="${trendDragWid}"]`); const target = e.currentTarget; if(!dragged || dragged === target) return; box.insertBefore(dragged, target.nextSibling); }
 async function saveTrendOrder(tid){ const box = $('tw-chips-' + tid); const ids = [...box.querySelectorAll('[data-wid]')].map(el => +el.dataset.wid); try { await api('/admin/trends/' + tid + '/order', 'POST', {world_ids: ids}); setMsg('ترتیب ترند ذخیره شد.', true); loadTrends(); } catch(err){ setMsg(err.message); } }
 async function delTrend(id){ if(!confirm('ترند و همه‌ی عضویت‌هایش حذف شود؟')) return; try { await api('/admin/trends/' + id, 'DELETE'); loadTrends(); } catch(err){ setMsg(err.message); } }
+let freshWorlds = [];
+let freshCats = {};
 async function loadFresh(){
   const worlds = await fetch('/api/v1/worlds').then(r => r.json());
   const overrides = await api('/admin/fresh');
+  let cats = [];
+  try { cats = await api('/admin/categories'); } catch(_e) {}
   const byId = {}; worlds.forEach(w => byId[w.id] = w);
+  const catById = {}; cats.forEach(c => catById[c.id] = c.name);
   const ov = {}; overrides.forEach(o => ov[o.world_id] = o.action);
-  // همان منطق اپ نسخه‌ی ۱۰: سنجاق‌ها اول (به ترتیب /worlds)، بعد خودکار ۷ روز اخیر، حداکثر ۹؛ اگر هیچی نبود، ۶ تای آخر بدون پنهان‌ها.
+  freshWorlds = worlds; freshCats = catById;
+  // همان منطق اپ نسخه‌ی ۱۰: سنجاق‌ها اول (به ترتیب /worlds)، بعد خودکار ۷ روز اخیر، حداکثر ۲۷؛ اگر هیچی نبود، ۱۸ تای آخر بدون پنهان‌ها.
   const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
   const pinned = worlds.filter(w => ov[w.id] === 'pin');
   const auto = worlds.filter(w => ov[w.id] !== 'pin' && ov[w.id] !== 'hide' && new Date(w.created_at).getTime() >= weekAgo)
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  let fresh = pinned.concat(auto).slice(0, 9);
+  let fresh = pinned.concat(auto).slice(0, 27);
   if(!fresh.length) fresh = worlds.filter(w => ov[w.id] !== 'hide')
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 6);
-  $('fresh-current').innerHTML = '<b>تازه‌های هفته‌ی فعلی:</b> ' + (fresh.length ? fresh.map(w => esc(w.name) + (ov[w.id] === 'pin' ? ' 📌' : '')).join(' ، ') : '<span class="muted">خالی است.</span>');
-  $('fresh-world').innerHTML = '<option value="">انتخاب دنیا…</option>' + worlds.map(w => `<option value="${w.id}">${esc(w.name)}${ov[w.id] ? (ov[w.id] === 'pin' ? ' (سنجاق)' : ' (پنهان)') : ''}</option>`).join('');
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 18);
+  const rowBtns = w => {
+    const isPin = ov[w.id] === 'pin';
+    let b = '';
+    if(!isPin) b += `<button class="small" onclick="setFresh('pin', ${w.id})">سنجاق</button>`;
+    else b += `<button class="small" onclick="clearFresh(${w.id})">برداشتن سنجاق</button>`;
+    b += ` <button class="small danger" onclick="setFresh('hide', ${w.id})">پنهان</button>`;
+    return b;
+  };
+  $('fresh-current').innerHTML = '<b>تازه‌های هفته‌ی فعلی:</b>' + (fresh.length ? fresh.map(w => `<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;"><span>${esc(w.name)}${ov[w.id] === 'pin' ? ' 📌' : ''}</span> ${rowBtns(w)}</div>`).join('') : '<p class="muted">خالی است.</p>');
   $('fresh-overrides').innerHTML = overrides.length ? overrides.map(o => `<div>${esc((byId[o.world_id] || {}).name || ('دنیا ' + o.world_id))} — ${o.action === 'pin' ? 'سنجاق' : 'پنهان'} <button class="small danger" onclick="clearFresh(${o.world_id})">حذف (برگشت به خودکار)</button></div>`).join('') : '<p class="muted">دخالتی نیست؛ همه‌چیز خودکار است.</p>';
+  renderFreshSearch();
 }
-async function setFresh(action){ const sel = $('fresh-world'); if(!sel.value) return; try { await api('/admin/fresh', 'POST', {world_id: +sel.value, action}); setMsg('ذخیره شد.', true); loadFresh(); } catch(err){ setMsg(err.message); } }
+function renderFreshSearch(){
+  const box = $('fresh-search-rows'); if(!box) return;
+  const q = ($('fresh-search') ? $('fresh-search').value : '').trim();
+  if(!q){ box.innerHTML = ''; return; }
+  const matches = freshWorlds.filter(w => w.name.includes(q)).slice(0, 20);
+  box.innerHTML = matches.length ? matches.map(w => `<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;"><span>${esc(w.name)}${freshCats[w.category_id] ? ' — ' + esc(freshCats[w.category_id]) : ''}</span> <button class="small" onclick="setFresh('pin', ${w.id})">سنجاق</button> <button class="small danger" onclick="setFresh('hide', ${w.id})">پنهان</button></div>`).join('') : '<p class="muted">چیزی پیدا نشد.</p>';
+}
+async function setFresh(action, wid){ if(!wid) return; try { await api('/admin/fresh', 'POST', {world_id: +wid, action}); setMsg('ذخیره شد.', true); loadFresh(); } catch(err){ setMsg(err.message); } }
 async function clearFresh(wid){ try { await api('/admin/fresh/' + wid, 'DELETE'); setMsg('به خودکار برگشت.', true); loadFresh(); } catch(err){ setMsg(err.message); } }
 
 async function loadCats(){ cats = await api('/admin/categories');

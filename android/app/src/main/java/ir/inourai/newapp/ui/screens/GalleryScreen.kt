@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -26,8 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.GalleryItem
@@ -40,7 +38,19 @@ import ir.inourai.newapp.data.GalleryItem
 fun GalleryScreen(onGoHome: () -> Unit) {
     var items by remember { mutableStateOf<List<GalleryItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
-    var selected by remember { mutableStateOf<GalleryItem?>(null) }
+    // نمایشگر تمام‌صفحه (همان نمایشگر «تصاویر من»، بدون دکمه‌ی ارسال؛
+    // قلب فقط وقتی generationId عکس معلوم باشد):
+    // null یعنی بسته است.
+    var viewerPhotos by remember { mutableStateOf<List<GalleryPhoto>?>(null) }
+    var viewerIndex by remember { mutableStateOf(0) }
+
+    // ضربه به تب «نگارخانه» وقتی همین صفحه بالاست، در ناوبری هیچ کاری
+    // نمی‌کند؛ با این سیگنال نمایشگر باز بسته می‌شود تا کاربر روی همان
+    // صفحه گیر نکند (همان گیرکردن تب «تصاویر من» با نمایشگر باز).
+    val resetTick = GalleryReset.tick
+    LaunchedEffect(resetTick) {
+        if (resetTick > 0) viewerPhotos = null
+    }
 
     LaunchedEffect(Unit) {
         try {
@@ -53,7 +63,7 @@ fun GalleryScreen(onGoHome: () -> Unit) {
     PullRefreshLayout(onRefresh = { RefreshBus.refresh(); onGoHome() }) {
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
-            "گالری کاربران",
+            "نگارخانه کاربران",
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(16.dp),
         )
@@ -68,7 +78,7 @@ fun GalleryScreen(onGoHome: () -> Unit) {
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("هنوز عکسی در گالری منتشر نشده است.")
+                Text("هنوز عکسی در نگارخانه منتشر نشده است.")
             }
             else -> LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
@@ -76,7 +86,7 @@ fun GalleryScreen(onGoHome: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             ) {
-                items(items) { item ->
+                itemsIndexed(items) { index, item ->
                     AsyncImage(
                         model = item.image_url,
                         contentDescription = null,
@@ -85,7 +95,10 @@ fun GalleryScreen(onGoHome: () -> Unit) {
                             .fillMaxWidth()
                             .aspectRatio(1f)
                             .clip(RoundedCornerShape(16.dp))
-                            .clickable { selected = item },
+                            .clickable {
+                                viewerPhotos = items.map { GalleryPhoto(it.id, it.image_url, it.generation_id) }
+                                viewerIndex = index
+                            },
                     )
                 }
             }
@@ -93,22 +106,12 @@ fun GalleryScreen(onGoHome: () -> Unit) {
     }
     }
 
-    selected?.let { item ->
-        Dialog(
-            onDismissRequest = { selected = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                AsyncImage(
-                    model = item.image_url,
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().clickable { selected = null },
-                )
-            }
-        }
+    viewerPhotos?.let { photos ->
+        GalleryViewer(
+            photos = photos,
+            startIndex = viewerIndex,
+            onClose = { viewerPhotos = null },
+            showHeart = true,
+        )
     }
 }

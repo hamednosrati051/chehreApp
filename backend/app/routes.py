@@ -418,8 +418,21 @@ def remove_favorite(world_id):
 
 # ---------------- image likes ----------------
 # قلب روی خروجی‌های تصویر (مثل favorites ولی روی generation):
-# لیست، افزودن (idempotent)، حذف (idempotent). مالکیت generation
-# در افزودن/حذف بررسی می‌شود، وگرنه 404.
+# لیست، افزودن (idempotent)، حذف (idempotent). افزودن/حذف برای
+# generation خود کاربر یا منتشرشده در گالری عمومی مجاز است (لایک
+# نشان‌کردن است و عکس عمومی از قبل برای همه قابل دیدن است)؛
+# generation ناموجود همچنان 404 می‌گیرد.
+
+
+def _likable_generation(gen, user_id):
+    """لایک‌پذیر: خود کاربر یا منتشرشده در گالری عمومی
+    (وضعیت تاییدشده + انتشار در اپ، همان فیلتر /gallery/public)."""
+    if gen.user_id == user_id:
+        return True
+    pub = AppGallery.query.filter_by(
+        generation_id=gen.id, status="approved", published_in_app=True
+    ).first()
+    return pub is not None
 
 
 @content_bp.get("/image-likes")
@@ -477,7 +490,7 @@ def list_image_likes():
 @require_auth
 def add_image_like():
     gen = AppGeneration.query.get((request.json or {}).get("generation_id"))
-    if not gen or gen.user_id != g.user.id:
+    if not gen or not _likable_generation(gen, g.user.id):
         return jsonify({"error": "generation not found"}), 404
     like = AppImageLike.query.filter_by(
         user_id=g.user.id, generation_id=gen.id
@@ -492,7 +505,7 @@ def add_image_like():
 @require_auth
 def remove_image_like(generation_id):
     gen = AppGeneration.query.get(generation_id)
-    if not gen or gen.user_id != g.user.id:
+    if not gen or not _likable_generation(gen, g.user.id):
         return jsonify({"error": "generation not found"}), 404
     like = AppImageLike.query.filter_by(
         user_id=g.user.id, generation_id=generation_id
@@ -813,7 +826,7 @@ def public_gallery():
         .limit(50)
         .all()
     )
-    return jsonify([{"id": r.id, "image_url": r.image_url} for r in rows])
+    return jsonify([{"id": r.id, "generation_id": r.generation_id, "image_url": r.image_url} for r in rows])
 
 
 # ---------------- world detail ----------------
