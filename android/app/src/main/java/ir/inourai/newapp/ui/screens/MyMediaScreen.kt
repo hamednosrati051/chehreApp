@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -66,21 +65,14 @@ fun MyMediaScreen(
     var liked by remember { mutableStateOf<List<LikedGeneration>>(emptyList()) }
     var submitted by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var notice by remember { mutableStateOf<String?>(null) }
-    // نمایشگر تمام‌صفحه‌ی گالری: null یعنی بسته است. دکمه‌ی ارسال به گالری
-    // فقط برای عکس‌های ساخته‌شده‌ی خود کاربر (تب عکس) فعال است، نه تب قلب.
-    var viewerPhotos by remember { mutableStateOf<List<GalleryPhoto>?>(null) }
-    var viewerIndex by remember { mutableStateOf(0) }
-    var viewerCanSend by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val loggedIn = Session.token != null
 
-    // ضربه به تب «تصاویر من» وقتی همین صفحه بالاست، در ناوبری
-    // launchSingleTop هیچ کاری نمی‌کند؛ پس با این سیگنال، نمایشگر باز
-    // بسته و شبکه‌ی عکس‌ها نشان داده می‌شود تا کاربر روی همان صفحه گیر نکند.
+    // ضربه به تب «تصاویر من» وقتی همین صفحه بالاست، شبکه‌ی عکس‌ها
+    // نشان داده می‌شود تا کاربر روی همان صفحه گیر نکند.
     val resetTick = MyMediaReset.tick
     LaunchedEffect(resetTick) {
         if (resetTick > 0) {
-            viewerPhotos = null
             tab = 1
         }
     }
@@ -217,15 +209,11 @@ fun MyMediaScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 ) {
-                    itemsIndexed(likedDone) { index, item ->
+                    items(likedDone) { item ->
                         Box(
                             modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                                 .clip(RoundedCornerShape(20.dp))
-                                .clickable {
-                                    viewerPhotos = likedDone.map { GalleryPhoto(it.id, it.output_url!!, it.id) }
-                                    viewerIndex = index
-                                    viewerCanSend = false
-                                },
+                                .clickable { onImage(item.id) },
                         ) {
                             AsyncImage(
                                 model = item.output_url,
@@ -275,15 +263,11 @@ fun MyMediaScreen(
                         }
                     }
                 }
-                itemsIndexed(done) { index, item ->
+                items(done) { item ->
                     Box(
                         modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                             .clip(RoundedCornerShape(20.dp))
-                            .clickable {
-                                viewerPhotos = done.map { GalleryPhoto(it.id, it.output_url!!, it.id) }
-                                viewerIndex = index
-                                viewerCanSend = true
-                            },
+                            .clickable { onImage(item.id) },
                     ) {
                         AsyncImage(
                             model = item.output_url,
@@ -321,19 +305,6 @@ fun MyMediaScreen(
             ) {
                 Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
             }
-        }
-
-        // نمایشگر تمام‌صفحه‌ی گالری (روی شبکه می‌نشیند؛ برگشت آن را می‌بندد).
-        viewerPhotos?.let { photos ->
-            GalleryViewer(
-                photos = photos,
-                startIndex = viewerIndex,
-                onClose = { viewerPhotos = null },
-                showSendButton = viewerCanSend,
-                submittedIds = submitted,
-                onSent = { id -> submitted = submitted + id },
-                showHeart = true,
-            )
         }
     }
     }

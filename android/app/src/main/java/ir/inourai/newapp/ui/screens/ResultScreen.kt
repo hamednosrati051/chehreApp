@@ -22,9 +22,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -36,7 +40,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -249,44 +252,30 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
             }
         }
         if (outputUrl != null) {
+            // ردیف آیکون‌های اقدام: خالص و بدون نوشته، با فاصله‌ی یکسان؛
+            // همین ردیف هم در صفحه‌ی بعد از ساخت و هم در «تصاویر من» دیده می‌شود
+            // (هر دو همان ResultScreen است). جایگزین دکمه‌های متنی قبلی.
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
             ) {
-                Button(
-                    onClick = { share() },
-                    colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
-                    shape = RoundedCornerShape(50),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("اشتراک‌گذاری", fontWeight = FontWeight.Bold)
+                IconButton(onClick = { download() }, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Rounded.Download, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
                 }
-                OutlinedButton(
-                    onClick = { download() },
-                    shape = RoundedCornerShape(50),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("دانلود", color = Color.White)
+                IconButton(onClick = { share() }, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Rounded.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
                 }
-            }
-            if (!submitted) {
-                Button(
-                    onClick = { showGalleryConfirm = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
-                    shape = RoundedCornerShape(50),
-                    modifier = Modifier.fillMaxWidth(0.5f).padding(bottom = 8.dp),
-                ) {
-                    Text("ارسال به نگارخانه عمومی چهره‌ساز", fontWeight = FontWeight.Bold)
-                }
-            } else {
-                Button(
-                    onClick = {},
-                    enabled = false,
-                    colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
-                    shape = RoundedCornerShape(50),
-                    modifier = Modifier.fillMaxWidth(0.5f).padding(bottom = 16.dp),
-                ) {
-                    Text("ارسال شده به نگارخانه", fontWeight = FontWeight.Bold)
+                if (!submitted) {
+                    IconButton(onClick = { showGalleryConfirm = true }, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
+                } else {
+                    // حالت ارسال‌شده: تیک سبز و غیرفعال، تا آیکون هرگز
+                    // «ارسال‌نشده» به نظر نرسد.
+                    IconButton(onClick = {}, enabled = false, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(28.dp))
+                    }
                 }
             }
         }
