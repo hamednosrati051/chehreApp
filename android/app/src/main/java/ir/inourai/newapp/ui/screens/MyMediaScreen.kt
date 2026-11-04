@@ -201,7 +201,7 @@ fun MyMediaScreen(
                 LazyVerticalStaggeredGrid(
                     columns = StaggeredGridCells.Fixed(2),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalItemSpacing = 12.dp,
                     modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 ) {
                     itemsIndexed(likedDone) { index, item ->
@@ -256,7 +256,7 @@ fun MyMediaScreen(
             LazyVerticalStaggeredGrid(
                 columns = StaggeredGridCells.Fixed(2),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalItemSpacing = 12.dp,
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
             ) {
                 val pending = images.filter { it.status == "queued" || it.status == "processing" }

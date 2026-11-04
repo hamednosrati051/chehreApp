@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Intent
 import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -44,7 +45,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -75,6 +75,7 @@ data class GalleryPhoto(
  *  دانلود + اشتراک‌گذاری هر عکس + لغزنده‌ی قبل/بعد (سلفی در برابر خروجی).
  *  منطق دانلود/اشتراک‌گذاری عمداً همین‌جا تکرار شده تا صفحه‌ی نتیجه
  *  دست نخورد؛ تغییر یکی، دیگری را نمی‌شکند. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GalleryViewer(
     photos: List<GalleryPhoto>,
