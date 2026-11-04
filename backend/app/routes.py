@@ -1166,13 +1166,14 @@ def admin_update_model(model_id):
 def list_trends_public():
     """ترندها برای خانه‌ی اپ؛ بدون احراز هویت (کاربر لاگین‌نکرده هم
     خانه را می‌بیند). مرتب بر اساس sort_order؛ world_ids به ترتیب
-    پایدار عضویت (id ردیف عضویت)."""
+    sort_order عضویت (پس از مرتب‌سازی ادمین)، در صورت تساوی id ردیف.
+    شکل پاسخ مثل قبل است؛ فقط ترتیب idها عوض می‌شود."""
     trends = AppTrend.query.order_by(AppTrend.sort_order, AppTrend.id).all()
     out = []
     for t in trends:
         rows = (
             AppTrendWorld.query.filter_by(trend_id=t.id)
-            .order_by(AppTrendWorld.id)
+            .order_by(AppTrendWorld.sort_order, AppTrendWorld.id)
             .all()
         )
         out.append(
@@ -1203,7 +1204,11 @@ SEEDED_TREND_FLAGS = {
 
 
 def _trend_admin(t):
-    rows = AppTrendWorld.query.filter_by(trend_id=t.id).all()
+    rows = (
+        AppTrendWorld.query.filter_by(trend_id=t.id)
+        .order_by(AppTrendWorld.sort_order, AppTrendWorld.id)
+        .all()
+    )
     worlds = (
         {w.id: w for w in AppWorld.query.filter(
             AppWorld.id.in_([r.world_id for r in rows])
@@ -1233,6 +1238,17 @@ def _valid_display_type(value):
     return value in ("card", "round")
 
 
+def _next_trend_sort_order(trend_id):
+    """ترتیب عضویت تازه در یک ترند: یکی بعد از بزرگ‌ترین sort_order
+    فعلی (عضویت‌های قدیمی ترتیبشان را نگه می‌دارند)."""
+    max_order = (
+        db.session.query(db.func.max(AppTrendWorld.sort_order))
+        .filter(AppTrendWorld.trend_id == trend_id)
+        .scalar()
+    )
+    return 0 if max_order is None else max_order + 1
+
+
 def _sync_world_trend_memberships(world):
     """عضویت‌های ۴ ترند seeded را با پرچم‌های فعلی دنیا همگام می‌کند.
 
@@ -1249,7 +1265,11 @@ def _sync_world_trend_memberships(world):
         if getattr(world, flag):
             if member is None:
                 db.session.add(
-                    AppTrendWorld(trend_id=trend.id, world_id=world.id)
+                    AppTrendWorld(
+                        trend_id=trend.id,
+                        world_id=world.id,
+                        sort_order=_next_trend_sort_order(trend.id),
+                    )
                 )
         elif member is not None:
             db.session.delete(member)
@@ -1334,8 +1354,41 @@ def admin_trend_attach_world(trend_id):
     if AppTrendWorld.query.filter_by(
         trend_id=t.id, world_id=world.id
     ).first() is None:
-        db.session.add(AppTrendWorld(trend_id=t.id, world_id=world.id))
+        db.session.add(
+            AppTrendWorld(
+                trend_id=t.id,
+                world_id=world.id,
+                sort_order=_next_trend_sort_order(t.id),
+            )
+        )
     _set_world_trend_flag(world, t.key, True)
+    db.session.commit()
+    return jsonify(_trend_admin(t))
+
+
+@admin_bp.post("/admin/trends/<int:trend_id>/order")
+@require_admin
+def admin_reorder_trend(trend_id):
+    """ذخیره‌ی ترتیب دنیاها داخل یک ترند (ادمین با کشیدن چیپ‌ها).
+    world_ids باید دقیقاً همه‌ی اعضا را یک بار فهرست کند."""
+    t = AppTrend.query.get(trend_id)
+    if not t:
+        return jsonify({"error": "trend not found"}), 404
+    body = request.json or {}
+    world_ids = body.get("world_ids")
+    if not isinstance(world_ids, list) or not all(
+        isinstance(x, int) for x in world_ids
+    ):
+        return jsonify({"error": "world_ids must be a list of ints"}), 400
+    members = AppTrendWorld.query.filter_by(trend_id=t.id).all()
+    member_ids = {m.world_id for m in members}
+    if set(world_ids) != member_ids or len(world_ids) != len(member_ids):
+        return jsonify(
+            {"error": "world_ids must list all members exactly once"}
+        ), 400
+    by_world = {m.world_id: m for m in members}
+    for index, wid in enumerate(world_ids):
+        by_world[wid].sort_order = index
     db.session.commit()
     return jsonify(_trend_admin(t))
 

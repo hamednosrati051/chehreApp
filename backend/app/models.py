@@ -296,6 +296,9 @@ class AppTrendWorld(db.Model):
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     trend_id = db.Column(db.BigInteger, nullable=False, index=True)
     world_id = db.Column(db.BigInteger, nullable=False)
+    # ترتیب نمایش دنیا «داخل» ترند (نسخه‌ی ۱۰؛ ادمین با کشیدن چیپ‌ها
+    # عوضش می‌کند). بک‌فیل = id ردیف، پس ترتیب امروز حفظ می‌شود.
+    sort_order = db.Column(db.Integer, default=0, nullable=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
     __table_args__ = (

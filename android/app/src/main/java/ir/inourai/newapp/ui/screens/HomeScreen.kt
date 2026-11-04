@@ -172,9 +172,13 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
     // عضویت هر ترند: ترتیب دنیاها همان ترتیب worlds است (filter ترتیب
     // را حفظ می‌کند). ترند خالی: اینستاگرام → همه‌ی دنیاها؛ ایرانی →
     // تاریخی → featured؛ ورزشی/فصلی/سفارشی (کلید null) → پنهان.
+    // اعضای ترند: دقیقاً به ترتیب world_ids خود ترند (نسخه‌ی ۱۰) —
+    // قبلاً worlds.filter بود و ترتیب فهرست دنیاها را نگه می‌داشت،
+    // برای همین مرتب‌سازی سروری در اپ دیده نمی‌شد.
+    val worldsById = worlds.associateBy { it.id }
     fun trendMembers(t: Trend): List<World> {
-        val ids = (t.world_ids ?: emptyList()).toSet()
-        val members = worlds.filter { it.id in ids }
+        val ids = t.world_ids ?: emptyList()
+        val members = ids.mapNotNull { worldsById[it] }
         if (members.isNotEmpty()) return members
         val key = (t.key ?: "").lowercase()
         return when {
