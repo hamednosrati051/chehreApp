@@ -7,7 +7,14 @@ import android.content.Intent
 import android.content.ContentValues
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,8 +61,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,12 +95,38 @@ internal suspend fun downloadResultBytes(url: String): ByteArray {
     }
 }
 
+/** فهرست سوایپ صفحه‌ی نتیجه وقتی از «تصاویر من» باز شده است: شناسه‌های
+ *  همان فهرستی که عکس از آن لمس شده (تب عکس: در انتظار + آماده؛ تب قلب:
+ *  لایک‌شده‌ها). «تصاویر من» قبل از رفتن به نتیجه آن را پر می‌کند؛ صفحه‌ی
+ *  بعد از ساخت (fresh) سوایپ ندارد و این فهرست را نادیده می‌گیرد. */
+object ResultSwipeContext {
+    var ids: List<Long> = emptyList()
+        private set
+
+    fun set(newIds: List<Long>) {
+        ids = newIds
+    }
+}
+
 /** نمایش تمام‌صفحه‌ی نتیجه (مثل رقیب): نام دنیا + قلب + اشتراک‌گذاری
- *  و دانلود؛ وقتی تازه ساخته شده، شیت امتیاز بازار هم نشان داده می‌شود. */
+ *  و دانلود؛ وقتی تازه ساخته شده، شیت امتیاز بازار هم نشان داده می‌شود.
+ *  وقتی از «تصاویر من» باز شده باشد، با سوایپ افقی بین عکس‌های همان
+ *  فهرست حرکت می‌کند؛ صفحه‌ی بعد از ساخت تک‌عکس می‌ماند. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
+fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBack: () -> Unit) {
     val context = LocalContext.current
+    // سوایپ فقط وقتی معنا دارد که صفحه از «تصاویر من» آمده باشد، فهرست
+    // دست‌کم ۲ عکس داشته باشد و عکس فعلی عضو همان فهرست باشد؛ در غیر
+    // این صورت (از جمله صفحه‌ی تازه‌ساخته‌شده) صفحه تک‌عکس است.
+    val swipeEnabled = !fresh && swipeIds != null && swipeIds.size > 1 && swipeIds.contains(genId)
+    var currentId by remember(genId) { mutableStateOf(genId) }
+    var slideDir by remember { mutableStateOf(1) }
+    // عکس‌های آماده‌شده بر حسب شناسه، تا در انیمیشن سوایپ، صفحه‌ی قبلی
+    // هنوز عکس خودش را نشان بدهد و صفحه‌ی تازه تا آماده‌شدن، چرخک بزند.
+    var photoCache by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
+    val density = LocalDensity.current
+    val swipeThresholdPx = remember(density) { with(density) { 80.dp.toPx() } }
     var status by remember { mutableStateOf("loading") }
     var outputUrl by remember { mutableStateOf<String?>(null) }
     var worldName by remember { mutableStateOf<String?>(null) }
@@ -105,24 +140,32 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // اگر نوتیفیکیشن «آماده شد» برای همین ساخت آمده بود، با بازشدن
-    // نتیجه دیگر لازم نیست.
-    LaunchedEffect(genId) {
+    // نتیجه دیگر لازم نیست. با عوض‌شدن عکس (سوایپ)، حالت به «در حال
+    // بارگذاری» برمی‌گردد تا عکس قبلی جای عکس تازه ننشیند.
+    LaunchedEffect(currentId) {
+        status = "loading"
+        outputUrl = null
+        worldName = null
+        error = null
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.cancel(genId.toInt())
+        nm.cancel(currentId.toInt())
         ImageLikes.refresh()
         try {
-            submitted = Api.service.myGallery().any { it.generation_id == genId }
+            submitted = Api.service.myGallery().any { it.generation_id == currentId }
         } catch (_: Exception) {
         }
         var failures = 0
         var pollErrorShown = false
         while (true) {
             try {
-                val st = Api.service.generation(genId)
+                val st = Api.service.generation(currentId)
                 failures = 0
                 status = st.status
                 outputUrl = st.output_url
                 worldName = st.world_name
+                if (st.status == "done" && st.output_url != null) {
+                    photoCache = photoCache + (currentId to st.output_url)
+                }
                 if (st.status == "failed") error = friendlyGenerationError(st.error)
                 if (st.status == "done" || st.status == "failed") break
             } catch (_: Exception) {
@@ -154,7 +197,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
             try {
                 val bytes = downloadResultBytes(url)
                 val dir = File(context.cacheDir, "shared").apply { mkdirs() }
-                val file = File(dir, "result_$genId.jpg").apply { writeBytes(bytes) }
+                val file = File(dir, "result_$currentId.jpg").apply { writeBytes(bytes) }
                 val uri = FileProvider.getUriForFile(
                     context, "${context.packageName}.fileprovider", file
                 )
@@ -176,7 +219,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
             try {
                 val bytes = downloadResultBytes(url)
                 val values = ContentValues().apply {
-                    put(MediaStore.Images.Media.DISPLAY_NAME, "chehresaz_$genId.jpg")
+                    put(MediaStore.Images.Media.DISPLAY_NAME, "chehresaz_$currentId.jpg")
                     put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
                     put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/ChehreSaz")
                 }
@@ -218,8 +261,8 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
             if (Session.token != null) {
                 IconButton(onClick = {
                     scope.launch {
-                        val wasLiked = genId in likedIds
-                        val ok = ImageLikes.toggle(genId)
+                        val wasLiked = currentId in likedIds
+                        val ok = ImageLikes.toggle(currentId)
                         if (!ok) {
                             notice = if (wasLiked) "لغو پسند ناموفق بود؛ دوباره تلاش کن"
                             else "پسندیدن ناموفق بود؛ دوباره تلاش کن"
@@ -227,27 +270,81 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                     }
                 }) {
                     Icon(
-                        if (genId in likedIds) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                        if (currentId in likedIds) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                         contentDescription = null,
-                        tint = if (genId in likedIds) Color(0xFFFF5A5A) else Color.White,
+                        tint = if (currentId in likedIds) Color(0xFFFF5A5A) else Color.White,
                     )
                 }
             }
         }
-        Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            when {
-                outputUrl != null -> AsyncImage(
-                    model = outputUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit,
-                )
-                error != null -> Text(error ?: "", color = Color.White)
-                else -> Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(24.dp),
-                ) {
-                    CircularProgressIndicator(color = Color.White)
+        // ناحیه‌ی عکس: وقتی سوایپ فعال است، کشیدن افقی به چپ/راست به
+        // عکس بعدی/قبلی همان فهرست می‌رود (در دو سر فهرست، سوایپ کاری
+        // نمی‌کند)؛ هر عکس با داده‌ی خودش (نام دنیا، قلب، وضعیت ارسال)
+        // نشان داده می‌شود.
+        Box(
+            modifier = Modifier.weight(1f).fillMaxWidth()
+                .then(
+                    if (swipeEnabled) {
+                        Modifier.pointerInput(swipeIds, currentId) {
+                            var total = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { total = 0f },
+                                onDragEnd = {
+                                    val ids = swipeIds
+                                    if (ids != null) {
+                                        val idx = ids.indexOf(currentId)
+                                        if (idx >= 0) {
+                                            if (total < -swipeThresholdPx && idx < ids.lastIndex) {
+                                                slideDir = 1
+                                                currentId = ids[idx + 1]
+                                            } else if (total > swipeThresholdPx && idx > 0) {
+                                                slideDir = -1
+                                                currentId = ids[idx - 1]
+                                            }
+                                        }
+                                    }
+                                },
+                                onHorizontalDrag = { _, dragAmount -> total += dragAmount },
+                            )
+                        }
+                    } else Modifier
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            AnimatedContent(
+                targetState = currentId,
+                transitionSpec = {
+                    (slideInHorizontally { w -> slideDir * w } + fadeIn()) togetherWith
+                        (slideOutHorizontally { w -> -slideDir * w } + fadeOut())
+                },
+                label = "result-photo",
+                modifier = Modifier.fillMaxSize(),
+            ) { id ->
+                val cached = photoCache[id]
+                when {
+                    cached != null -> AsyncImage(
+                        model = cached,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit,
+                    )
+                    id == currentId && error != null -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(error ?: "", color = Color.White)
+                    }
+                    else -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp),
+                        ) {
+                            CircularProgressIndicator(color = Color.White)
+                        }
+                    }
                 }
             }
         }
@@ -311,7 +408,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                         showGalleryConfirm = false
                         scope.launch {
                             try {
-                                Api.service.gallerySubmit(GallerySubmitRequest(genId))
+                                Api.service.gallerySubmit(GallerySubmitRequest(currentId))
                                 submitted = true
                                 notice = "برای نمایش عمومی، در صف تایید نگارخانه چهره‌ساز قرار گرفت"
                             } catch (_: Exception) {

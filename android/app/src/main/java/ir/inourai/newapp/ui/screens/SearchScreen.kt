@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,6 +35,7 @@ import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Category
 import ir.inourai.newapp.data.Favorites
 import ir.inourai.newapp.data.World
+import kotlinx.coroutines.launch
 
 /** جستجو: فیلد متن + چیپ دسته‌ها + شبکه‌ی دنیا‌ها (مثل طرح مرجع). */
 @Composable
@@ -45,17 +47,26 @@ fun SearchScreen(onWorld: (Long) -> Unit, onGoHome: () -> Unit) {
     // «همه»: جستجو بدون فیلتر دسته (برخلاف «پیشنهادی» که فقط featuredهاست).
     // پیش‌فرض «همه» است تا جستجو از ابتدا در همه‌ی دسته‌ها باشد.
     var showAll by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
+
+    // رفرش با کشیدن پایین، همان جستجو را تازه می‌کند (فهرست دنیا‌ها و
+    // دسته‌ها، با همان پرسمان و فیلتر فعلی) و هرگز به خانه برنمی‌گردد.
+    fun refreshSearch() {
+        scope.launch {
+            try {
+                worlds = Api.service.worlds()
+            } catch (_: Exception) {
+            }
+            try {
+                categories = Api.service.categories()
+            } catch (_: Exception) {
+            }
+            Favorites.refresh()
+        }
+    }
 
     LaunchedEffect(Unit) {
-        try {
-            worlds = Api.service.worlds()
-        } catch (_: Exception) {
-        }
-        try {
-            categories = Api.service.categories()
-        } catch (_: Exception) {
-        }
-        Favorites.refresh()
+        refreshSearch()
     }
 
     val shown = worlds.filter { w ->
@@ -63,7 +74,7 @@ fun SearchScreen(onWorld: (Long) -> Unit, onGoHome: () -> Unit) {
             (query.isBlank() || w.name.contains(query))
     }
 
-    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); onGoHome() }) {
+    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); refreshSearch() }) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         OutlinedTextField(
             value = query,

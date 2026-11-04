@@ -73,6 +73,7 @@ import ir.inourai.newapp.ui.screens.MyMediaReset
 import ir.inourai.newapp.ui.screens.MyMediaScreen
 import ir.inourai.newapp.ui.screens.ProfileScreen
 import ir.inourai.newapp.ui.screens.ResultScreen
+import ir.inourai.newapp.ui.screens.ResultSwipeContext
 import ir.inourai.newapp.ui.screens.SearchScreen
 import ir.inourai.newapp.ui.screens.SplashScreen
 import ir.inourai.newapp.ui.screens.WorldsScreen
@@ -339,9 +340,14 @@ fun App(initialGenId: Long = -1L) {
                 ) { entry ->
                     val genId = entry.arguments?.getLong("genId") ?: 0L
                     val fresh = entry.arguments?.getBoolean("fresh") ?: false
+                    // سوایپ فقط برای صفحه‌ای که از «تصاویر من» آمده باشد؛
+                    // صفحه‌ی تازه‌ساخته‌شده (fresh) و هر مسیر دیگری تک‌عکس‌اند.
+                    val swipeIds =
+                        if (!fresh && ResultSwipeContext.ids.contains(genId)) ResultSwipeContext.ids else null
                     ResultScreen(
                         genId = genId,
                         fresh = fresh,
+                        swipeIds = swipeIds,
                         onBack = {
                             if (!nav.popBackStack()) nav.navigate(Dest.HOME)
                         },

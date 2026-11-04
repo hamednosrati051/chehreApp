@@ -131,6 +131,25 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
         }
     }
 
+    // رفرش با کشیدن پایین، همان پروفایل را تازه می‌کند (موجودی، سابقه‌ی
+    // پرداخت و موبایل ماسک‌شده) و هرگز به خانه برنمی‌گردد.
+    fun refreshProfile() {
+        refreshBalance()
+        scope.launch {
+            if (Session.token != null) {
+                payments = try {
+                    Api.service.myPurchases()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                try {
+                    maskedMobile = Api.service.me().mobile_masked
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
     LaunchedEffect(loggedIn) {
         if (loggedIn) {
             refreshBalance()
@@ -156,7 +175,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); onGoHome() }) {
+    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); refreshProfile() }) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(ScreenBg).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),

@@ -115,7 +115,9 @@ fun MyMediaScreen(
         }
     }
 
-    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); onGoHome() }) {
+    // رفرش با کشیدن پایین، همان صفحه را تازه می‌کند (فهرست‌های عکس،
+    // قلب و وضعیت ارسال) و هرگز به خانه برنمی‌گردد.
+    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); refresh() }) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
         // سگمنت قلب | عکس (مثل رقیب).
@@ -213,7 +215,10 @@ fun MyMediaScreen(
                         Box(
                             modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                                 .clip(RoundedCornerShape(20.dp))
-                                .clickable { onImage(item.id) },
+                                .clickable {
+                                    ResultSwipeContext.set(likedDone.map { it.id })
+                                    onImage(item.id)
+                                },
                         ) {
                             AsyncImage(
                                 model = item.output_url,
@@ -243,6 +248,9 @@ fun MyMediaScreen(
             ) {
                 val pending = images.filter { it.status == "queued" || it.status == "processing" }
                 val done = images.filter { it.status == "done" && it.output_url != null }
+                // فهرست سوایپ صفحه‌ی نتیجه: همان ترتیبی که شبکه نشان می‌دهد
+                // (در انتظارها اول، بعد آماده‌ها).
+                val swipeIds = pending.map { it.id } + done.map { it.id }
                 if (images.isEmpty()) {
                     item {
                         Text("هنوز عکسی نساخته‌ای؛ از خانه یک دنیا را انتخاب کن.")
@@ -253,7 +261,10 @@ fun MyMediaScreen(
                         modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                             .clip(RoundedCornerShape(20.dp))
                             .background(Color(0xFF1A1F2E))
-                            .clickable { onImage(item.id) },
+                            .clickable {
+                                ResultSwipeContext.set(swipeIds)
+                                onImage(item.id)
+                            },
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -267,7 +278,10 @@ fun MyMediaScreen(
                     Box(
                         modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                             .clip(RoundedCornerShape(20.dp))
-                            .clickable { onImage(item.id) },
+                            .clickable {
+                                ResultSwipeContext.set(swipeIds)
+                                onImage(item.id)
+                            },
                     ) {
                         AsyncImage(
                             model = item.output_url,

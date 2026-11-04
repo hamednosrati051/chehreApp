@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.GalleryItem
+import kotlinx.coroutines.launch
 
 /**
  * گالری تصاویر کاربران: فقط عکس‌های تاییدشده‌ی ادمین (منتشرشده در اپ).
@@ -38,6 +40,7 @@ import ir.inourai.newapp.data.GalleryItem
 fun GalleryScreen(onGoHome: () -> Unit) {
     var items by remember { mutableStateOf<List<GalleryItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
     // نمایشگر تمام‌صفحه (همان نمایشگر «تصاویر من»، بدون دکمه‌ی ارسال؛
     // قلب فقط وقتی generationId عکس معلوم باشد):
     // null یعنی بسته است.
@@ -52,15 +55,24 @@ fun GalleryScreen(onGoHome: () -> Unit) {
         if (resetTick > 0) viewerPhotos = null
     }
 
-    LaunchedEffect(Unit) {
-        try {
-            items = Api.service.publicGallery()
-        } catch (_: Exception) {
+    // رفرش با کشیدن پایین، همان نگارخانه را تازه می‌کند (فهرست عکس‌های
+    // منتشرشده) و هرگز به خانه برنمی‌گردد؛ عکس‌های قبلی تا آمدن تازه‌ها
+    // سر جایشان می‌مانند تا صفحه چشمک نزند.
+    fun refreshGallery() {
+        scope.launch {
+            try {
+                items = Api.service.publicGallery()
+            } catch (_: Exception) {
+            }
+            loading = false
         }
-        loading = false
     }
 
-    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); onGoHome() }) {
+    LaunchedEffect(Unit) {
+        refreshGallery()
+    }
+
+    PullRefreshLayout(onRefresh = { RefreshBus.refresh(); refreshGallery() }) {
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
             "نگارخانه کاربران",
