@@ -150,6 +150,18 @@ fun App(initialGenId: Long = -1L) {
             popUpTo(nav.graph.startDestinationId) { saveState = true }
         }
     }
+    // ضربه به زبانه: اگر مقصد همین حالا در پشته هست (مثلاً «تصاویر من»
+    // زیر «دنیاها» یا «ساخت عکس»)، اول با popBackStack به همان نمونه‌ی
+    // موجود برمی‌گردیم — دقیقاً رفتار دکمه‌ی برگشت سیستم که کار می‌کند —
+    // و فقط وقتی در پشته نیست از navToTab استفاده می‌کنیم. مسیر
+    // نابود-و-بازسازی navToTab از روی «دنیاها» روی دستگاه صفحه‌ی
+    // تصاویر من را نشان نمی‌داد؛ این مسیر آن را دور می‌زند. باس‌های
+    // ریست برای حالت «همین حالا روی همان زبانه‌ایم» سر جایشان می‌مانند.
+    val goToTab: (String) -> Unit = { dest ->
+        if (!nav.popBackStack(dest, inclusive = false)) {
+            navToTab(dest)
+        }
+    }
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
     var showSplash by rememberSaveable { mutableStateOf(true) }
@@ -242,11 +254,11 @@ fun App(initialGenId: Long = -1L) {
                                     .padding(horizontal = 8.dp, vertical = 10.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                             ) {
-                                NavTab(Icons.Rounded.Home, "خانه", route == Dest.HOME) { navToTab(Dest.HOME) }
-                                NavTab(Icons.Rounded.Search, "جستجو", route == Dest.SEARCH) { navToTab(Dest.SEARCH) }
-                                NavTab(Icons.Rounded.PhotoLibrary, "نگارخانه", route == Dest.GALLERY) { GalleryReset.request(); navToTab(Dest.GALLERY) }
-                                NavTab(Icons.Rounded.Image, "تصاویر من", route == Dest.MY_MEDIA || route == Dest.WORLDS) { MyMediaReset.request(); navToTab(Dest.MY_MEDIA) }
-                                NavTab(Icons.Rounded.Person, "پروفایل", route == Dest.PROFILE) { navToTab(Dest.PROFILE) }
+                                NavTab(Icons.Rounded.Home, "خانه", route == Dest.HOME) { goToTab(Dest.HOME) }
+                                NavTab(Icons.Rounded.Search, "جستجو", route == Dest.SEARCH) { goToTab(Dest.SEARCH) }
+                                NavTab(Icons.Rounded.PhotoLibrary, "نگارخانه", route == Dest.GALLERY) { GalleryReset.request(); goToTab(Dest.GALLERY) }
+                                NavTab(Icons.Rounded.Image, "تصاویر من", route == Dest.MY_MEDIA || route == Dest.WORLDS) { MyMediaReset.request(); goToTab(Dest.MY_MEDIA) }
+                                NavTab(Icons.Rounded.Person, "پروفایل", route == Dest.PROFILE) { goToTab(Dest.PROFILE) }
                             }
                         }
                     }
