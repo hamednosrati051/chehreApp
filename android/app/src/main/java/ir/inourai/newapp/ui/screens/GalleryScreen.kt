@@ -111,7 +111,6 @@ fun GalleryScreen(onGoHome: () -> Unit) {
             photos = photos,
             startIndex = viewerIndex,
             onClose = { viewerPhotos = null },
-            showHeart = true,
         )
     }
 }

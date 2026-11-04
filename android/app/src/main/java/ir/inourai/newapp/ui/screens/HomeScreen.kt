@@ -312,8 +312,8 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
             item {
                 if (trend.display_type == "round") {
                     // حلقه‌ی ترندهای دایره‌ای (نسخه‌ی ۱۰): گرادیان آبی
-                    // تم (#1D6FE0→#0B3D91) به‌صورت قاب ۲ پیکسلی جدا، با ۱
-                    // پیکسل فاصله از دایره؛ دایره‌ی بیرونی ۸۸، تصویر ۸۲.
+                    // تم (#1D6FE0→#0B3D91) به‌صورت قاب ۲ پیکسلی جدا، با ۴
+                    // پیکسل فاصله از دایره؛ دایره‌ی بیرونی ۸۸، تصویر ۷۶.
                     // null یعنی پیش‌فرض روشن؛ خاموش = دایره‌ی ساده‌ی قبلی.
                     val ringOn = trend.show_ring != false
                     LazyRow(
@@ -340,7 +340,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
                                         AsyncImage(
                                             model = w.sample_image_url,
                                             contentDescription = w.name,
-                                            modifier = Modifier.size(82.dp).clip(CircleShape),
+                                            modifier = Modifier.size(76.dp).clip(CircleShape),
                                             contentScale = ContentScale.Crop,
                                         )
                                     }

@@ -332,6 +332,7 @@ fun MyMediaScreen(
                 showSendButton = viewerCanSend,
                 submittedIds = submitted,
                 onSent = { id -> submitted = submitted + id },
+                showHeart = true,
             )
         }
     }

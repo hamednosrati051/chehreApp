@@ -424,15 +424,6 @@ def remove_favorite(world_id):
 # generation ناموجود همچنان 404 می‌گیرد.
 
 
-def _likable_generation(gen, user_id):
-    """لایک‌پذیر: خود کاربر یا منتشرشده در گالری عمومی
-    (وضعیت تاییدشده + انتشار در اپ، همان فیلتر /gallery/public)."""
-    if gen.user_id == user_id:
-        return True
-    pub = AppGallery.query.filter_by(
-        generation_id=gen.id, status="approved", published_in_app=True
-    ).first()
-    return pub is not None
 
 
 @content_bp.get("/image-likes")
@@ -490,7 +481,8 @@ def list_image_likes():
 @require_auth
 def add_image_like():
     gen = AppGeneration.query.get((request.json or {}).get("generation_id"))
-    if not gen or not _likable_generation(gen, g.user.id):
+    # قلب فقط مال تصاویر خود کاربر است: افزودن لایک برای نسل دیگری ۴۰۴.
+    if not gen or gen.user_id != g.user.id:
         return jsonify({"error": "generation not found"}), 404
     like = AppImageLike.query.filter_by(
         user_id=g.user.id, generation_id=gen.id
@@ -505,8 +497,10 @@ def add_image_like():
 @require_auth
 def remove_image_like(generation_id):
     gen = AppGeneration.query.get(generation_id)
-    if not gen or not _likable_generation(gen, g.user.id):
+    if not gen:
         return jsonify({"error": "generation not found"}), 404
+    # حذف لایک به مالک نسل وابسته نیست تا هیچ قلبی گیر نکند؛
+    # ردیف لایکِ خودِ فراخواننده حذف می‌شود (بدون ردیف هم ok برمی‌گردد).
     like = AppImageLike.query.filter_by(
         user_id=g.user.id, generation_id=generation_id
     ).first()
