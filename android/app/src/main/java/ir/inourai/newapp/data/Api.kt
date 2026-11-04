@@ -41,6 +41,10 @@ data class World(
     val is_iranian_trend: Boolean = false,
     val is_sport_trend: Boolean = false,
     val is_seasonal_trend: Boolean = false,
+    // دخالت ادمین در «تازه‌های هفته» (نسخه‌ی ۱۰، افزایشی): نبودن
+    // فیلد در JSON یعنی خودکار؛ اپ‌های قدیمی این دو را نمی‌شناسند.
+    val is_fresh_pinned: Boolean = false,
+    val is_fresh_hidden: Boolean = false,
     val created_at: String? = null,
 )
 data class Trend(
@@ -232,9 +236,14 @@ object Api {
         .build()
         .create(ApiService::class.java)
 
-    /** آپلود فایل ورودی (سلفی) به endpoint ‎/uploads بک‌اند خود اپ. */
+    /** آپلود فایل ورودی (سلفی) به endpoint ‎/uploads بک‌اند خود اپ.
+     *  دلیل رد خوانده می‌شود تا کاربر به‌جای پیام کلی، علت را بفهمد:
+     *  فایل بزرگ‌تر از سقف → upload_too_big، ۴۰۰ دیگر → upload_conversion،
+     *  بقیه‌ی کدها → upload_failed. هیچ‌کدام متن خام به کاربر نمی‌رسد
+     *  (نگاشت در userError انجام می‌شود). */
     suspend fun uploadFile(file: java.io.File): String {
         val tokenValue = token ?: throw IllegalStateException("login required")
+        if (file.length() > UPLOAD_MAX_BYTES) throw RuntimeException("upload_too_big")
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart(
@@ -251,21 +260,31 @@ object Api {
         return withContext(Dispatchers.IO) {
             val resp = OkHttpClient().newCall(req).execute()
             if (!resp.isSuccessful) {
-                throw RuntimeException("upload failed: ${resp.code}")
+                val bodyText = try {
+                    resp.body?.string() ?: ""
+                } catch (_: Exception) {
+                    ""
+                }
+                if (resp.code == 400 && bodyText.contains("file too large")) {
+                    throw RuntimeException("upload_too_big")
+                }
+                if (resp.code == 400) throw RuntimeException("upload_conversion")
+                throw RuntimeException("upload_failed")
             }
             JSONObject(resp.body?.string() ?: "").getString("url")
         }
     }
 }
 
-/** پیام فارسی ساده برای خطای ساخت؛ بدنه‌ی خام provider هرگز به کاربر نشان داده نمی‌شود. */
+/** پیام فارسی ساده برای خطای ساخت؛ بدنه‌ی خام provider هرگز به کاربر نشان داده نمی‌شود.
+ *  خطاهای بدون نگاشت (از جمله تایم‌اوت خواندن از provider) → «ناموفق تولید عکس». */
 fun friendlyGenerationError(raw: String?): String {
-    if (raw == null) return "ساخت ناموفق بود"
+    if (raw == null) return "ناموفق تولید عکس"
     if (raw.contains("content_policy_violation") || raw.contains("safety system")) {
-        return "ساخت این تصویر به‌خاطر محدودیت ایمنی مدل رد شد. عکس یا دنیای دیگری را امتحان کن؛ سکه و هدیه‌ات کم نشده است."
+        return "رد ایمنی مدل؛ عکس یا دنیای دیگری را امتحان کن — سکه‌ات کم نشده است."
     }
     if (raw.contains("provider http")) {
         return "ساخت ناموفق بود (خطای سرویس‌دهنده)؛ دوباره تلاش کن"
     }
-    return raw
+    return "ناموفق تولید عکس"
 }

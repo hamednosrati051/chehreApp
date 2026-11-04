@@ -41,6 +41,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -75,6 +79,9 @@ import ir.inourai.newapp.data.Balance
 import ir.inourai.newapp.data.Favorites
 import ir.inourai.newapp.data.GenerationRequest
 import ir.inourai.newapp.data.Session
+import ir.inourai.newapp.data.UserError
+import ir.inourai.newapp.data.networkError
+import ir.inourai.newapp.data.userError
 import ir.inourai.newapp.data.World
 import ir.inourai.newapp.service.GenerationPollService
 import java.io.File
@@ -91,13 +98,35 @@ private fun uriToFile(context: Context, uri: Uri): File {
     return out
 }
 
-// عکس آخری: کپی بایت‌ها در filesDir تا بین دنیاها و بعد از ری‌استارت بماند.
+// عکس آخری: هر انتخاب در یک فایل یکتا با زمان ذخیره می‌شود و فایل‌های
+// قبلی پاک می‌شوند. این عمدی است: اگر همه‌ی انتخاب‌ها روی یک فایل ثابت
+// بازنویسی شوند، Uri پیش‌فرض همیشه یکی می‌ماند و Coil تصویر کش‌شده‌ی
+// انتخاب قبلی را نشان می‌دهد در حالی که آپلود بایت‌های تازه را می‌فرستد
+// (باگ «عکس نمایشی با عکس ارسالی فرق دارد»). با فایل یکتا، هر انتخاب
+// Uri تازه دارد و نمایش و آپلود همیشه یک عکس‌اند.
 // (فقط Uri ذخیره نمی‌شود چون دسترسی GetContent موقتی است و بعد از ری‌استارت از بین می‌رود.)
 private fun saveLastPhoto(context: Context, uri: Uri) {
     try {
         context.contentResolver.openInputStream(uri)?.use { input ->
-            File(context.filesDir, "last_photo.jpg").outputStream().use { output ->
+            val file = File(context.filesDir, "last_photo_${System.currentTimeMillis()}.jpg")
+            file.outputStream().use { output ->
                 input.copyTo(output)
+            }
+            context.filesDir.listFiles { f ->
+                f.name.startsWith("last_photo_") && f.name != file.name
+            }?.forEach { old ->
+                try {
+                    old.delete()
+                } catch (_: Exception) {
+                }
+            }
+            File(context.filesDir, "last_photo.jpg").let { legacy ->
+                if (legacy.exists()) {
+                    try {
+                        legacy.delete()
+                    } catch (_: Exception) {
+                    }
+                }
             }
         }
     } catch (_: Exception) {
@@ -105,29 +134,22 @@ private fun saveLastPhoto(context: Context, uri: Uri) {
 }
 
 // Uri قابل‌نمایش/آپلود برای عکس آخری ذخیره‌شده؛ اگر فایلی نباشد null.
+// تازه‌ترین فایل انتخاب می‌شود (سازگار با فایل قدیمی last_photo.jpg
+// که پیش از نسخه‌ی ۱۰ ساخته شده باشد).
 private fun lastPhotoUri(context: Context): Uri? {
     return try {
-        val file = File(context.filesDir, "last_photo.jpg")
-        if (file.exists()) {
-            FileProvider.getUriForFile(
-                context, "${context.packageName}.fileprovider", file
-            )
-        } else {
-            null
-        }
+        val newest = context.filesDir.listFiles { f ->
+            f.name.startsWith("last_photo_") && f.name.endsWith(".jpg")
+        }?.maxByOrNull { it.lastModified() }
+        val file = newest
+            ?: File(context.filesDir, "last_photo.jpg").takeIf { it.exists() }
+            ?: return null
+        FileProvider.getUriForFile(
+            context, "${context.packageName}.fileprovider", file
+        )
     } catch (_: Exception) {
         null
     }
-}
-
-private fun friendlyError(e: Exception): String {
-    if (e.message?.contains("content_policy_violation") == true || e.message?.contains("safety system") == true) {
-        return "ساخت این تصویر به‌خاطر محدودیت ایمنی مدل رد شد. عکس یا دنیای دیگری را امتحان کن؛ سکه و هدیه‌ات کم نشده است."
-    }
-    if (e.message?.contains("upload failed") == true) {
-        return "آپلود عکس ناموفق بود؛ دوباره تلاش کن"
-    }
-    return e.message ?: "خطایی پیش آمد"
 }
 
 /** صفحه‌ی ساخت دنیا (مثل رقیب): نمونه‌ی تمام‌صفحه + قلب و نام دنیا بالا،
@@ -147,8 +169,30 @@ fun CreateImageScreen(
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
     var jobId by remember { mutableStateOf<Long?>(null) }
     var status by remember { mutableStateOf("idle") }
-    var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+    // کانال خطا: اسنک‌بار پایین صفحه (متن کوتاه + «تلاش دوباره» وقتی
+    // تکرار معنا دارد). متن خام exception هرگز اینجا نمی‌آید؛ نگاشت در
+    // userError انجام می‌شود و snackbar فقط متن فارسی نهایی را نشان می‌دهد.
+    val snackbarHostState = remember { SnackbarHostState() }
+    var snack by remember { mutableStateOf<UserError?>(null) }
+    var snackRetry by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var snackSeq by remember { mutableStateOf(0) }
+    fun showSnack(ue: UserError, retry: (() -> Unit)? = null) {
+        snack = ue
+        snackRetry = retry
+        snackSeq++
+    }
+    LaunchedEffect(snackSeq) {
+        val ue = snack ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = ue.message,
+            actionLabel = if (ue.retryable) "تلاش دوباره" else null,
+            duration = SnackbarDuration.Long,
+        )
+        if (result == SnackbarResult.ActionPerformed) snackRetry?.invoke()
+        snack = null
+        snackRetry = null
+    }
     var showPicker by remember { mutableStateOf(false) }
     var showPacks by remember { mutableStateOf(false) }
     val favIds by Favorites.ids
@@ -161,7 +205,6 @@ fun CreateImageScreen(
         if (uri != null) {
             picked = uri
             saveLastPhoto(context, uri)
-            error = null
         }
         showPicker = false
     }
@@ -171,7 +214,6 @@ fun CreateImageScreen(
         if (ok) {
             picked = cameraUri
             cameraUri?.let { saveLastPhoto(context, it) }
-            error = null
         }
         showPicker = false
     }
@@ -215,13 +257,18 @@ fun CreateImageScreen(
         }
     }
 
-    // نظرسنجی وضعیت job تا آماده‌شدن.
+    // نظرسنجی وضعیت job تا آماده‌شدن. خطای موقت شبکه چرخه را نمی‌شکند:
+    // بعد از ۳ پاسخ ناموفق پشت سر هم یک اسنک‌بار شبکه نشان داده می‌شود
+    // و نظرسنجی ادامه پیدا می‌کند تا موفقیت یا شکست نهایی.
     LaunchedEffect(jobId) {
         val id = jobId ?: return@LaunchedEffect
+        var failures = 0
+        var pollErrorShown = false
         while (true) {
             delay(3000)
             try {
                 val st = Api.service.generation(id)
+                failures = 0
                 status = st.status
                 if (st.status == "done") {
                     GenerationPollService.stop(context)
@@ -232,11 +279,16 @@ fun CreateImageScreen(
                 }
                 if (st.status == "failed") {
                     GenerationPollService.stop(context)
-                    error = friendlyGenerationError(st.error)
+                    showSnack(UserError(friendlyGenerationError(st.error), false))
                     jobId = null
                     break
                 }
             } catch (_: Exception) {
+                failures++
+                if (failures >= 3 && !pollErrorShown) {
+                    pollErrorShown = true
+                    showSnack(networkError())
+                }
             }
         }
     }
@@ -285,6 +337,53 @@ fun CreateImageScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // ساخت تصویر: آپلود سلفی + ثبت generation + شروع سرویس نظرسنجی.
+    // به‌صورت تابع جدا آمده تا اسنک‌بار «تلاش دوباره» هم همان مسیر را
+    // دوباره اجرا کند (نه کپی منطق). ۴۰۲ و ۴۰۱ مثل قبل جدا هندل می‌شوند
+    // (بسته‌ها / ورود)؛ بقیه‌ی خطاها نگاشت‌شده به اسنک‌بار می‌روند.
+    fun startBuild() {
+        if (Session.token == null) {
+            onLogin()
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(
+                Manifest.permission.POST_NOTIFICATIONS
+            )
+        }
+        scope.launch {
+            try {
+                val uri = picked ?: return@launch
+                val inputUrl = Api.uploadFile(uriToFile(context, uri))
+                val created = Api.service.createGeneration(
+                    GenerationRequest(
+                        kind = "image",
+                        world_id = worldId,
+                        input_url = inputUrl,
+                    ),
+                )
+                jobId = created.id
+                status = "queued"
+                GenerationPollService.start(context, created.id)
+            } catch (e: Exception) {
+                if (e is HttpException && e.code() == 402) {
+                    // سکه ناکافی: به‌جای خطا، موجودی تازه می‌شود تا حالت
+                    // «سکه کافی نداری» بیاید.
+                    refreshBalance()
+                } else if (e is HttpException && e.code() == 401) {
+                    onLogin()
+                } else {
+                    val ue = userError(e)
+                    showSnack(ue, if (ue.retryable) { { startBuild() } } else null)
+                }
+            }
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -475,45 +574,7 @@ fun CreateImageScreen(
                             }
                             Spacer(modifier = Modifier.weight(1f))
                             Button(
-                                onClick = {
-                                    if (Session.token == null) {
-                                        onLogin()
-                                        return@Button
-                                    }
-                                    if (Build.VERSION.SDK_INT >= 33 &&
-                                        ContextCompat.checkSelfPermission(
-                                            context, Manifest.permission.POST_NOTIFICATIONS
-                                        ) != PackageManager.PERMISSION_GRANTED
-                                    ) {
-                                        notificationPermissionLauncher.launch(
-                                            Manifest.permission.POST_NOTIFICATIONS
-                                        )
-                                    }
-                                    scope.launch {
-                                        try {
-                                            val uri = picked ?: return@launch
-                                            val inputUrl = Api.uploadFile(uriToFile(context, uri))
-                                            val created = Api.service.createGeneration(
-                                                GenerationRequest(
-                                                    kind = "image",
-                                                    world_id = worldId,
-                                                    input_url = inputUrl,
-                                                ),
-                                            )
-                                            jobId = created.id
-                                            status = "queued"
-                                            GenerationPollService.start(context, created.id)
-                                        } catch (e: Exception) {
-                                            if (e is HttpException && e.code() == 402) {
-                                                // سکه ناکافی: به‌جای خطای قرمز بعد از ساخت،
-                                                // موجودی تازه می‌شود تا حالت «سکه کافی نداری» بیاید.
-                                                refreshBalance()
-                                            } else {
-                                                error = friendlyError(e)
-                                            }
-                                        }
-                                    }
-                                },
+                                onClick = { startBuild() },
                                 shape = RoundedCornerShape(50),
                             ) {
                                 Text("ساخت تصویر", fontWeight = FontWeight.Bold)
@@ -538,15 +599,16 @@ fun CreateImageScreen(
                             modifier = Modifier.padding(top = 8.dp),
                         )
                     }
-                    error?.let {
-                        Text(it, color = Color(0xFFFF8A8A), modifier = Modifier.padding(top = 8.dp))
-                    }
                     notice?.let {
                         Text(it, color = Color.White, modifier = Modifier.padding(top = 8.dp))
                     }
                 }
             }
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+        )
     }
 
     // شیت «انتخاب عکس» (مثل رقیب): گالری / دوربین / انصراف.
@@ -630,7 +692,7 @@ fun CreateImageScreen(
         PacksSheet(
             onDismiss = { showPacks = false },
             onPurchased = { refreshBalance(); notice = "سکه‌ها اضافه شد" },
-            onError = { notice = it },
+            onError = { showSnack(UserError(it, false)) },
             onLogin = onLogin,
         )
     }

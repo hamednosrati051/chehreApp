@@ -1,6 +1,7 @@
 package ir.inourai.newapp.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +14,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,7 +35,9 @@ import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.OtpRequest
 import ir.inourai.newapp.data.OtpVerify
 import ir.inourai.newapp.data.Session
+import java.io.IOException
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 /** ورود با موبایل — با همان متن‌های شیت اپ مرجع: «شماره موبایلت را وارد
  *  کن؛ با اولین ورود ۱ تصویر هدیه می‌گیری»، «کد ۶ رقمی»، «کد تأیید
@@ -41,7 +47,21 @@ fun LoginScreen(onDone: () -> Unit) {
     var mobile by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var sent by remember { mutableStateOf(false) }
+    // خطا در اسنک‌بار پایین صفحه نشان داده می‌شود (متن کوتاه فارسی،
+    // هرگز متن خام)؛ seq کاری می‌کند که دو خطای یکسان پشت سر هم هم
+    // هر دو نمایش داده شوند.
     var error by remember { mutableStateOf<String?>(null) }
+    var snackSeq by remember { mutableStateOf(0) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    fun showError(msg: String) {
+        error = msg
+        snackSeq++
+    }
+    LaunchedEffect(snackSeq) {
+        val msg = error ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Long)
+        error = null
+    }
     val scope = rememberCoroutineScope()
     // وعده‌ی هدیه فقط وقتی تنظیم روشن است؛ خطا در خواندن یعنی متن فعلی می‌ماند.
     var giftOn by remember { mutableStateOf(true) }
@@ -52,6 +72,7 @@ fun LoginScreen(onDone: () -> Unit) {
         } catch (_: Exception) { }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -89,9 +110,18 @@ fun LoginScreen(onDone: () -> Unit) {
                             try {
                                 val resp = Api.service.otpRequest(OtpRequest(mobile))
                                 if (resp.isSuccessful) sent = true
-                                else error = "ارسال کد ناموفق بود"
+                                else showError(
+                                    when (resp.code()) {
+                                        429 -> "تعداد درخواست زیاد است؛ کمی بعد دوباره تلاش کن"
+                                        400 -> "شماره موبایل معتبر نیست"
+                                        else -> "ارسال کد ناموفق بود"
+                                    }
+                                )
                             } catch (e: Exception) {
-                                error = e.message
+                                showError(
+                                    if (e is IOException) "مشکل شبکه؛ دوباره تلاش کن"
+                                    else "ارسال کد ناموفق بود"
+                                )
                             }
                         }
                     },
@@ -131,7 +161,20 @@ fun LoginScreen(onDone: () -> Unit) {
                             Session.justRegistered = res.is_new == true
                             onDone()
                         } catch (e: Exception) {
-                            error = "کد اشتباه است"
+                            // سرور برای «کد نیست»، «تلاش‌ها تمام شده»،
+                            // «منقضی» و «اشتباه» همه ۴۰۱ می‌دهد؛ پس
+                            // پیام، هر دو حالت محتمل را پوشش می‌دهد.
+                            showError(
+                                when {
+                                    e is HttpException && e.code() == 429 ->
+                                        "تعداد درخواست زیاد است؛ کمی بعد دوباره تلاش کن"
+                                    e is HttpException && e.code() == 401 ->
+                                        "کد اشتباه است یا منقضی شده است"
+                                    e is IOException ->
+                                        "مشکل شبکه؛ دوباره تلاش کن"
+                                    else -> "کد اشتباه است"
+                                }
+                            )
                         }
                     }
                 },
@@ -140,6 +183,10 @@ fun LoginScreen(onDone: () -> Unit) {
                 Text("تأیید و ورود")
             }
         }
-        error?.let { Text(it) }
+    }
+    SnackbarHost(
+        hostState = snackbarHostState,
+        modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+    )
     }
 }

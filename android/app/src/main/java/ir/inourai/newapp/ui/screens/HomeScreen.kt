@@ -199,8 +199,18 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
         }
     }
     val weekAgo = System.currentTimeMillis() - 7L * 24 * 3600 * 1000
-    val fresh = worlds.filter { createdMillis(it) >= weekAgo }.sortedByDescending { createdMillis(it) }.take(9)
-    val freshFallback = worlds.sortedByDescending { createdMillis(it) }.take(6)
+    // «تازه‌های هفته» با دخالت ادمین (نسخه‌ی ۱۰): سنجاق‌ها همیشه اول
+    // (به ترتیب /worlds)، بعد خودکار ۷ روز اخیر، حداکثر ۹ تا؛ پنهان‌ها
+    // هرگز نمی‌آیند. اگر هیچی نبود (نه سنجاق، نه تازه‌ی خودکار)،
+    // ۶ دنیای آخر بدون پنهان‌ها. بدون دخالت ادمین، دقیقاً مثل قبل است.
+    val freshPinned = worlds.filter { it.is_fresh_pinned }
+    val freshAuto = worlds.filter {
+        !it.is_fresh_pinned && !it.is_fresh_hidden && createdMillis(it) >= weekAgo
+    }.sortedByDescending { createdMillis(it) }
+    val fresh = (freshPinned + freshAuto).take(9)
+    val freshFallback = worlds.filter {
+        !it.is_fresh_hidden
+    }.sortedByDescending { createdMillis(it) }.take(6)
     val shown = if (selected != null) {
         worlds.filter { it.category_id == selected }
     } else {

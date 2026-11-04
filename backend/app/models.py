@@ -303,6 +303,22 @@ class AppTrendWorld(db.Model):
     )
 
 
+class AppFreshOverride(db.Model):
+    """دخالت ادمین در فهرست خودکار «تازه‌های هفته» (نسخه‌ی ۱۰).
+
+    یک ردیف برای هر دنیا: action = 'pin' (همیشه در تازه‌ها) یا
+    'hide' (هرگز در تازه‌ها). نبودن ردیف یعنی خودکار. جدول جدا از
+    دنیاها نگه داشته شده تا curation با داده‌ی دنیا قاطی نشود؛
+    اپ‌های قدیمی پرچم‌های تازه‌ی /worlds را نمی‌شناسند و تازه‌ها را
+    مثل قبل (۷ روز اخیر، حداکثر ۹) حساب می‌کنند.
+    """
+
+    __tablename__ = "app_fresh_overrides"
+    world_id = db.Column(db.BigInteger, primary_key=True)
+    action = db.Column(db.String(10), nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+
 class AppDeviceToken(db.Model):
     """توکن FCM دستگاه کاربر (برای پوش‌نوتیفیکیشن)."""
 

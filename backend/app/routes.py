@@ -20,6 +20,7 @@ from .models import (
     AppCoinLedger,
     AppCoinPack,
     AppFavorite,
+    AppFreshOverride,
     AppGallery,
     AppGeneration,
     AppImageLike,
@@ -262,6 +263,8 @@ def list_worlds():
         .order_by(AppWorld.is_featured.desc(), AppWorld.sort_order)
         .all()
     )
+    # پرچم‌های تازه (نسخه‌ی ۱۰، افزایشی): نبودن ردیف یعنی خودکار.
+    fresh = {o.world_id: o.action for o in AppFreshOverride.query.all()}
     return jsonify(
         [
             {
@@ -276,6 +279,8 @@ def list_worlds():
                 "is_iranian_trend": bool(w.is_iranian_trend),
                 "is_sport_trend": bool(w.is_sport_trend),
                 "is_seasonal_trend": bool(w.is_seasonal_trend),
+                "is_fresh_pinned": fresh.get(w.id) == "pin",
+                "is_fresh_hidden": fresh.get(w.id) == "hide",
                 "created_at": w.created_at.isoformat() if w.created_at else None,
             }
             for w in worlds
@@ -821,6 +826,7 @@ def world_detail(world_id):
     if not w or not w.is_active:
         return jsonify({"error": "world not found"}), 404
     # hidden_prompt هرگز به اپ فرستاده نمی‌شود.
+    override = AppFreshOverride.query.get(w.id)
     return jsonify(
         {
             "id": w.id,
@@ -834,6 +840,8 @@ def world_detail(world_id):
             "is_iranian_trend": bool(w.is_iranian_trend),
             "is_sport_trend": bool(w.is_sport_trend),
             "is_seasonal_trend": bool(w.is_seasonal_trend),
+            "is_fresh_pinned": override is not None and override.action == "pin",
+            "is_fresh_hidden": override is not None and override.action == "hide",
             "created_at": w.created_at.isoformat() if w.created_at else None,
         }
     )
@@ -1359,6 +1367,59 @@ def admin_delete_trend(trend_id):
         db.session.delete(m)
     db.session.delete(t)
     db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ---------------- admin: تازه‌های هفته ----------------
+# دخالت ادمین در فهرست خودکار تازه‌ها: pin = همیشه در تازه‌ها،
+# hide = هرگز در تازه‌ها. نبودن ردیف یعنی خودکار. اپ‌های قدیمی
+# پرچم‌های تازه‌ی /worlds را نمی‌شناسند و تازه‌ها را مثل قبل حساب
+# می‌کنند؛ اپ نسخه‌ی ۱۰ پرچم‌ها را اعمال می‌کند.
+
+
+@admin_bp.get("/admin/fresh")
+@require_admin
+def admin_list_fresh():
+    rows = AppFreshOverride.query.order_by(AppFreshOverride.world_id).all()
+    return jsonify(
+        [
+            {
+                "world_id": r.world_id,
+                "action": r.action,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ]
+    )
+
+
+@admin_bp.post("/admin/fresh")
+@require_admin
+def admin_set_fresh():
+    body = request.json or {}
+    action = body.get("action")
+    if action not in ("pin", "hide"):
+        return jsonify({"error": "action must be pin or hide"}), 400
+    world = AppWorld.query.get(body.get("world_id"))
+    if not world:
+        return jsonify({"error": "world not found"}), 404
+    row = AppFreshOverride.query.get(world.id)
+    if row is None:
+        row = AppFreshOverride(world_id=world.id, action=action)
+        db.session.add(row)
+    else:
+        row.action = action
+    db.session.commit()
+    return jsonify({"world_id": row.world_id, "action": row.action})
+
+
+@admin_bp.delete("/admin/fresh/<int:world_id>")
+@require_admin
+def admin_clear_fresh(world_id):
+    row = AppFreshOverride.query.get(world_id)
+    if row is not None:
+        db.session.delete(row)
+        db.session.commit()
     return jsonify({"ok": True})
 
 

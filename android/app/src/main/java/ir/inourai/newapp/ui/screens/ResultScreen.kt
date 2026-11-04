@@ -110,17 +110,26 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
             submitted = Api.service.myGallery().any { it.generation_id == genId }
         } catch (_: Exception) {
         }
+        var failures = 0
+        var pollErrorShown = false
         while (true) {
             try {
                 val st = Api.service.generation(genId)
+                failures = 0
                 status = st.status
                 outputUrl = st.output_url
                 worldName = st.world_name
                 if (st.status == "failed") error = friendlyGenerationError(st.error)
                 if (st.status == "done" || st.status == "failed") break
-            } catch (e: Exception) {
-                error = e.message
-                break
+            } catch (_: Exception) {
+                // خطای موقت نظرسنجی (مثلاً قطعی شبکه) چرخه را نمی‌شکند و
+                // پیام خام نشان نمی‌دهد: بعد از ۳ شکست پشت سر هم یک
+                // پیام کوتاه شبکه می‌آید و نظرسنجی ادامه پیدا می‌کند.
+                failures++
+                if (failures >= 3 && !pollErrorShown) {
+                    pollErrorShown = true
+                    notice = "مشکل شبکه؛ دوباره تلاش کن"
+                }
             }
             delay(3000)
         }
@@ -151,8 +160,8 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 context.startActivity(Intent.createChooser(send, "اشتراک‌گذاری تصویر"))
-            } catch (e: Exception) {
-                notice = e.message
+            } catch (_: Exception) {
+                notice = "اشتراک‌گذاری ناموفق بود؛ دوباره تلاش کن"
             }
         }
     }
@@ -173,8 +182,8 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                 ) ?: throw RuntimeException("media store failed")
                 resolver.openOutputStream(uri)?.use { it.write(bytes) }
                 notice = "دانلود شد"
-            } catch (e: Exception) {
-                notice = e.message
+            } catch (_: Exception) {
+                notice = "دانلود ناموفق بود؛ دوباره تلاش کن"
             }
         }
     }
@@ -306,8 +315,8 @@ fun ResultScreen(genId: Long, fresh: Boolean, onBack: () -> Unit) {
                                 Api.service.gallerySubmit(GallerySubmitRequest(genId))
                                 submitted = true
                                 notice = "برای نمایش عمومی، در صف تایید گالری چهره‌ساز قرار گرفت"
-                            } catch (e: Exception) {
-                                notice = e.message
+                            } catch (_: Exception) {
+                                notice = "ارسال به گالری ناموفق بود؛ دوباره تلاش کن"
                             }
                         }
                     },

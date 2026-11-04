@@ -39,6 +39,7 @@ import ir.inourai.newapp.billing.BazaarBilling
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Pack
 import ir.inourai.newapp.data.Session
+import ir.inourai.newapp.data.billingErrorMessage
 import kotlinx.coroutines.launch
 
 private val PacksGold = Color(0xFF8A5A00)
@@ -58,13 +59,18 @@ fun PacksSheet(
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var packs by remember { mutableStateOf<List<Pack>>(emptyList()) }
+    // خطا در دریافت فهرست بسته‌ها: به‌جای «بسته‌ای نیست» گمراه‌کننده،
+    // پیام دریافت ناموفق نشان داده می‌شود.
+    var packsLoadFailed by remember { mutableStateOf(false) }
     var buyingSku by remember { mutableStateOf<String?>(null) }
     val loggedIn = Session.token != null
 
     LaunchedEffect(Unit) {
         packs = try {
+            packsLoadFailed = false
             Api.service.packs()
         } catch (_: Exception) {
+            packsLoadFailed = true
             emptyList()
         }
     }
@@ -88,7 +94,7 @@ fun PacksSheet(
                 onPurchased()
                 onDismiss()
             } catch (e: Exception) {
-                onError(e.message ?: "خطایی پیش آمد")
+                onError(billingErrorMessage(e))
             }
         }
     }
@@ -106,7 +112,7 @@ fun PacksSheet(
                 val sender = BazaarBilling.getBuyIntentSender(context, p.bazaar_sku)
                 buyLauncher.launch(IntentSenderRequest.Builder(sender).build())
             } catch (e: Exception) {
-                onError(e.message ?: "خطایی پیش آمد")
+                onError(billingErrorMessage(e))
             } finally {
                 buyingSku = null
             }
@@ -127,7 +133,11 @@ fun PacksSheet(
                 Text("بسته‌های سکه", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(modifier = Modifier.height(12.dp))
                 if (packs.isEmpty()) {
-                    Text("بسته‌ای نیست.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (packsLoadFailed) "دریافت بسته‌ها ناموفق بود؛ دوباره تلاش کن"
+                        else "بسته‌ای نیست.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 packs.forEach { p ->
                     Row(

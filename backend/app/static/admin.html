@@ -87,6 +87,7 @@
   <div id="tabs">
     <button data-tab="worlds" class="on" onclick="showTab('worlds')">دنیاها</button>
     <button data-tab="trends" onclick="showTab('trends')">ترندها</button>
+    <button data-tab="fresh" onclick="showTab('fresh')">تازه‌های هفته</button>
     <button data-tab="cats" onclick="showTab('cats')">دسته‌ها</button>
     <button data-tab="packs" onclick="showTab('packs')">پک‌ها</button>
     <button data-tab="models" onclick="showTab('models')">مدل‌ها</button>
@@ -135,6 +136,20 @@
       <button>ساخت ترند</button>
     </form>
     <div id="t-list"></div>
+  </section>
+
+  <section id="fresh">
+    <h2>تازه‌های هفته</h2>
+    <p class="muted">فهرست خودکار: دنیاهای ۷ روز اخیر، جدیدترین اول، حداکثر ۹ تا (اگر هیچی نباشد، ۶ تای آخر). دخالت شما فقط استثناست: «سنجاق» یعنی همیشه در تازه‌ها، «پنهان» یعنی هرگز در تازه‌ها؛ بقیه همچنان خودکار وارد و خارج می‌شوند. تعویض = یکی را پنهان + دیگری را سنجاق کن.</p>
+    <div id="fresh-current"></div>
+    <h3 style="margin-top:16px;">سنجاق / پنهان کردن</h3>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <select id="fresh-world"><option value="">انتخاب دنیا…</option></select>
+      <button class="small" onclick="setFresh('pin')">سنجاق (همیشه در تازه‌ها)</button>
+      <button class="small" onclick="setFresh('hide')">پنهان (هرگز در تازه‌ها)</button>
+    </div>
+    <h3 style="margin-top:16px;">دخالت‌های فعلی</h3>
+    <div id="fresh-overrides"></div>
   </section>
 
   <section id="cats">
@@ -360,7 +375,7 @@ function applyFilter(listEl){ if (listEl === 'w-list') { wPage = 1; renderWorlds
 function showTab(tab){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === tab));
-  ({worlds: loadWorlds, trends: loadTrends, cats: loadCats, packs: loadPacks, models: loadModels,
+  ({worlds: loadWorlds, trends: loadTrends, fresh: loadFresh, cats: loadCats, packs: loadPacks, models: loadModels,
     purchases: loadPurchases, gallery: loadGallery, ghist: loadGhist, gens: loadGens, inputs: loadInputs, users: loadUsers, admins: loadAdmins,
     settings: loadSettings, notifs: loadNotifs})[tab]?.().catch(e => setMsg(e.message));
 }
@@ -416,6 +431,25 @@ async function attachTrendWorld(id){ const sel = $('tw-' + id); if(!sel.value) r
 function filterTrendWorlds(id, q){ const sel = $('tw-' + id); const needle = (q || '').trim(); for(const o of sel.options){ if(!o.value){ o.hidden = false; continue; } o.hidden = needle !== '' && !o.text.includes(needle); } if(sel.selectedOptions.length && sel.selectedOptions[0].hidden) sel.value = ''; }
 async function detachTrendWorld(tid, wid){ try { await api('/admin/trends/' + tid + '/worlds/' + wid, 'DELETE'); loadTrends(); } catch(err){ setMsg(err.message); } }
 async function delTrend(id){ if(!confirm('ترند و همه‌ی عضویت‌هایش حذف شود؟')) return; try { await api('/admin/trends/' + id, 'DELETE'); loadTrends(); } catch(err){ setMsg(err.message); } }
+async function loadFresh(){
+  const worlds = await fetch('/api/v1/worlds').then(r => r.json());
+  const overrides = await api('/admin/fresh');
+  const byId = {}; worlds.forEach(w => byId[w.id] = w);
+  const ov = {}; overrides.forEach(o => ov[o.world_id] = o.action);
+  // همان منطق اپ نسخه‌ی ۱۰: سنجاق‌ها اول (به ترتیب /worlds)، بعد خودکار ۷ روز اخیر، حداکثر ۹؛ اگر هیچی نبود، ۶ تای آخر بدون پنهان‌ها.
+  const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
+  const pinned = worlds.filter(w => ov[w.id] === 'pin');
+  const auto = worlds.filter(w => ov[w.id] !== 'pin' && ov[w.id] !== 'hide' && new Date(w.created_at).getTime() >= weekAgo)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  let fresh = pinned.concat(auto).slice(0, 9);
+  if(!fresh.length) fresh = worlds.filter(w => ov[w.id] !== 'hide')
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 6);
+  $('fresh-current').innerHTML = '<b>تازه‌های هفته‌ی فعلی:</b> ' + (fresh.length ? fresh.map(w => esc(w.name) + (ov[w.id] === 'pin' ? ' 📌' : '')).join(' ، ') : '<span class="muted">خالی است.</span>');
+  $('fresh-world').innerHTML = '<option value="">انتخاب دنیا…</option>' + worlds.map(w => `<option value="${w.id}">${esc(w.name)}${ov[w.id] ? (ov[w.id] === 'pin' ? ' (سنجاق)' : ' (پنهان)') : ''}</option>`).join('');
+  $('fresh-overrides').innerHTML = overrides.length ? overrides.map(o => `<div>${esc((byId[o.world_id] || {}).name || ('دنیا ' + o.world_id))} — ${o.action === 'pin' ? 'سنجاق' : 'پنهان'} <button class="small danger" onclick="clearFresh(${o.world_id})">حذف (برگشت به خودکار)</button></div>`).join('') : '<p class="muted">دخالتی نیست؛ همه‌چیز خودکار است.</p>';
+}
+async function setFresh(action){ const sel = $('fresh-world'); if(!sel.value) return; try { await api('/admin/fresh', 'POST', {world_id: +sel.value, action}); setMsg('ذخیره شد.', true); loadFresh(); } catch(err){ setMsg(err.message); } }
+async function clearFresh(wid){ try { await api('/admin/fresh/' + wid, 'DELETE'); setMsg('به خودکار برگشت.', true); loadFresh(); } catch(err){ setMsg(err.message); } }
 
 async function loadCats(){ cats = await api('/admin/categories');
   $('c-list').innerHTML = cats.length ? `<table><tr><th>نام</th><th>اسلاگ</th><th>ترتیب</th><th>فعال</th><th></th></tr>` +
