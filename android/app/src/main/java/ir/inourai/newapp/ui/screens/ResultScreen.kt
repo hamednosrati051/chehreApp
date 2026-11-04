@@ -73,8 +73,9 @@ import okhttp3.Request
 private val ViewerBg = Color(0xFF0F172A)
 private val RoyalBlue = Color(0xFF2E5BFF)
 
-/** دانلود بایت‌های تصویر نتیجه (برای اشتراک‌گذاری و دانلود). */
-private suspend fun downloadResultBytes(url: String): ByteArray {
+/** دانلود بایت‌های تصویر نتیجه (برای اشتراک‌گذاری و دانلود).
+ *  internal است تا نمایشگر گالری هم از همین تابع استفاده کند. */
+internal suspend fun downloadResultBytes(url: String): ByteArray {
     return withContext(Dispatchers.IO) {
         val resp = OkHttpClient().newCall(Request.Builder().url(url).build()).execute()
         if (!resp.isSuccessful) throw RuntimeException("download failed: ${resp.code}")

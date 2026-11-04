@@ -14,10 +14,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -65,6 +66,9 @@ fun MyMediaScreen(
     var liked by remember { mutableStateOf<List<LikedGeneration>>(emptyList()) }
     var submitted by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var notice by remember { mutableStateOf<String?>(null) }
+    // نمایشگر تمام‌صفحه‌ی گالری (نسخه‌ی ۱۰): null یعنی بسته است.
+    var viewerPhotos by remember { mutableStateOf<List<GalleryPhoto>?>(null) }
+    var viewerIndex by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
     val loggedIn = Session.token != null
 
@@ -194,40 +198,63 @@ fun MyMediaScreen(
                     }
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Fixed(2),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 ) {
-                    items(likedDone) { item ->
-                        Box(
-                            modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                                .clip(RoundedCornerShape(20.dp))
-                                .clickable { onImage(item.id) },
+                    itemsIndexed(likedDone) { index, item ->
+                        Column(
+                            modifier = Modifier.fillMaxWidth()
+                                .clickable {
+                                    viewerPhotos = likedDone.map {
+                                        GalleryPhoto(it.id, it.output_url!!, it.world_name, it.created_at_fa)
+                                    }
+                                    viewerIndex = index
+                                },
                         ) {
-                            AsyncImage(
-                                model = item.output_url,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                            )
-                            if (item.id in submitted) {
-                                Box(
-                                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
-                                        .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                                ) {
-                                    Text("✓ گالری", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Box(
+                                modifier = Modifier.fillMaxWidth()
+                                    .aspectRatio(if (index % 3 == 0) 0.75f else 1f)
+                                    .clip(RoundedCornerShape(20.dp)),
+                            ) {
+                                AsyncImage(
+                                    model = item.output_url,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop,
+                                )
+                                if (item.id in submitted) {
+                                    Box(
+                                        modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                                            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                                    ) {
+                                        Text("✓ گالری", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
+                            }
+                            if (item.world_name != null) {
+                                Text(
+                                    item.world_name,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = 6.dp),
+                                )
+                            }
+                            if (item.created_at_fa != null) {
+                                Text(item.created_at_fa, fontSize = 11.sp, color = Color.Gray)
                             }
                         }
                     }
                 }
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+            LazyVerticalStaggeredGrid(
+                columns = StaggeredGridCells.Fixed(2),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
@@ -254,26 +281,49 @@ fun MyMediaScreen(
                         }
                     }
                 }
-                items(done) { item ->
-                    Box(
-                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                            .clip(RoundedCornerShape(20.dp))
-                            .clickable { onImage(item.id) },
+                itemsIndexed(done) { index, item ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable {
+                                viewerPhotos = done.map {
+                                    GalleryPhoto(it.id, it.output_url!!, it.world_name, it.created_at_fa)
+                                }
+                                viewerIndex = index
+                            },
                     ) {
-                        AsyncImage(
-                            model = item.output_url,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                        )
-                        if (item.id in submitted) {
-                            Box(
-                                modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
-                                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
-                                    .padding(horizontal = 8.dp, vertical = 3.dp),
-                            ) {
-                                Text("✓ گالری", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier.fillMaxWidth()
+                                .aspectRatio(if (index % 3 == 0) 0.75f else 1f)
+                                .clip(RoundedCornerShape(20.dp)),
+                        ) {
+                            AsyncImage(
+                                model = item.output_url,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                            if (item.id in submitted) {
+                                Box(
+                                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                                        .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                ) {
+                                    Text("✓ گالری", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
+                        }
+                        if (item.world_name != null) {
+                            Text(
+                                item.world_name,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 6.dp),
+                            )
+                        }
+                        if (item.created_at_fa != null) {
+                            Text(item.created_at_fa, fontSize = 11.sp, color = Color.Gray)
                         }
                     }
                 }
@@ -296,6 +346,15 @@ fun MyMediaScreen(
             ) {
                 Text(it, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
             }
+        }
+
+        // نمایشگر تمام‌صفحه‌ی گالری (روی شبکه می‌نشیند؛ برگشت آن را می‌بندد).
+        viewerPhotos?.let { photos ->
+            GalleryViewer(
+                photos = photos,
+                startIndex = viewerIndex,
+                onClose = { viewerPhotos = null },
+            )
         }
     }
     }

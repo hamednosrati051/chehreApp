@@ -71,6 +71,9 @@ data class GenerationStatus(
     val error: String? = null,
     val world_id: Long? = null,
     val world_name: String? = null,
+    // نسخه‌ی ۱۰، افزایشی: ورودی خود کاربر (قبل/بعد) و تاریخ شمسی زیرنویس.
+    val input_url: String? = null,
+    val created_at_fa: String? = null,
 )
 data class Balance(
     val coins: Int,
@@ -123,6 +126,8 @@ data class LikedGeneration(
     val world_id: Long?,
     val created_at: String?,
     val status: String?,
+    // نسخه‌ی ۱۰، افزایشی: تاریخ شمسی زیرنویس.
+    val created_at_fa: String? = null,
 )
 data class GallerySubmitRequest(val generation_id: Long)
 data class GallerySubmitResponse(val id: Long, val status: String)

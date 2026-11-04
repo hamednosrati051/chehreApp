@@ -462,6 +462,8 @@ def list_image_likes():
                 "created_at": (
                     gen.created_at.isoformat() if gen.created_at else None
                 ),
+                # نسخه‌ی ۱۰، افزایشی: تاریخ شمسی برای زیرنویس گالری.
+                "created_at_fa": _fa_dt(gen.created_at),
                 "status": gen.status,
             }
         )
@@ -607,6 +609,10 @@ def get_generation(gen_id):
             "kind": gen.kind,
             "status": gen.status,
             "output_url": gen.output_url,
+            # نسخه‌ی ۱۰، افزایشی: ورودی فقط برای صاحب generation برمی‌گردد
+            # (مالکیت بالاتر همین تابع چک شده) تا اپ قبل/بعد را نشان دهد.
+            # اپ‌های قدیمی این فیلد را نمی‌شناسند و نادیده می‌گیرند.
+            "input_url": gen.input_url,
             "charged": bool(gen.charged),
             "error": gen.error_message,
             "world_id": gen.world_id,
@@ -642,6 +648,8 @@ def my_generations():
                 "world_name": (
                     worlds[gen.world_id].name if gen.world_id in worlds else None
                 ),
+                # نسخه‌ی ۱۰، افزایشی: تاریخ شمسی برای زیرنویس گالری.
+                "created_at_fa": _fa_dt(gen.created_at),
             }
             for gen in gens
         ]
