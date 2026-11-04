@@ -143,6 +143,7 @@
       <input id="c-name" placeholder="نام (مثلا تاریخی)" required>
       <input id="c-slug" placeholder="اسلاگ لاتین (مثلا tarikhi)" required>
       <input id="c-sort" type="number" value="0" placeholder="ترتیب">
+      <label><input id="c-act" type="checkbox" checked> فعال</label>
       <button>ذخیره دسته</button>
     </form>
     <div id="c-list"></div>
@@ -419,8 +420,8 @@ async function delTrend(id){ if(!confirm('ترند و همه‌ی عضویت‌�
 async function loadCats(){ cats = await api('/admin/categories');
   $('c-list').innerHTML = cats.length ? `<table><tr><th>نام</th><th>اسلاگ</th><th>ترتیب</th><th>فعال</th><th></th></tr>` +
     cats.map(c => `<tr><td>${esc(c.name)}</td><td>${esc(c.slug)}</td><td>${c.sort_order}</td><td>${c.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editCat(${JSON.stringify(c).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delCat(${c.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">دسته‌ای نیست.</p>'; }
-function editCat(c){ editingCat = c.id; $('c-name').value = c.name; $('c-slug').value = c.slug; $('c-sort').value = c.sort_order; }
-async function saveCat(e){ e.preventDefault(); const body = {name: $('c-name').value.trim(), slug: $('c-slug').value.trim(), sort_order: +$('c-sort').value};
+function editCat(c){ editingCat = c.id; $('c-name').value = c.name; $('c-slug').value = c.slug; $('c-sort').value = c.sort_order; $('c-act').checked = c.is_active; }
+async function saveCat(e){ e.preventDefault(); const body = {name: $('c-name').value.trim(), slug: $('c-slug').value.trim(), sort_order: +$('c-sort').value, is_active: $('c-act').checked};
   try { editingCat ? await api('/admin/categories/' + editingCat, 'PATCH', body) : await api('/admin/categories', 'POST', body); setMsg('دسته ذخیره شد.', true); editingCat = null; e.target.reset(); loadCats(); } catch(err){ setMsg(err.message); } }
 async function delCat(id){ if(!confirm('دسته حذف شود؟ (اگر دنیا داشته باشد رد می‌شود)')) return; try { await api('/admin/categories/' + id, 'DELETE'); loadCats(); } catch(err){ setMsg(err.message); } }
 
