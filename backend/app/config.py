@@ -43,6 +43,12 @@ class Config:
     # بدون تایید، سکه شارژ نمی‌شود.
     BAZAAR_RSA_PUBLIC_KEY = os.environ.get("APP_BAZAAR_RSA_PUBLIC_KEY", "")
 
+    # توکن ربات بله برای انتشار گالری در کانال @iNourAi (ربات خود چهره‌ساز).
+    # تا وقتی ست نشده، انتشار در کانال با خطای روشن رد می‌شود — هرگز
+    # توکنی در کد ساخته/کپی نمی‌شود.
+    BALE_BOT_TOKEN = os.environ.get("APP_BALE_BOT_TOKEN", "")
+    BALE_CHANNEL = "@iNourAi"
+
     # فایل کلید service account فایربیس برای FCM (فقط نام env؛
     # مقدارش مسیر فایل روی سرور است، نه خود کلید. تا وقتی ست نشده
     # یا فایل خوانا نباشد، ارسال پوش با خطای fcm_not_configured

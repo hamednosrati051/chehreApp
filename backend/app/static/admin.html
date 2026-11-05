@@ -540,7 +540,7 @@ const galleryFa = {pending: 'در انتظار', approved: 'تأییدشده', r
 async function loadGhist(){ const q = new URLSearchParams({status: $('gh-status').value, page: ghPageNo});
   const res = await api('/admin/gallery?' + q);
   $('gh-list').innerHTML = res.items.length ? `<table><tr><th>عکس</th><th>موبایل</th><th>وضعیت</th><th>در گالری اپ</th><th>بازبین</th><th>دلیل رد</th><th>تاریخ</th><th></th></tr>` +
-    res.items.map(r => `<tr><td><img class="thumb" src="${esc(r.image_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | ' + (galleryFa[r.status] || r.status) + ' | ' + (r.created_at ? faDate(r.created_at) : ''))}" onclick="openLightbox(this.src, this.dataset.cap)" style="cursor:pointer;"></td><td>${esc(r.mobile)}</td><td>${galleryFa[r.status] || esc(r.status)}</td><td>${r.published_in_app ? '✓' : '—'}</td><td>${esc(r.reviewed_by)}</td><td>${esc(r.rejection_reason)}</td><td class="muted">${esc(faDate(r.created_at))}</td><td>${r.status === 'pending' ? '' : `<button class="small gold" onclick="galleryRequeue(${r.id})">بازگشت به انتظار</button> <button class="small danger" onclick="galleryDelete(${r.id})">حذف</button>`}</td></tr>`).join('') + '</table>' : '<p class="muted">عکسی نیست.</p>';
+    res.items.map(r => `<tr><td><img class="thumb" src="${esc(r.image_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | ' + (galleryFa[r.status] || r.status) + ' | ' + (r.created_at ? faDate(r.created_at) : ''))}" onclick="openLightbox(this.src, this.dataset.cap)" style="cursor:pointer;"></td><td>${esc(r.mobile)}</td><td>${galleryFa[r.status] || esc(r.status)}</td><td>${r.published_in_app ? '✓' : '—'}</td><td>${esc(r.reviewed_by)}</td><td>${esc(r.rejection_reason)}</td><td class="muted">${esc(faDate(r.created_at))}</td><td>${r.status === 'pending' ? '' : `${r.status === 'approved' ? (r.bale_published_at ? `<span class="muted">منتشر شده ✓</span> ` : `<button class="small gold" onclick="galleryPublishBale(${r.id})">انتشار در کانال</button> `) : ''}<button class="small gold" onclick="galleryRequeue(${r.id})">بازگشت به انتظار</button> <button class="small danger" onclick="galleryDelete(${r.id})">حذف</button>`}</td></tr>`).join('') + '</table>' : '<p class="muted">عکسی نیست.</p>';
   $('gh-pager').innerHTML = pagerHTML('gh', res); }
 let genPageNo = 1;
 function genPage(n){ if(n < 1) return; genPageNo = n; loadGens(); }
@@ -558,6 +558,7 @@ async function loadInputs(){ const res = await api('/admin/inputs?page=' + inPag
 async function inputDelete(url){ if(!confirm('عکس ورودی از روی سرور حذف شود؟ خروجی‌ها دست نمی‌خورند.')) return; try { await api('/admin/inputs', 'DELETE', {input_url: url}); loadInputs(); } catch(err){ setMsg(err.message); } }
 async function galleryRequeue(id){ try { await api('/admin/gallery/' + id + '/requeue', 'POST'); loadGhist(); } catch(err){ setMsg(err.message); } }
 async function galleryDelete(id){ if(!confirm('ردیف گالری حذف شود؟')) return; try { await api('/admin/gallery/' + id, 'DELETE'); loadGhist(); } catch(err){ setMsg(err.message); } }
+async function galleryPublishBale(id){ if(!confirm('این عکس در کانال بله @iNourAi منتشر شود؟')) return; try { await api('/admin/gallery/' + id + '/publish-bale', 'POST'); loadGhist(); } catch(err){ setMsg(err.message); } }
 
 let uPageNo = 1;
 function pagerHTML(prefix, meta){ const pages = Math.max(1, Math.ceil(meta.total / meta.page_size));

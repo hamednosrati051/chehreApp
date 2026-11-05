@@ -228,6 +228,10 @@ class AppGallery(db.Model):
         nullable=False,
     )
     published_in_app = db.Column(db.Boolean, default=False, nullable=False)
+    # انتشار در کانال بله @iNourAi (دکمه‌ی ادمین در «تاریخچه گالری»)؛
+    # هر ردیف حداکثر یک بار منتشر می‌شود.
+    bale_published_at = db.Column(db.DateTime)
+    bale_message_id = db.Column(db.String(64))
     # مثل نورا: چه کسی، کی، و با چه دلیلی رد شد (دلیل فقط در ادمین است).
     reviewed_by_admin_id = db.Column(db.BigInteger)
     reviewed_at = db.Column(db.DateTime)

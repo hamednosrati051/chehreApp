@@ -35,6 +35,7 @@ from .models import (
     AppUser,
     AppWorld,
 )
+from .services import bale as bale_svc
 from .services import bazaar as bazaar_svc
 from .services import coins as coins_svc
 from .services import fcm as fcm_svc
@@ -1771,6 +1772,74 @@ def admin_gallery_requeue(row_id):
     return jsonify({"id": r.id, "status": r.status})
 
 
+@admin_bp.post("/admin/gallery/<int:row_id>/publish-bale")
+@require_admin
+def admin_gallery_publish_bale(row_id):
+    """انتشار یک عکس تأییدشده‌ی گالری در کانال بله @iNourAi.
+
+    دکمه‌ی ادمین در «تاریخچه گالری»؛ فقط ردیف تأییدشده، هر ردیف حداکثر
+    یک بار (bale_published_at). کپشن: نام دنیا + «چهره‌ساز».
+    وضعیت انتشار فقط بعد از ارسال موفق ثبت می‌شود.
+    """
+    from urllib.parse import urlparse
+
+    r = AppGallery.query.get(row_id)
+    if not r:
+        return jsonify({"error": "not found"}), 404
+    if r.status != "approved":
+        return jsonify({"error": "only approved rows can be published to Bale"}), 409
+    if r.bale_published_at is not None:
+        return jsonify(
+            {
+                "error": "already published to Bale",
+                "bale_published_at": r.bale_published_at.isoformat(),
+                "bale_message_id": r.bale_message_id,
+            }
+        ), 409
+    # نام دنیا برای کپشن.
+    world_name = None
+    gen = AppGeneration.query.get(r.generation_id)
+    if gen is not None and gen.world_id:
+        w = AppWorld.query.get(gen.world_id)
+        world_name = w.name if w else None
+    caption = f"{world_name} — چهره‌ساز" if world_name else "چهره‌ساز"
+    # فقط فایل لوکال روی همین سرور (مثل حذف ورودی‌ها).
+    if current_app.config.get("S3_ENDPOINT"):
+        return jsonify({"error": "S3-backed storage: bale publish not supported here"}), 400
+    parsed = urlparse(r.image_url or "")
+    if parsed.netloc not in ("", "chehre.inourai.ir", "171.22.25.152:5001") or not parsed.path.startswith(
+        "/static/uploads/"
+    ):
+        return jsonify({"error": "only local upload files can be published to Bale"}), 400
+    filename = os.path.basename(parsed.path)
+    if not filename or filename in (".", "..") or "/" in filename or "\\" in filename:
+        return jsonify({"error": "bad filename"}), 400
+    uploads_dir = os.path.realpath(os.path.join(current_app.static_folder, "uploads"))
+    path = os.path.realpath(os.path.join(uploads_dir, filename))
+    if os.path.commonpath([path, uploads_dir]) != uploads_dir:
+        return jsonify({"error": "bad path"}), 400
+    if not os.path.exists(path):
+        return jsonify({"error": "image file not found on server"}), 404
+    with open(path, "rb") as f:
+        photo_bytes = f.read()
+    try:
+        message_id = bale_svc.send_photo_to_channel(photo_bytes, caption)
+    except bale_svc.BaleNotConfigured:
+        return jsonify({"error": "bale bot token not configured"}), 503
+    except bale_svc.BaleSendError as exc:
+        return jsonify({"error": str(exc)}), 502
+    r.bale_published_at = datetime.datetime.utcnow()
+    r.bale_message_id = message_id
+    db.session.commit()
+    return jsonify(
+        {
+            "id": r.id,
+            "bale_published_at": r.bale_published_at.isoformat(),
+            "bale_message_id": r.bale_message_id,
+        }
+    )
+
+
 @admin_bp.delete("/admin/gallery/<int:row_id>")
 @require_admin
 def admin_gallery_delete(row_id):
@@ -2425,6 +2494,10 @@ def admin_gallery_all():
                 "image_url": r.image_url,
                 "status": r.status,
                 "published_in_app": bool(r.published_in_app),
+                "bale_published_at": r.bale_published_at.isoformat()
+                if r.bale_published_at
+                else None,
+                "bale_message_id": r.bale_message_id,
                 "reviewed_by": admins.get(r.reviewed_by_admin_id),
                 "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
                 "rejection_reason": r.rejection_reason,
