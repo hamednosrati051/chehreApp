@@ -54,6 +54,9 @@ fun PacksSheet(
     onPurchased: () -> Unit,
     onError: (String) -> Unit,
     onLogin: () -> Unit,
+    // v11: بعد از خریدِ همراه با هدیه، با مقدار سکه‌ی هدیه صدا زده می‌شود
+    // (۰ یعنی هدیه‌ای نبود). پیش‌فرض خالی تا فراخوان‌های قدیمی بی‌تغییر بمانند.
+    onGift: (Int) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -90,8 +93,9 @@ fun PacksSheet(
                         onError("نتیجه‌ی خرید خوانا نبود")
                         return@launch
                     }
-                BazaarBilling.verifyAndConsume(context, purchase)
+                val gift = BazaarBilling.verifyAndConsume(context, purchase)
                 onPurchased()
+                if (gift > 0) onGift(gift)
                 onDismiss()
             } catch (e: Exception) {
                 onError(billingErrorMessage(e))
@@ -168,6 +172,15 @@ fun PacksSheet(
                                 "${p.coins} سکه — ${p.price_toman} تومان",
                                 modifier = Modifier.padding(top = 4.dp),
                             )
+                            // v11 هدیه‌ی خرید: فقط وقتی پک هدیه دارد.
+                            if (p.gift_coins > 0) {
+                                Text(
+                                    "+${p.gift_coins} سکه هدیه" + if (p.gift_scope == "first") " (فقط خرید اول)" else "",
+                                    color = PacksGold,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
                         }
                         Button(
                             onClick = { buy(p) },

@@ -92,6 +92,9 @@ data class Pack(
     val badge: String?,
     val pack_type: String?,
     val sort_order: Int,
+    // v11 هدیه‌ی خرید (پیش‌فرض ۰ یعنی پاسخ قدیمی بدون این فیلدها هم پارس می‌شود).
+    val gift_coins: Int = 0,
+    val gift_scope: String? = null,
 )
 data class PurchaseVerifyRequest(
     val pack_id: Long,
@@ -105,6 +108,8 @@ data class PurchaseVerifyResponse(
     val coins: Int,
     val already_credited: Boolean,
     val balance: Int,
+    // v11: سکه‌ی هدیه‌ی اعطاشده در این خرید (۰ اگر هدیه‌ای نبود).
+    val gift_coins: Int = 0,
 )
 data class PendingPurchase(
     val id: Long,

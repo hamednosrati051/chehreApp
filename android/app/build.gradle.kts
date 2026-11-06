@@ -14,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 34
         // v4: پروفایل مطابق طرح مرجع (کارت آبی سکه + شیت پک‌ها با دکمه‌ی خرید) + pack_type.
-        versionCode = 10
+        versionCode = 11
         versionName = "1.0"
     }
 

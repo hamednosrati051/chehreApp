@@ -357,12 +357,13 @@ object BazaarBilling {
     }
 
     /** وریفای سروری + consume؛ سرور idempotency را تضمین می‌کند
-     *  (توکن تکراری دوباره شارژ نمی‌شود). */
-    suspend fun verifyAndConsume(context: Context, purchase: OwnedPurchase) {
+     *  (توکن تکراری دوباره شارژ نمی‌شود). برمی‌گرداند سکه‌ی هدیه‌ی
+     *  اعطاشده در این خرید (v11؛ ۰ اگر هدیه‌ای نبود). */
+    suspend fun verifyAndConsume(context: Context, purchase: OwnedPurchase): Int {
         val packs = Api.service.packs()
         val pack = packs.firstOrNull { it.bazaar_sku == purchase.sku }
             ?: throw RuntimeException("unknown sku: ${purchase.sku}")
-        Api.service.verifyPurchase(
+        val resp = Api.service.verifyPurchase(
             PurchaseVerifyRequest(
                 pack_id = pack.id,
                 purchase_token = purchase.purchaseToken,
@@ -371,6 +372,7 @@ object BazaarBilling {
             ),
         )
         consume(context, purchase.purchaseToken)
+        return resp.gift_coins
     }
 
     /** بازیابی خریدهای ناتمام: همه‌ی ownedها وریفای و consume می‌شوند.

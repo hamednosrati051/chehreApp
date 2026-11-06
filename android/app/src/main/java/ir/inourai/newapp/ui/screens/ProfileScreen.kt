@@ -389,6 +389,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
             onPurchased = { refreshBalance(); notice = "سکه‌ها اضافه شد" },
             onError = { notice = it },
             onLogin = onLogin,
+            onGift = { g -> if (g > 0) notice = "$g سکه هدیه به حسابت اضافه شد" },
         )
     }
 

@@ -694,6 +694,7 @@ fun CreateImageScreen(
             onPurchased = { refreshBalance(); notice = "سکه‌ها اضافه شد" },
             onError = { showSnack(UserError(it, false)) },
             onLogin = onLogin,
+            onGift = { g -> if (g > 0) notice = "$g سکه هدیه به حسابت اضافه شد" },
         )
     }
 }
