@@ -131,10 +131,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
         }
     }
 
-    // رفرش با کشیدن پایین، همان پروفایل را تازه می‌کند (موجودی، سابقه‌ی
-    // پرداخت و موبایل ماسک‌شده) و هرگز به خانه برنمی‌گردد.
-    fun refreshProfile() {
-        refreshBalance()
+    fun refreshPayments() {
         scope.launch {
             if (Session.token != null) {
                 payments = try {
@@ -142,6 +139,17 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                 } catch (_: Exception) {
                     emptyList()
                 }
+            }
+        }
+    }
+
+    // رفرش با کشیدن پایین، همان پروفایل را تازه می‌کند (موجودی، سابقه‌ی
+    // پرداخت و موبایل ماسک‌شده) و هرگز به خانه برنمی‌گردد.
+    fun refreshProfile() {
+        refreshBalance()
+        refreshPayments()
+        scope.launch {
+            if (Session.token != null) {
                 try {
                     maskedMobile = Api.service.me().mobile_masked
                 } catch (_: Exception) {
@@ -162,13 +170,13 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
         }
     }
 
-    // موجودی در هر بار ورود به پروفایل (و بازگشت به اپ) تازه شود،
-    // نه فقط موقع ورود؛ وگرنه تغییر سروریِ موجودی کهنه می‌ماند.
+    // موجودی و سابقه‌ی پرداخت در هر بار ورود به پروفایل (و بازگشت به اپ)
+    // تازه شوند؛ وگرنه تغییر سروریِ موجودی و سابقه کهنه می‌ماند.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME && Session.token != null) {
-                refreshBalance()
+                refreshProfile()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -267,7 +275,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                         icon = Icons.Rounded.Receipt,
                         title = "سابقه پرداخت",
                         iconBg = Color(0xFFE6F4EA), iconTint = Color(0xFF1B7A3D),
-                        onClick = { showPayments = true },
+                        onClick = { refreshPayments(); showPayments = true },
                     )
                 }
             }
@@ -386,7 +394,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
     if (showPacks) {
         PacksSheet(
             onDismiss = { showPacks = false },
-            onPurchased = { refreshBalance(); notice = "سکه‌ها اضافه شد" },
+            onPurchased = { refreshProfile(); notice = "سکه‌ها اضافه شد" },
             onError = { notice = it },
             onLogin = onLogin,
             onGift = { g -> if (g > 0) notice = "$g سکه هدیه به حسابت اضافه شد" },
