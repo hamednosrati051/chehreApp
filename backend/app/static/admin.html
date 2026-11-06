@@ -172,9 +172,9 @@
       <input id="p-sku" placeholder="SKU بازار (مثلا pack_starter)" required>
       <input id="p-badge" placeholder="بج (مثلا محبوب‌ترین)">
       <input id="p-type" placeholder="نوع پک (مثلا اقتصادی)">
-      <input id="p-sort" type="number" value="0" placeholder="ترتیب">
-      <input id="p-gift" type="number" value="0" min="0" placeholder="سکه هدیه (۰ = بدون هدیه)">
-      <select id="p-gift-scope"><option value="every">هدیه: همه خریدها</option><option value="first">هدیه: فقط خرید اول</option></select>
+      <label>ترتیب <input id="p-sort" type="number" value="0"></label>
+      <label>سکه هدیه <input id="p-gift" type="number" value="0" min="0" placeholder="۰ = بدون هدیه"></label>
+      <label>دامنه هدیه <select id="p-gift-scope"><option value="every">هدیه: همه خریدها</option><option value="first">هدیه: فقط خرید اول</option></select></label>
       <span><button>ذخیره پک</button> <button type="button" class="gold" onclick="resetPackForm()">فرم جدید</button></span>
     </form>
     <input id="p-search" class="search" placeholder="جستجو در پک‌ها…">
