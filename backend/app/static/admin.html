@@ -173,6 +173,8 @@
       <input id="p-badge" placeholder="بج (مثلا محبوب‌ترین)">
       <input id="p-type" placeholder="نوع پک (مثلا اقتصادی)">
       <input id="p-sort" type="number" value="0" placeholder="ترتیب">
+      <input id="p-gift" type="number" value="0" min="0" placeholder="سکه هدیه (۰ = بدون هدیه)">
+      <select id="p-gift-scope"><option value="every">هدیه: همه خریدها</option><option value="first">هدیه: فقط خرید اول</option></select>
       <span><button>ذخیره پک</button> <button type="button" class="gold" onclick="resetPackForm()">فرم جدید</button></span>
     </form>
     <input id="p-search" class="search" placeholder="جستجو در پک‌ها…">
@@ -494,12 +496,12 @@ async function saveCat(e){ e.preventDefault(); const body = {name: $('c-name').v
 async function delCat(id){ if(!confirm('دسته حذف شود؟ (اگر دنیا داشته باشد رد می‌شود)')) return; try { await api('/admin/categories/' + id, 'DELETE'); loadCats(); } catch(err){ setMsg(err.message); } }
 
 async function loadPacks(){ const ps = await api('/admin/packs');
-  $('p-list').innerHTML = ps.length ? `<table><tr><th>نام</th><th>سکه</th><th>تومان</th><th>SKU</th><th>بج</th><th>نوع</th><th>فعال</th><th></th></tr>` +
-    ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${esc(p.pack_type)}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>';
+  $('p-list').innerHTML = ps.length ? `<table><tr><th>نام</th><th>سکه</th><th>تومان</th><th>SKU</th><th>بج</th><th>نوع</th><th>هدیه</th><th>فعال</th><th></th></tr>` +
+    ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${esc(p.pack_type)}</td><td>${p.gift_coins ? `+${p.gift_coins}${p.gift_scope === 'first' ? ' (اول)' : ''}` : '—'}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>';
   applyFilter('p-list'); }
-function editPack(p){ editingPack = p.id; $('p-name').value = p.name; $('p-coins').value = p.coins; $('p-price').value = p.price_toman; $('p-sku').value = p.bazaar_sku; $('p-badge').value = p.badge || ''; $('p-type').value = p.pack_type || ''; $('p-sort').value = p.sort_order; }
-function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-sku','p-badge','p-type'].forEach(i => $(i).value = ''); $('p-sort').value = 0; }
-async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').value.trim(), coins: +$('p-coins').value, price_toman: +$('p-price').value, bazaar_sku: $('p-sku').value.trim(), badge: $('p-badge').value.trim() || null, pack_type: $('p-type').value.trim() || null, sort_order: +$('p-sort').value};
+function editPack(p){ editingPack = p.id; $('p-name').value = p.name; $('p-coins').value = p.coins; $('p-price').value = p.price_toman; $('p-sku').value = p.bazaar_sku; $('p-badge').value = p.badge || ''; $('p-type').value = p.pack_type || ''; $('p-sort').value = p.sort_order; $('p-gift').value = p.gift_coins || 0; $('p-gift-scope').value = p.gift_scope || 'every'; }
+function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-sku','p-badge','p-type'].forEach(i => $(i).value = ''); $('p-sort').value = 0; $('p-gift').value = 0; $('p-gift-scope').value = 'every'; }
+async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').value.trim(), coins: +$('p-coins').value, price_toman: +$('p-price').value, bazaar_sku: $('p-sku').value.trim(), badge: $('p-badge').value.trim() || null, pack_type: $('p-type').value.trim() || null, sort_order: +$('p-sort').value, gift_coins: +$('p-gift').value || 0, gift_scope: $('p-gift-scope').value};
   try { editingPack ? await api('/admin/packs/' + editingPack, 'PATCH', body) : await api('/admin/packs', 'POST', body); setMsg('پک ذخیره شد.', true); resetPackForm(); loadPacks(); } catch(err){ setMsg(err.message); } }
 async function delPack(id){ if(!confirm('پک حذف شود؟')) return; try { await api('/admin/packs/' + id, 'DELETE'); loadPacks(); } catch(err){ setMsg(err.message); } }
 

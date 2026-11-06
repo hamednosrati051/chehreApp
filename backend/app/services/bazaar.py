@@ -64,7 +64,9 @@ def verify_signature(purchase_data: str, signature_b64: str) -> bool:
 def verify_purchase(user, pack, purchase_token, purchase_data, signature):
     """خرید را وریفای و (فقط یک بار) سکه شارژ می‌کند.
 
-    برمی‌گرداند: (purchase, already_credited: bool).
+    برمی‌گرداند: (purchase, already_credited: bool, gift_granted: int).
+    هدیه‌ی خرید (v11): فقط در وریفای تازه (نه مسیر already_credited) و فقط
+    وقتی پک gift_coins>0 دارد؛ در همان تراکنش شارژ می‌شود.
     خطا می‌دهد (ValueError) اگر امضا نامعتبر باشد یا داده با پک نخواند؛
     در آن صورت خرید pending می‌ماند و سکه‌ای شارژ نمی‌شود.
     """
@@ -84,7 +86,7 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature):
     if existing is not None and existing.user_id != user.id:
         raise ValueError("purchase token belongs to another user")
     if existing is not None and existing.status in ("verified", "consumed"):
-        return existing, True
+        return existing, True, 0
 
     # اگر پک داده نشده ولی خرید pending از قبل هست، از همان ردیف بردار.
     if pack is None and existing is not None:
@@ -147,8 +149,8 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature):
             if existing.user_id != user.id:
                 raise ValueError("purchase token belongs to another user")
             if existing.status in ("verified", "consumed"):
-                return existing, True
-            return existing, False
+                return existing, True, 0
+            return existing, False, 0
 
     # شارژ سکه و تغییر وضعیت در یک تراکنش: اگر بین آن دو خطا رخ دهد،
     # نه سکه‌ای بی‌سند شارژ می‌شود و نه خریدی pending می‌ماند که بعداً
@@ -158,8 +160,31 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature):
         reason="purchase", ref_type="purchase", ref_id=existing.id,
         commit=False,
     )
+    # هدیه‌ی خرید (v11): فقط همین‌جا (وریفای تازه)، در همان تراکنش.
+    # scope 'every' = هر خرید این پک؛ 'first' = فقط اولین خرید وریفای‌شده‌ی
+    # همین پک برای همین کاربر (ردیف فعلی هنوز pending است، پس در شمار نمی‌آید).
+    gift_granted = 0
+    gift_coins = getattr(pack, "gift_coins", 0) or 0
+    if gift_coins > 0 and pack is not None:
+        gift_scope = getattr(pack, "gift_scope", "every") or "every"
+        grant = gift_scope != "first"
+        if not grant:
+            prior = (
+                AppPurchase.query.filter_by(user_id=user.id, pack_id=pack.id)
+                .filter(AppPurchase.status.in_(("verified", "consumed")))
+                .filter(AppPurchase.id != existing.id)
+                .first()
+            )
+            grant = prior is None
+        if grant:
+            coins_svc.credit_coins(
+                user, gift_coins,
+                reason="gift", ref_type="purchase", ref_id=existing.id,
+                commit=False,
+            )
+            gift_granted = gift_coins
     existing.status = "consumed"
     existing.verified_at = db.func.now()
     db.session.add(existing)
     db.session.commit()
-    return existing, False
+    return existing, False, gift_granted

@@ -700,6 +700,8 @@ def coin_packs():
                 "badge": p.badge,
                 "pack_type": p.pack_type,
                 "sort_order": p.sort_order,
+                "gift_coins": p.gift_coins or 0,
+                "gift_scope": p.gift_scope or "every",
             }
             for p in packs
         ]
@@ -915,7 +917,7 @@ def verify_purchase_route():
     if pack is not None and not pack.is_active:
         return jsonify({"error": "pack not found"}), 404
     try:
-        purchase, already = bazaar_svc.verify_purchase(
+        purchase, already, gift_granted = bazaar_svc.verify_purchase(
             g.user,
             pack,
             body.get("purchase_token"),
@@ -932,6 +934,7 @@ def verify_purchase_route():
             "id": purchase.id,
             "status": purchase.status,
             "coins": resp_pack.coins if resp_pack else 0,
+            "gift_coins": gift_granted,
             "already_credited": already,
             "balance": coins_svc.get_balance(g.user),
         }
@@ -1626,7 +1629,22 @@ def _pack_admin(p):
         "pack_type": p.pack_type,
         "sort_order": p.sort_order,
         "is_active": bool(p.is_active),
+        "gift_coins": p.gift_coins or 0,
+        "gift_scope": p.gift_scope or "every",
     }
+
+
+def _gift_coins_value(value):
+    """سکه‌ی هدیه: عدد صحیح ≥ 0؛ ورودی بد → 0."""
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _gift_scope_value(value):
+    """دامنه‌ی هدیه: فقط 'first' یا 'every'؛ ورودی بد → 'every'."""
+    return value if value in ("first", "every") else "every"
 
 
 @admin_bp.get("/admin/packs")
@@ -1654,6 +1672,8 @@ def admin_create_pack():
         pack_type=body.get("pack_type"),
         sort_order=body.get("sort_order", 0),
         is_active=bool(body.get("is_active", True)),
+        gift_coins=_gift_coins_value(body.get("gift_coins", 0)),
+        gift_scope=_gift_scope_value(body.get("gift_scope", "every")),
     )
     db.session.add(p)
     db.session.commit()
@@ -1676,6 +1696,10 @@ def admin_update_pack(pack_id):
             setattr(p, field, body[field])
     if "is_active" in body:
         p.is_active = bool(body["is_active"])
+    if "gift_coins" in body:
+        p.gift_coins = _gift_coins_value(body["gift_coins"])
+    if "gift_scope" in body:
+        p.gift_scope = _gift_scope_value(body["gift_scope"])
     db.session.commit()
     return jsonify(_pack_admin(p))
 

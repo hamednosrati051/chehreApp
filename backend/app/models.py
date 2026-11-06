@@ -170,6 +170,10 @@ class AppCoinPack(db.Model):
     pack_type = db.Column(db.String(50))
     sort_order = db.Column(db.Integer, default=0, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    # v11 هدیه‌ی خرید: سکه‌ی هدیه‌ی این پک (۰ = بدون هدیه) + دامنه‌ی آن
+    # ('every' = هر خرید، 'first' = فقط اولین خرید این پک برای کاربر).
+    gift_coins = db.Column(db.Integer, default=0, nullable=False)
+    gift_scope = db.Column(db.String(10), default="every", nullable=False)
 
 
 class AppPurchase(db.Model):
