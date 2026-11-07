@@ -408,10 +408,10 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                 }
             }
         }
-        // پیام هدیه (نسخه‌ی ۱۲): یک متن کوتاه و ساده، بدون قاب یا دکمه‌ی
-        // پررنگ — فقط در صفحه‌ی تازه‌ساخته‌شده و فقط وقتی همین
-        // generation با اعتبار هدیه ساخته شده باشد. «خرید سکه» یک
-        // دکمه‌ی متنی ساده است و شیت بسته‌ها را باز می‌کند.
+        // پیام هدیه (نسخه‌ی ۱۲): خط اول کوچک و کم‌رنگ، خط دوم بزرگ و
+        // پررنگ و طلایی تا تو چشم باشد؛ دکمه‌ی «خرید سکه» هم طلایی است.
+        // فقط در صفحه‌ی تازه‌ساخته‌شده و فقط وقتی همین generation با
+        // اعتبار هدیه ساخته شده باشد. «خرید سکه» شیت بسته‌ها را باز می‌کند.
         if (showGiftNudge && outputUrl != null) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -425,13 +425,14 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                 )
                 Text(
                     "تصویر بعدی با سکه، کیفیت خیلی عالی دارد — چهره و حالت‌ها قشنگ‌تر",
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 13.sp,
+                    color = Color(0xFFFFC107),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 2.dp),
                 )
                 TextButton(onClick = { showPacks = true }) {
-                    Text("خرید سکه", color = Color(0xFF7EB3FF), fontWeight = FontWeight.Bold)
+                    Text("خرید سکه", color = Color(0xFFFFC107), fontWeight = FontWeight.Bold)
                 }
             }
         }

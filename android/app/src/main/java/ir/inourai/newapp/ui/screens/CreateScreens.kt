@@ -608,7 +608,7 @@ fun CreateImageScreen(
                                     .background(Color(0xFF8A5A00), RoundedCornerShape(24.dp))
                                     .padding(horizontal = 10.dp, vertical = 2.dp),
                             ) {
-                                Text("${toPersianDigits(cost)} سکه", color = Color.White, fontSize = 13.sp)
+                                Text(if (hasGift) "هدیه" else "${toPersianDigits(cost)} سکه", color = Color.White, fontSize = 13.sp)
                             }
                         }
                         // برچسب کیفیت (نسخه‌ی ۱۲، فقط اطلاع‌رسانی):
@@ -618,7 +618,7 @@ fun CreateImageScreen(
                         if (hasGift) {
                             Text(
                                 "رایگان با کیفیت استاندارد — با سکه کیفیت عالی",
-                                color = Color.White.copy(alpha = 0.85f),
+                                color = Color(0xFFFFC107),
                                 fontSize = 13.sp,
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                                 textAlign = TextAlign.Center,
