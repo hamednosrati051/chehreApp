@@ -617,7 +617,7 @@ fun CreateImageScreen(
                         // رفتار ساخت دقیقاً مثل قبل می‌مانند.
                         if (hasGift) {
                             Text(
-                                "کیفیت استاندارد",
+                                "رایگان با کیفیت استاندارد — با سکه کیفیت عالی",
                                 color = Color.White.copy(alpha = 0.85f),
                                 fontSize = 13.sp,
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),

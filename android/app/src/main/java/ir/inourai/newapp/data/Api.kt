@@ -294,8 +294,13 @@ object Api {
  *  خطاهای بدون نگاشت (از جمله تایم‌اوت خواندن از provider) → «ناموفق تولید عکس». */
 fun friendlyGenerationError(raw: String?): String {
     if (raw == null) return "ناموفق تولید عکس"
-    if (raw.contains("content_policy_violation") || raw.contains("safety system")) {
-        return "رد ایمنی مدل؛ عکس یا دنیای دیگری را امتحان کن — سکه‌ات کم نشده است."
+    // رد ایمنی — همه‌ی مدل‌ها، هدیه و پولی: GapGPT با
+    // content_policy_violation / safety system، کلاین با کد ۳۰۳۰
+    // (Your output has been flagged)؛ هر دو یعنی همان ترکیب
+    // دنیا+عکس دوباره هم رد می‌شود، پس کاربر باید دنیای دیگری بگیرد.
+    if (raw.contains("content_policy_violation") || raw.contains("safety system") ||
+        raw.contains("3030") || raw.contains("has been flagged")) {
+        return "رد ایمنی مدل؛ دنیای دیگری را امتحان کن — هزینه‌ای از تو کم نشده است."
     }
     if (raw.contains("provider http")) {
         return "ساخت ناموفق بود (خطای سرویس‌دهنده)؛ دوباره تلاش کن"
