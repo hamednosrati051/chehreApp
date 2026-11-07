@@ -2331,6 +2331,19 @@ def admin_user_coin_adjust(user_id):
     return jsonify({"id": u.id, "balance": balance})
 
 
+@admin_bp.post("/admin/users/<int:user_id>/gift-image")
+@require_admin
+def admin_user_gift_image(user_id):
+    """هدیه‌ی دستی ۱ تصویر رایگان به کاربر (دکمه‌ی «هدیه» در لیست کاربران)."""
+    u = AppUser.query.get(user_id)
+    if not u:
+        return jsonify({"error": "user not found"}), 404
+    u.free_image_credits = (u.free_image_credits or 0) + 1
+    db.session.add(u)
+    db.session.commit()
+    return jsonify({"id": u.id, "free_image_credits": u.free_image_credits})
+
+
 @admin_bp.patch("/admin/users/<int:user_id>")
 @require_admin
 def admin_update_user(user_id):

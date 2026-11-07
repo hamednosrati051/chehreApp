@@ -588,9 +588,10 @@ function applyUserFilter(e){ e.preventDefault(); uPageNo = 1; loadUsers(); }
 async function loadUsers(){ const q = new URLSearchParams({search: $('u-search').value.trim(), is_active: $('u-status').value, page: uPageNo});
   const res = await api('/admin/users?' + q);
   $('u-list').innerHTML = res.items.length ? `<table><tr><th>id</th><th>موبایل</th><th>نام</th><th>وضعیت</th><th>اعتبار رایگان</th><th>موجودی سکه</th><th>آخرین ورود</th><th></th></tr>` +
-    res.items.map(u => `<tr><td>${u.id}</td><td>${esc(u.mobile)}</td><td>${esc(u.name)}</td><td>${esc(u.status)}</td><td>${u.free_image_credits}</td><td>${u.balance}</td><td class="muted">${esc(faDate(u.last_login_at))}</td><td><button class="small" onclick="loadUserDetail(${u.id})">جزئیات</button> ${u.status === 'blocked' ? `<button class="small gold" onclick="userStatus(${u.id},'active')">رفع مسدود</button>` : `<button class="small danger" onclick="userStatus(${u.id},'blocked')">مسدود</button>`}</td></tr>`).join('') + '</table>' : '<p class="muted">کاربری نیست.</p>';
+    res.items.map(u => `<tr><td>${u.id}</td><td>${esc(u.mobile)}</td><td>${esc(u.name)}</td><td>${esc(u.status)}</td><td>${u.free_image_credits}</td><td>${u.balance}</td><td class="muted">${esc(faDate(u.last_login_at))}</td><td><button class="small" onclick="loadUserDetail(${u.id})">جزئیات</button> <button class="small gold" onclick="giftImage(${u.id})">هدیه +۱</button> ${u.status === 'blocked' ? `<button class="small gold" onclick="userStatus(${u.id},'active')">رفع مسدود</button>` : `<button class="small danger" onclick="userStatus(${u.id},'blocked')">مسدود</button>`}</td></tr>`).join('') + '</table>' : '<p class="muted">کاربری نیست.</p>';
   $('u-pager').innerHTML = pagerHTML('u', res); }
 async function userStatus(id, st){ try { await api('/admin/users/' + id, 'PATCH', {status: st}); loadUsers(); } catch(err){ setMsg(err.message); } }
+async function giftImage(id){ try { const r = await api('/admin/users/' + id + '/gift-image', 'POST', {}); setMsg('۱ تصویر هدیه اضافه شد؛ اعتبار رایگان: ' + r.free_image_credits + '.', true); loadUsers(); } catch(err){ setMsg(err.message); } }
 let currentFailed = [];
 async function loadUserDetail(id){ const u = await api('/admin/users/' + id);
   currentFailed = u.failed_generations || [];
