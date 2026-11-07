@@ -98,6 +98,13 @@ private fun uriToFile(context: Context, uri: Uri): File {
     return out
 }
 
+/** عدد را با ارقام فارسی برمی‌گرداند (مثلاً 10 ← «۱۰»)؛ چیپ قیمت
+ *  دکمه‌ی ساخت ایموجی ندارد چون رندر ایموجی در گوشی‌ها یکسان نیست. */
+private fun toPersianDigits(n: Int): String {
+    val fa = "۰۱۲۳۴۵۶۷۸۹"
+    return n.toString().map { c -> if (c in '0'..'9') fa[c - '0'] else c }.joinToString("")
+}
+
 // عکس آخری: هر انتخاب در یک فایل یکتا با زمان ذخیره می‌شود و فایل‌های
 // قبلی پاک می‌شوند. این عمدی است: اگر همه‌ی انتخاب‌ها روی یک فایل ثابت
 // بازنویسی شوند، Uri پیش‌فرض همیشه یکی می‌ماند و Coil تصویر کش‌شده‌ی
@@ -565,6 +572,7 @@ fun CreateImageScreen(
                             textAlign = TextAlign.Center,
                         )
                     } else {
+                        // ردیف اول: بندانگشتی + «تغییر تصویر» + بستن.
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth(),
@@ -583,19 +591,24 @@ fun CreateImageScreen(
                                 Icon(Icons.Rounded.Close, contentDescription = null, tint = Color.White)
                             }
                             Spacer(modifier = Modifier.weight(1f))
-                            Button(
-                                onClick = { startBuild() },
-                                shape = RoundedCornerShape(50),
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        // ردیف دوم: دکمه‌ی ساخت تمام‌عرض. پیش از این همه‌ی
+                        // این اجزا در یک ردیف بودند و روی گوشی ۳۶۰dp دکمه‌ی
+                        // ساخت بیرون از صفحه می‌رفت (۳۸۲dp در ۳۲۸dp جا).
+                        Button(
+                            onClick = { startBuild() },
+                            shape = RoundedCornerShape(50),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("ساخت تصویر", fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFF8A5A00), RoundedCornerShape(24.dp))
+                                    .padding(horizontal = 10.dp, vertical = 2.dp),
                             ) {
-                                Text("ساخت تصویر", fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .background(Color(0xFF8A5A00), RoundedCornerShape(24.dp))
-                                        .padding(horizontal = 10.dp, vertical = 2.dp),
-                                ) {
-                                    Text("🪙 $cost", color = Color.White, fontSize = 13.sp)
-                                }
+                                Text("${toPersianDigits(cost)} سکه", color = Color.White, fontSize = 13.sp)
                             }
                         }
                         // برچسب کیفیت (نسخه‌ی ۱۲، فقط اطلاع‌رسانی):

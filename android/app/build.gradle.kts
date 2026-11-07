@@ -13,8 +13,8 @@ android {
         applicationId = "ir.inourai.newapp"
         minSdk = 26
         targetSdk = 34
-        // v12: برچسب کیفیت ساخت + پیام هدیه + چک اعلان در لانچ.
-        versionCode = 12
+        // v13: دکمه‌ی ساخت دو ردیف شد (رفع بریده‌شدن روی گوشی باریک) + چیپ «۱۰ سکه».
+        versionCode = 13
         versionName = "1.0"
     }
 
