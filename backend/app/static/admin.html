@@ -185,11 +185,16 @@
   <section id="models">
     <h2>مدل‌ها</h2>
     <p class="muted">کلید هرگز نمایش داده نمی‌شود؛ فقط بودنش اعلام می‌شود. برای تغییر کلید، مقدار جدید را بنویسید؛ خالی بماند یعنی بدون تغییر.</p>
+    <form class="grid" onsubmit="saveModelRoles(event)">
+      <label>مدل اصلی (پولی‌ها): <select id="m-main"></select></label>
+      <label>مدل هدیه (هدیه ورود و رایگان): <select id="m-gift"></select></label>
+      <button>ذخیره مدل‌ها</button>
+    </form>
     <form class="grid" onsubmit="saveModel(event)">
       <input id="m-name" placeholder="نام نمایشی (مثلا Sunburst)" class="full" required>
       <input id="m-slug" placeholder="اسلاگ یکتا (خالی = خودکار از نام)" class="full">
       <input id="m-provider" placeholder="provider (مثلا avalai)" required>
-      <select id="m-ptype"><option value="openai_compat">openai_compat</option><option value="async_generation">async_generation</option><option value="async_generation_video">async_generation_video</option><option value="chat_image_edit_gemini">chat_image_edit_gemini</option></select>
+      <select id="m-ptype"><option value="openai_compat">openai_compat</option><option value="async_generation">async_generation</option><option value="async_generation_video">async_generation_video</option><option value="chat_image_edit_gemini">chat_image_edit_gemini</option><option value="cloudflare_workers_ai">cloudflare_workers_ai</option></select>
       <input id="m-pname" placeholder="نام مدل نزد provider (مثلا gpt-image-2.5-sunburst)" class="full" required>
       <select id="m-cap"><option value="generate_image">generate_image</option><option value="edit_image">edit_image</option><option value="image">image</option></select>
       <select id="m-pricing"><option value="image_count">image_count</option><option value="token">token</option></select>
@@ -507,7 +512,20 @@ async function delPack(id){ if(!confirm('پک حذف شود؟')) return; try { a
 
 async function loadModels(){ models = await api('/admin/models');
   $('m-list').innerHTML = models.length ? `<table><tr><th>نام</th><th>اسلاگ</th><th>مدل provider</th><th>قابلیت</th><th>نوع تعرفه</th><th>کلید</th><th>فعال</th><th></th></tr>` +
-    models.map(m => `<tr><td>${esc(m.name)}</td><td class="muted">${esc(m.slug)}</td><td class="muted">${esc(m.provider_model_name)}</td><td>${esc(m.capability)}</td><td>${esc(m.pricing_type)}</td><td>${m.has_credentials ? '✓ دارد' : '✗ ندارد'}</td><td>${m.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editModel(${JSON.stringify(m).replace(/'/g, "&#39;")})'>ویرایش</button></td></tr>`).join('') + '</table>' : '<p class="muted">مدلی نیست.</p>'; }
+    models.map(m => `<tr><td>${esc(m.name)}</td><td class="muted">${esc(m.slug)}</td><td class="muted">${esc(m.provider_model_name)}</td><td>${esc(m.capability)}</td><td>${esc(m.pricing_type)}</td><td>${m.has_credentials ? '✓ دارد' : '✗ ندارد'}</td><td>${m.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editModel(${JSON.stringify(m).replace(/'/g, "&#39;")})'>ویرایش</button></td></tr>`).join('') + '</table>' : '<p class="muted">مدلی نیست.</p>';
+  loadModelRoles(); }
+async function loadModelRoles(){ const opts = models.filter(m => m.kind === 'image' && m.capability === 'edit_image' && m.is_active).map(m => `<option value="${m.id}">${esc(m.name)} (${esc(m.provider_model_name || '')})</option>`).join('');
+  $('m-main').innerHTML = '<option value="">— پیش‌فرض —</option>' + opts;
+  $('m-gift').innerHTML = '<option value="">— مثل مدل اصلی —</option>' + opts;
+  try { const ss = await api('/admin/settings'); const gm = {}; ss.forEach(s => gm[s.key] = s.value);
+    if (gm.main_image_model_id) $('m-main').value = gm.main_image_model_id;
+    if (gm.gift_image_model_id) $('m-gift').value = gm.gift_image_model_id;
+  } catch(_){} }
+async function saveModelRoles(e){ e.preventDefault(); try {
+  await api('/admin/settings', 'PATCH', {key: 'main_image_model_id', value: $('m-main').value});
+  await api('/admin/settings', 'PATCH', {key: 'gift_image_model_id', value: $('m-gift').value});
+  setMsg('مدل اصلی و مدل هدیه ذخیره شد.', true); loadModels();
+} catch(err){ setMsg(err.message); } }
 function editModel(m){ editingModel = m.id; $('m-name').value = m.name; $('m-slug').value = m.slug || ''; $('m-provider').value = m.provider; $('m-ptype').value = m.provider_type || 'openai_compat'; $('m-pname').value = m.provider_model_name || ''; $('m-cap').value = m.capability; $('m-pricing').value = m.pricing_type || 'image_count'; $('m-tok').value = m.tokenizer_encoding || ''; $('m-desc').value = m.description || ''; $('m-cap1').value = m.default_max_output_tokens ?? ''; $('m-cap2').value = m.max_prompt_chars ?? ''; $('m-cap3').value = m.max_history_messages ?? ''; $('m-cap4').value = m.max_history_tokens ?? ''; $('m-base').value = m.base_url || ''; $('m-key').value = ''; $('m-act').checked = m.is_active; window.scrollTo(0, 0); }
 function resetModelForm(){ editingModel = null; ['m-name','m-slug','m-provider','m-pname','m-tok','m-desc','m-cap1','m-cap2','m-cap3','m-cap4','m-base','m-key'].forEach(i => $(i).value = ''); $('m-ptype').value = 'openai_compat'; $('m-cap').value = 'generate_image'; $('m-pricing').value = 'image_count'; $('m-act').checked = true; }
 function _numOrNull(id){ const v = $(id).value.trim(); return v === '' ? null : +v; }

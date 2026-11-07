@@ -96,6 +96,44 @@ def _entry_gift_enabled():
     return str(row.value).strip().lower() not in ("0", "false", "no", "off")
 
 
+def _default_image_model():
+    """اولین مدل ویرایش تصویر فعال (رفتار فعلی، قبل از نقش‌های مدل)."""
+    return (
+        AppModel.query.filter_by(
+            kind="image", capability="edit_image", is_active=True
+        )
+        .order_by(AppModel.id)
+        .first()
+    )
+
+
+def _model_from_setting(key):
+    """مدل تصویر از روی یک کلید app_settings؛ فقط ردیف موجود، فعال،
+    kind=image و capability=edit_image قبول است، وگرنه None."""
+    row = AppSetting.query.get(key)
+    if row is None:
+        return None
+    try:
+        mid = int(str(row.value).strip())
+    except (TypeError, ValueError):
+        return None
+    m = AppModel.query.get(mid)
+    if not m or m.kind != "image" or m.capability != "edit_image" or not m.is_active:
+        return None
+    return m
+
+
+def _main_image_model():
+    """مدل اصلی (پولی‌ها): تنظیم main_image_model_id، وگرنه رفتار فعلی."""
+    return _model_from_setting("main_image_model_id") or _default_image_model()
+
+
+def _gift_image_model():
+    """مدل هدیه (هدیه‌ی ورود و رایگان): تنظیم gift_image_model_id،
+    وگرنه مدل اصلی."""
+    return _model_from_setting("gift_image_model_id") or _main_image_model()
+
+
 def _token_for(user):
     payload = {
         # PyJWT 2.8+ «sub» را فقط رشته می‌پذیرد؛ موقع خواندن به int برمی‌گردد.
@@ -549,15 +587,9 @@ def create_generation():
             return jsonify({"error": "world not found"}), 404
         if not body.get("input_url"):
             return jsonify({"error": "input_url required"}), 400
-        # تک‌مدل فعال به‌ازای هر دسته: دنیا دیگر مدل خودش را ندارد؛
-        # همان یک مدل ویرایش فعال استفاده می‌شود (تصمیم مالک، 2026-10-27).
-        model = (
-            AppModel.query.filter_by(
-                kind="image", capability="edit_image", is_active=True
-            )
-            .order_by(AppModel.id)
-            .first()
-        )
+        # مدل اصلی (پولی‌ها): نقش مدل از تنظیمات، وگرنه همان یک مدل
+        # ویرایش فعال (تصمیم مالک، 2026-10-27)؛ دنیا مدل خودش را ندارد.
+        model = _main_image_model()
         if model is not None and model.kind != "image":
             return jsonify({"error": "model kind mismatch"}), 409
         # تعرفه‌ی دنیا اگر ست شده، وگرنه تعرفه‌ی پیش‌فرض (۵ سکه).
@@ -594,6 +626,16 @@ def create_generation():
         db.session.commit()
         return jsonify({"error": "insufficient coins"}), 402
     gen.charged = True
+    if kind == "image":
+        # مسیریابی مدل بر اساس منبع پرداخت: هدیه/رایگان → مدل هدیه،
+        # سکه → مدل اصلی. worker همان gen.model_id را می‌خواند.
+        role_model = (
+            _gift_image_model()
+            if source in ("gift", "free")
+            else _main_image_model()
+        )
+        if role_model is not None:
+            gen.model_id = role_model.id
     db.session.commit()
     # صف: worker با send_task برمی‌دارد (نام تسک در worker.py).
     from .worker import celery_app
@@ -2108,6 +2150,29 @@ def admin_update_settings():
     body = request.json or {}
     if not body.get("key") or body.get("value") is None:
         return jsonify({"error": "key and value required"}), 400
+    if body["key"] in ("main_image_model_id", "gift_image_model_id"):
+        # نقش‌های مدل فقط id یک مدل ویرایش تصویر فعال را می‌پذیرند؛
+        # مقدار خالی یعنی پاک‌کردن نقش (برگشت به رفتار پیش‌فرض).
+        val = str(body["value"]).strip()
+        if val == "":
+            row = AppSetting.query.get(body["key"])
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+            return jsonify({"key": body["key"], "value": ""})
+        try:
+            mid = int(val)
+        except (TypeError, ValueError):
+            return jsonify({"error": "model id must be an integer"}), 400
+        m = AppModel.query.get(mid)
+        if (
+            not m
+            or m.kind != "image"
+            or m.capability != "edit_image"
+            or not m.is_active
+        ):
+            return jsonify({"error": "model not found or not active"}), 400
+        body["value"] = str(mid)
     row = AppSetting.query.get(body["key"])
     if row:
         row.value = str(body["value"])

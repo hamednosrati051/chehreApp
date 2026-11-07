@@ -115,12 +115,56 @@ def _edit_via_chat(model_row, image_path, prompt):
     return result
 
 
+def _edit_via_cloudflare(model_row, image_path, prompt):
+    """ویرایش با Cloudflare Workers AI (FLUX.2 Klein 4B).
+
+    ورودی باید کوچک‌تر از 512×512 باشد، پس سلفی اول کوچک می‌شود؛
+    پاسخ JSON با تصویر base64 است (نه بایت خام)؛ خروجی مثل _call به
+    شکل b64_json برمی‌گردد تا worker بدون تغییر کار کند.
+    """
+    import base64
+    import io
+
+    from PIL import Image
+
+    api_key, base_url, model_name = _model_creds(model_row)
+    with Image.open(image_path) as im:
+        im = im.convert("RGB")
+        w, h = im.size
+        scale = min(1.0, 512 / max(w, h))
+        if scale < 1.0:
+            im = im.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=90)
+        data = buf.getvalue()
+    resp = requests.post(
+        f"{base_url}/{model_name}",
+        headers={"Authorization": f"Bearer {api_key}"},
+        files={"input_image_0": ("input.jpg", data, "image/jpeg")},
+        data={"prompt": "Use image 0 as the person. " + prompt},
+        timeout=300,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"provider http {resp.status_code}: {resp.text[:500]}")
+    ctype = resp.headers.get("content-type") or ""
+    if ctype.startswith("image/"):
+        return {"b64_json": base64.b64encode(resp.content).decode("ascii")}
+    payload = resp.json()
+    b64 = (payload.get("result") or {}).get("image")
+    if not b64:
+        raise RuntimeError("unexpected cloudflare image response")
+    return {"b64_json": b64}
+
+
 def edit_image(model_row, image_path, prompt):
     """سلفی + پرامپت مخفی دنیا → تصویر سبک‌دار.
 
     مدل‌های Gemini (provider_type=chat_image_edit_gemini) از مسیر چت
-    می‌روند؛ بقیه (openai_compat) از /images/edits مثل قبل.
+    می‌روند؛ Cloudflare (provider_type=cloudflare_workers_ai) از
+    Workers AI؛ بقیه (openai_compat) از /images/edits مثل قبل.
     """
+    if (model_row.provider_type or "") == "cloudflare_workers_ai":
+        return _edit_via_cloudflare(model_row, image_path, prompt)
     if (model_row.provider_type or "") == "chat_image_edit_gemini":
         return _edit_via_chat(model_row, image_path, prompt)
     _, _, model_name = _model_creds(model_row)
