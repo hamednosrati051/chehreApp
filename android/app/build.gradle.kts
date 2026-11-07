@@ -13,8 +13,9 @@ android {
         applicationId = "ir.inourai.newapp"
         minSdk = 26
         targetSdk = 34
-        // v13: دکمه‌ی ساخت دو ردیف شد (رفع بریده‌شدن روی گوشی باریک) + چیپ «۱۰ سکه».
-        versionCode = 13
+        // v12 rebuild: همه‌ی تغییرات (برچسب هدیه + ناج نتیجه + چک اعلان +
+        // دکمه‌ی ساخت دو ردیف + پیام خطای ایمنی همه‌مدل‌ها) در یک خروجی نسخه‌ی ۱۲.
+        versionCode = 12
         versionName = "1.0"
     }
 
