@@ -13,8 +13,8 @@ android {
         applicationId = "ir.inourai.newapp"
         minSdk = 26
         targetSdk = 34
-        // v4: پروفایل مطابق طرح مرجع (کارت آبی سکه + شیت پک‌ها با دکمه‌ی خرید) + pack_type.
-        versionCode = 11
+        // v12: برچسب کیفیت ساخت + پیام هدیه + چک اعلان در لانچ.
+        versionCode = 12
         versionName = "1.0"
     }
 

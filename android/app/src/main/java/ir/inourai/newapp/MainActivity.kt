@@ -1,9 +1,13 @@
 package ir.inourai.newapp
 
 import android.Manifest
+import android.app.NotificationManager
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -16,7 +20,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -27,16 +34,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,7 +65,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -227,6 +242,29 @@ fun App(initialGenId: Long = -1L) {
         }
     }
 
+    // بنر اعلان (نسخه‌ی ۱۲): در هر بار بازگشت به اپ بررسی می‌شود؛ اگر
+    // اعلان‌ها خاموش باشند، یک بنر ساده بالای صفحه می‌آید (فقط
+    // اطلاع‌رسانی به کاربر، بدون هیچ گزارشی به ادمین). بستن بنر فقط
+    // برای همین اجراست؛ در اجرای بعدی دوباره بررسی می‌شود. بازگشت از
+    // تنظیمات هم دوباره بررسی می‌کند تا بنر بی‌درنگ محو شود.
+    var notificationsEnabled by remember { mutableStateOf(true) }
+    var notifBannerDismissed by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                try {
+                    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    notificationsEnabled = nm.areNotificationsEnabled()
+                } catch (_: Exception) {
+                    notificationsEnabled = true
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     // جهت راست‌به‌چپ برای کل ترکیب: خانه اول (راست) و پروفایل آخر (چپ).
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
     AppTheme {
@@ -266,10 +304,11 @@ fun App(initialGenId: Long = -1L) {
                 }
             },
         ) { pad ->
+            Box(modifier = Modifier.padding(pad)) {
             NavHost(
                 navController = nav,
                 startDestination = if (initialGenId > 0) "result/$initialGenId" else Dest.HOME,
-                modifier = Modifier.padding(pad),
+                modifier = Modifier.fillMaxSize(),
                 enterTransition = { fadeIn(animationSpec = tween(300)) },
                 exitTransition = { fadeOut(animationSpec = tween(300)) },
                 popEnterTransition = { fadeIn(animationSpec = tween(300)) },
@@ -351,6 +390,7 @@ fun App(initialGenId: Long = -1L) {
                         onBack = {
                             if (!nav.popBackStack()) nav.navigate(Dest.HOME)
                         },
+                        onLogin = { nav.navigate(Dest.LOGIN) },
                     )
                 }
                 composable(Dest.LOGIN) {
@@ -360,6 +400,58 @@ fun App(initialGenId: Long = -1L) {
                         }
                     })
                 }
+            }
+            // بنر اعلان (نسخه‌ی ۱۲): فقط وقتی اعلان‌ها خاموش‌اند و در
+            // همین اجرا بسته نشده باشد؛ روی صفحه شناور می‌نشیند.
+            if (!notificationsEnabled && !notifBannerDismissed) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(16.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.NotificationsOff,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp),
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "اعلان‌ها خاموش است",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                            )
+                            Text(
+                                "وقتی تصویرت آماده شد با اعلان خبرت می‌کنیم؛ برای دریافت اعلان، دسترسی را روشن کن.",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+                        TextButton(onClick = {
+                            try {
+                                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                }
+                                context.startActivity(intent)
+                            } catch (_: Exception) {
+                            }
+                        }) {
+                            Text("تنظیمات", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                        IconButton(onClick = { notifBannerDismissed = true }) {
+                            Icon(Icons.Rounded.Close, contentDescription = null, tint = Color.White)
+                        }
+                    }
+                }
+            }
             }
         }
         }

@@ -135,6 +135,14 @@ fun PacksSheet(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("بسته‌های سکه", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                // خط کیفیت (نسخه‌ی ۱۲، فقط اطلاع‌رسانی): یک خط کوتاه در
+                // سربرگ شیت، نه روی هر کارت پک.
+                Text(
+                    "تصویرها با سکه، با کیفیت خیلی عالی ساخته می‌شوند — چهره و حالت‌ها قشنگ‌تر",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
                 Spacer(modifier = Modifier.height(12.dp))
                 if (packs.isEmpty()) {
                     Text(

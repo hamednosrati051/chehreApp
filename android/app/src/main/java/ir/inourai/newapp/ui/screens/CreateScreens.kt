@@ -316,6 +316,11 @@ fun CreateImageScreen(
     val insufficient = Session.token != null && picked != null && cost > 0 &&
         (balance?.free_image ?: 0) <= 0 && (balance?.coins ?: 0) < cost
 
+    // اعتبار هدیه‌ی تصویری (نسخه‌ی ۱۲): سرور موقع ثبت، هدیه را پیش از
+    // سکه مصرف می‌کند؛ پس اگر الان هدیه هست، ساخت بعدی با هدیه است.
+    // فقط برای برچسب کیفیت خوانده می‌شود؛ دکمه و رفتار ساخت مثل قبل‌اند.
+    val hasGift = (balance?.free_image ?: 0) > 0
+
     fun refreshBalance() {
         scope.launch {
             balance = try {
@@ -348,6 +353,10 @@ fun CreateImageScreen(
             onLogin()
             return
         }
+        // لحظه‌ی لمس دکمه: اگر هدیه هست، سرور همین ساخت را با هدیه ثبت
+        // می‌کند (هدیه پیش از سکه مصرف می‌شود)؛ شناسه برای پیام هدیه در
+        // صفحه‌ی نتیجه نگه داشته می‌شود. رفتار ساخت عوض نشده است.
+        val hadGiftAtTap = hasGift
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(
                 context, Manifest.permission.POST_NOTIFICATIONS
@@ -368,6 +377,7 @@ fun CreateImageScreen(
                         input_url = inputUrl,
                     ),
                 )
+                if (hadGiftAtTap) ResultGiftContext.set(created.id)
                 jobId = created.id
                 status = "queued"
                 GenerationPollService.start(context, created.id)
@@ -588,6 +598,18 @@ fun CreateImageScreen(
                                 }
                             }
                         }
+                        // برچسب کیفیت (نسخه‌ی ۱۲، فقط اطلاع‌رسانی):
+                        // دکمه، چیدمان و رفتار ساخت دقیقاً مثل قبل می‌ماند؛
+                        // این خط فقط می‌گوید ساخت بعدی با چه کیفیتی انجام
+                        // می‌شود — هدیه → استاندارد، سکه → خیلی عالی.
+                        Text(
+                            if (hasGift) "کیفیت استاندارد"
+                            else "کیفیت خیلی عالی — چهره و حالت‌ها قشنگ‌تر",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 13.sp,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            textAlign = TextAlign.Center,
+                        )
                     }
                     // هشدار «آخرین تصویر با سکه‌های فعلی» (مثل رقیب).
                     val bal = balance

@@ -66,6 +66,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -108,13 +109,34 @@ object ResultSwipeContext {
     }
 }
 
+/** شناسه‌ی generationای که با اعتبار هدیه ساخته شد (نسخه‌ی ۱۲، افزایشی):
+ *  سرور منبع پرداخت را در پاسخ ساخت برنمی‌گرداند (charged برای هدیه و
+ *  سکه هر دو True است)؛ صفحه‌ی ساخت پیش از ثبت، free_image را می‌خواند
+ *  و اگر هدیه داشت شناسه را اینجا می‌گذارد تا صفحه‌ی نتیجه‌ی تازه
+ *  (fresh) فقط همان یک بار پیام هدیه را نشان بدهد. با خوانده‌شدن پاک
+ *  می‌شود تا بازدید بعدی همان عکس (از «تصاویر من») پیام نگیرد. */
+object ResultGiftContext {
+    var usedGiftGenId: Long? = null
+        private set
+
+    fun set(genId: Long) {
+        usedGiftGenId = genId
+    }
+
+    fun take(): Long? {
+        val id = usedGiftGenId
+        usedGiftGenId = null
+        return id
+    }
+}
+
 /** نمایش تمام‌صفحه‌ی نتیجه (مثل رقیب): نام دنیا + قلب + اشتراک‌گذاری
  *  و دانلود؛ وقتی تازه ساخته شده، شیت امتیاز بازار هم نشان داده می‌شود.
  *  وقتی از «تصاویر من» باز شده باشد، با سوایپ افقی بین عکس‌های همان
  *  فهرست حرکت می‌کند؛ صفحه‌ی بعد از ساخت تک‌عکس می‌ماند. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBack: () -> Unit) {
+fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBack: () -> Unit, onLogin: () -> Unit = {}) {
     val context = LocalContext.current
     // سوایپ فقط وقتی معنا دارد که صفحه از «تصاویر من» آمده باشد، فهرست
     // دست‌کم ۲ عکس داشته باشد و عکس فعلی عضو همان فهرست باشد؛ در غیر
@@ -135,6 +157,16 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
     var showGalleryConfirm by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var ratingDismissed by remember { mutableStateOf(false) }
+    // پیام هدیه (نسخه‌ی ۱۲): فقط در صفحه‌ی تازه‌ساخته‌شده و فقط وقتی
+    // همین generation با اعتبار هدیه ثبت شده باشد؛ با خوانده‌شدن،
+    // شناسه از ResultGiftContext پاک می‌شود.
+    var showGiftNudge by remember(genId) { mutableStateOf(false) }
+    var showPacks by remember { mutableStateOf(false) }
+    LaunchedEffect(genId) {
+        if (fresh && ResultGiftContext.take() == genId) {
+            showGiftNudge = true
+        }
+    }
     val likedIds by ImageLikes.ids
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -376,6 +408,33 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                 }
             }
         }
+        // پیام هدیه (نسخه‌ی ۱۲): یک متن کوتاه و ساده، بدون قاب یا دکمه‌ی
+        // پررنگ — فقط در صفحه‌ی تازه‌ساخته‌شده و فقط وقتی همین
+        // generation با اعتبار هدیه ساخته شده باشد. «خرید سکه» یک
+        // دکمه‌ی متنی ساده است و شیت بسته‌ها را باز می‌کند.
+        if (showGiftNudge && outputUrl != null) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    "این تصویر با هدیه رایگان و کیفیت استاندارد ساخته شد",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    "تصویر بعدی با سکه، کیفیت خیلی عالی دارد — چهره و حالت‌ها قشنگ‌تر",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                TextButton(onClick = { showPacks = true }) {
+                    Text("خرید سکه", color = Color(0xFF7EB3FF), fontWeight = FontWeight.Bold)
+                }
+            }
+        }
         Spacer(modifier = Modifier.height(8.dp))
         }
 
@@ -427,6 +486,16 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                     Text("انصراف", color = Color.White)
                 }
             },
+        )
+    }
+
+    // شیت بسته‌های سکه (نسخه‌ی ۱۲): از دکمه‌ی متنی «خرید سکه» در پیام هدیه.
+    if (showPacks) {
+        PacksSheet(
+            onDismiss = { showPacks = false },
+            onPurchased = { notice = "سکه‌ها اضافه شد" },
+            onError = { notice = it },
+            onLogin = onLogin,
         )
     }
 
