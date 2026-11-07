@@ -418,7 +418,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    "این تصویر با هدیه رایگان و کیفیت استاندارد ساخته شد",
+                    "این تصویر با هدیه رایگان ساخته شد",
                     color = Color.White.copy(alpha = 0.85f),
                     fontSize = 13.sp,
                     textAlign = TextAlign.Center,

@@ -599,17 +599,18 @@ fun CreateImageScreen(
                             }
                         }
                         // برچسب کیفیت (نسخه‌ی ۱۲، فقط اطلاع‌رسانی):
-                        // دکمه، چیدمان و رفتار ساخت دقیقاً مثل قبل می‌ماند؛
-                        // این خط فقط می‌گوید ساخت بعدی با چه کیفیتی انجام
-                        // می‌شود — هدیه → استاندارد، سکه → خیلی عالی.
-                        Text(
-                            if (hasGift) "کیفیت استاندارد"
-                            else "کیفیت خیلی عالی — چهره و حالت‌ها قشنگ‌تر",
-                            color = Color.White.copy(alpha = 0.85f),
-                            fontSize = 13.sp,
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            textAlign = TextAlign.Center,
-                        )
+                        // فقط وقتی ساخت بعدی با اعتبار هدیه است نشان داده
+                        // می‌شود؛ با سکه هیچ چیز اضافه‌ای نیست و دکمه و
+                        // رفتار ساخت دقیقاً مثل قبل می‌مانند.
+                        if (hasGift) {
+                            Text(
+                                "کیفیت استاندارد",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 13.sp,
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
                     }
                     // هشدار «آخرین تصویر با سکه‌های فعلی» (مثل رقیب).
                     val bal = balance
