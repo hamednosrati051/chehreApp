@@ -247,10 +247,14 @@ fun MyMediaScreen(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
             ) {
                 val pending = images.filter { it.status == "queued" || it.status == "processing" }
-                val done = images.filter { it.status == "done" && it.output_url != null }
+                val done = images.filter { it.status == "done" && it.output_url != null && !it.expired }
+                // منقضی (نسخه‌ی ۱۳): ساختِ تمام‌شده بدون output_url یعنی
+                // فایل رایگان پس از ۲۴ ساعت حذف شده؛ به‌جای عکس، جایِ
+                // خاکستری «منقضی شده» نشان داده می‌شود.
+                val expired = images.filter { it.status == "done" && (it.expired || it.output_url == null) }
                 // فهرست سوایپ صفحه‌ی نتیجه: همان ترتیبی که شبکه نشان می‌دهد
-                // (در انتظارها اول، بعد آماده‌ها).
-                val swipeIds = pending.map { it.id } + done.map { it.id }
+                // (در انتظارها اول، بعد آماده‌ها، بعد منقضی‌ها).
+                val swipeIds = pending.map { it.id } + done.map { it.id } + expired.map { it.id }
                 if (images.isEmpty()) {
                     item {
                         Text("هنوز عکسی نساخته‌ای؛ از خانه یک دنیا را انتخاب کن.")
@@ -275,6 +279,10 @@ fun MyMediaScreen(
                     }
                 }
                 items(done) { item ->
+                    // اطلاع ۲۴ ساعته (نسخه‌ی ۱۳) زیر عکس رایگان می‌آید؛
+                    // پس‌زمینه روشن است، پس طلایی تیره خواناتر از طلایی
+                    // روشن صفحه‌ی نتیجه است. عکس پولی هیچ اطلاعی نمی‌گیرد.
+                    Column(modifier = Modifier.fillMaxWidth()) {
                     Box(
                         modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                             .clip(RoundedCornerShape(20.dp))
@@ -296,6 +304,36 @@ fun MyMediaScreen(
                                     .padding(horizontal = 8.dp, vertical = 3.dp),
                             ) {
                                 Text("✓ نگارخانه", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    if (item.is_free) {
+                        Text(
+                            "عکس رایگان فقط ۲۴ ساعت نگه داشته می‌شود",
+                            color = Color(0xFFB7791F),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        )
+                    }
+                    }
+                }
+                items(expired) { item ->
+                    Box(
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color(0xFFE0E0E0))
+                            .clickable {
+                                ResultSwipeContext.set(swipeIds)
+                                onImage(item.id)
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("منقضی شده", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            item.world_name?.let {
+                                Text(it, color = Color.Gray, fontSize = 12.sp)
                             }
                         }
                     }

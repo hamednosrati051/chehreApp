@@ -151,6 +151,13 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
     val swipeThresholdPx = remember(density) { with(density) { 80.dp.toPx() } }
     var status by remember { mutableStateOf("loading") }
     var outputUrl by remember { mutableStateOf<String?>(null) }
+    // نسخه‌ی ۱۳: رایگان/منقضی بودن هر عکس بر حسب شناسه نگه داشته
+    // می‌شود تا در انیمیشن سوایپ، عکس قبلی با وضعیت عکس تازه قاطی نشود.
+    var freeIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var expiredIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    // در هر بازترکیب از نو خوانده می‌شوند (State هستند).
+    val isFree = currentId in freeIds
+    val isExpired = currentId in expiredIds
     var worldName by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var submitted by remember { mutableStateOf(false) }
@@ -195,6 +202,14 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                 status = st.status
                 outputUrl = st.output_url
                 worldName = st.world_name
+                if (st.is_free) freeIds = freeIds + currentId
+                // منقضی (نسخه‌ی ۱۳): پرچم سرور، یا دفاعی — ساختِ تمام‌شده‌ی
+                // عکس بدون output_url یعنی فایلش پس از ۲۴ ساعت حذف شده است.
+                // کش عکس قبلی هم پاک می‌شود تا عکس منقضی نشان داده نشود.
+                if (st.expired || (st.status == "done" && st.output_url == null)) {
+                    expiredIds = expiredIds + currentId
+                    photoCache = photoCache - currentId
+                }
                 if (st.status == "done" && st.output_url != null) {
                     photoCache = photoCache + (currentId to st.output_url)
                 }
@@ -354,6 +369,32 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
             ) { id ->
                 val cached = photoCache[id]
                 when {
+                    // منقضی (نسخه‌ی ۱۳): به‌جای عکس، حالت منقضی؛ هرگز
+                    // عکس خراب یا کش قدیمی نشان داده نمی‌شود.
+                    id in expiredIds -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp),
+                        ) {
+                            Text(
+                                "این عکس رایگان منقضی شده است",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                textAlign = TextAlign.Center,
+                            )
+                            Text(
+                                "فایل این عکس پس از ۲۴ ساعت حذف شد؛ نسخه‌ای که دانلود کرده‌ای در گوشی تو باقی مانده است.",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                    }
                     cached != null -> AsyncImage(
                         model = cached,
                         contentDescription = null,
@@ -380,7 +421,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                 }
             }
         }
-        if (outputUrl != null) {
+        if (outputUrl != null && !isExpired) {
             // ردیف آیکون‌های اقدام: خالص و بدون نوشته، با فاصله‌ی یکسان؛
             // همین ردیف هم در صفحه‌ی بعد از ساخت و هم در «تصاویر من» دیده می‌شود
             // (هر دو همان ResultScreen است). جایگزین دکمه‌های متنی قبلی.
@@ -407,6 +448,19 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                     }
                 }
             }
+        }
+        // اطلاع ۲۴ ساعته (نسخه‌ی ۱۳): فقط عکس رایگانِ هنوز منقضی‌نشده؛
+        // طلایی و پررنگ، هم‌سبک خط طلایی پیام هدیه‌ی نسخه‌ی ۱۲.
+        // عکس پولی هیچ اطلاعی نمی‌گیرد.
+        if (status == "done" && isFree && !isExpired && outputUrl != null) {
+            Text(
+                "عکس رایگان فقط ۲۴ ساعت نگه داشته می‌شود",
+                color = Color(0xFFFFC107),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
         }
         // پیام هدیه (نسخه‌ی ۱۲): خط اول کوچک و کم‌رنگ، خط دوم بزرگ و
         // پررنگ و طلایی تا تو چشم باشد؛ دکمه‌ی «خرید سکه» هم طلایی است.
