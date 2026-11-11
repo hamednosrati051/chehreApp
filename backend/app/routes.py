@@ -2374,6 +2374,7 @@ def _user_admin(u):
     return {
         "id": u.id,
         "mobile": u.mobile,
+        "bazaar_account_id": u.bazaar_account_id,
         "name": u.name,
         "status": u.status,
         "free_image_credits": u.free_image_credits,
