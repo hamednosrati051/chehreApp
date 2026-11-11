@@ -2144,7 +2144,11 @@ def admin_update_settings():
     body = request.json or {}
     if not body.get("key") or body.get("value") is None:
         return jsonify({"error": "key and value required"}), 400
-    if body["key"] in ("main_image_model_id", "gift_image_model_id"):
+    if body["key"] in (
+        "main_image_model_id",
+        "gift_image_model_id",
+        "gift_image_model_id_2",
+    ):
         # نقش‌های مدل فقط id یک مدل ویرایش تصویر فعال را می‌پذیرند؛
         # مقدار خالی یعنی پاک‌کردن نقش (برگشت به رفتار پیش‌فرض).
         val = str(body["value"]).strip()
