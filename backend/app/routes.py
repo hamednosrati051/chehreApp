@@ -2035,6 +2035,7 @@ def admin_list_generations():
     ).order_by(AppGeneration.id.desc())
     rows, meta = _paginate(query)
     users = {u.id: u.mobile for u in AppUser.query.all()}
+    bazaar_ids = {u.id: u.bazaar_account_id for u in AppUser.query.all()}
     worlds = {w.id: w.name for w in AppWorld.query.all()}
     models = {m.id: m.name for m in AppModel.query.all()}
     # نوع تولید (رایگان/پولی) از روی دفتر سکه: سطر spend یعنی پولی، نبودنش
@@ -2063,6 +2064,7 @@ def admin_list_generations():
                 "id": r.id,
                 "user_id": r.user_id,
                 "mobile": users.get(r.user_id),
+                "bazaar_account_id": bazaar_ids.get(r.user_id),
                 "world": worlds.get(r.world_id),
                 "model": models.get(r.model_id),
                 "status": r.status,
@@ -2146,11 +2148,13 @@ def admin_list_inputs():
     total = db.session.query(func.count()).select_from(grouped.subquery()).scalar()
     rows = grouped.offset((page - 1) * page_size).limit(page_size).all()
     users = {u.id: u.mobile for u in AppUser.query.all()}
+    bazaar_ids = {u.id: u.bazaar_account_id for u in AppUser.query.all()}
     items = [
         {
             "input_url": r.input_url,
             "user_id": r.user_id,
             "mobile": users.get(r.user_id),
+            "bazaar_account_id": bazaar_ids.get(r.user_id),
             "uses": r.uses,
             "first_used": r.first_used.isoformat() if r.first_used else None,
             "last_used": r.last_used.isoformat() if r.last_used else None,
