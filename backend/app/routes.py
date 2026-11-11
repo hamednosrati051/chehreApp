@@ -1198,15 +1198,9 @@ def admin_update_model(model_id):
         m.capability = body["capability"]
     if "is_active" in body:
         m.is_active = bool(body["is_active"])
-        # تک‌مدل فعال به‌ازای هر دسته: فعال‌کردن یک مدل، بقیه‌ی همان
-        # kind و capability را غیرفعال می‌کند (تصمیم مالک، 2026-10-27).
-        if m.is_active:
-            AppModel.query.filter(
-                AppModel.id != m.id,
-                AppModel.kind == m.kind,
-                AppModel.capability == m.capability,
-                AppModel.is_active.is_(True),
-            ).update({"is_active": False})
+        # شرط تک‌مدل برداشته شد (تصمیم مالک، 2026-11-11): همه‌ی مدل‌ها
+        # می‌توانند هم‌زمان فعال باشند؛ مدل اصلی و هدیه از راه دو
+        # سلکتور نقش در ادمین تعیین می‌شوند، نه با فعال/غیرفعال.
     if "config_json" in body and isinstance(body["config_json"], dict):
         incoming = {
             k: v for k, v in body["config_json"].items() if k != _PROVIDER_CREDS_KEY
