@@ -1930,6 +1930,18 @@ def admin_list_generations():
     users = {u.id: u.mobile for u in AppUser.query.all()}
     worlds = {w.id: w.name for w in AppWorld.query.all()}
     models = {m.id: m.name for m in AppModel.query.all()}
+    # نوع تولید (رایگان/پولی) از روی دفتر سکه: سطر spend یعنی پولی، نبودنش
+    # یعنی رایگان — همان قانونی که بازپرداخت و پاکسازی ۲۴ ساعته استفاده می‌کنند.
+    spent_ids = {
+        row[0]
+        for row in db.session.query(AppCoinLedger.ref_id)
+        .filter(
+            AppCoinLedger.ref_type == "generation",
+            AppCoinLedger.ref_id.in_([r.id for r in rows]),
+            AppCoinLedger.reason == "spend",
+        )
+        .all()
+    }
     out = []
     for r in rows:
         out.append(
@@ -1941,11 +1953,53 @@ def admin_list_generations():
                 "model": models.get(r.model_id),
                 "status": r.status,
                 "coin_cost": r.coin_cost,
+                "is_free": r.id not in spent_ids,
                 "output_url": r.output_url,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
         )
     return jsonify({"items": out, **meta})
+
+
+@admin_bp.delete("/admin/generations/<int:gen_id>/output")
+@require_admin
+def admin_delete_generation_output(gen_id):
+    """حذف فیزیکی عکس خروجی یک تولید از روی سرور + خالی‌کردن output_url.
+    رکورد، تاریخچه و سکه دست نمی‌خورند. مثل حذف ورودی‌ها، ولی برای خروجی.
+    اگر تولید در نگارخانه منتشر شده باشد، حذف نمی‌شود (گالری به همان فایل
+    لینک دارد)؛ اول از نگارخانه حذفش کن."""
+    from urllib.parse import urlparse
+
+    gen = AppGeneration.query.get(gen_id)
+    if not gen:
+        return jsonify({"error": "not found"}), 404
+    if gen.status in ("processing", "queued"):
+        return jsonify({"error": "generation in flight"}), 409
+    if not gen.output_url:
+        return jsonify({"ok": True, "deleted_file": False})
+    if current_app.config.get("S3_ENDPOINT"):
+        return jsonify({"error": "S3-backed storage: file delete not supported here"}), 400
+    parsed = urlparse(gen.output_url)
+    if parsed.netloc not in ("", "chehre.inourai.ir", "171.22.25.152:5001") or not parsed.path.startswith(
+        "/static/uploads/"
+    ):
+        return jsonify({"error": "only local upload files can be deleted"}), 400
+    filename = os.path.basename(parsed.path)
+    if not filename or filename in (".", "..") or "/" in filename or "\\" in filename:
+        return jsonify({"error": "bad filename"}), 400
+    if AppGallery.query.filter_by(generation_id=gen.id).first():
+        return jsonify({"error": "در نگارخانه منتشر شده؛ اول از نگارخانه حذفش کن"}), 409
+    uploads_dir = os.path.realpath(os.path.join(current_app.static_folder, "uploads"))
+    path = os.path.realpath(os.path.join(uploads_dir, filename))
+    if os.path.commonpath([path, uploads_dir]) != uploads_dir:
+        return jsonify({"error": "bad path"}), 400
+    deleted_file = False
+    if os.path.exists(path):
+        os.unlink(path)
+        deleted_file = True
+    gen.output_url = None
+    db.session.commit()
+    return jsonify({"ok": True, "deleted_file": deleted_file})
 
 
 @admin_bp.get("/admin/inputs")
