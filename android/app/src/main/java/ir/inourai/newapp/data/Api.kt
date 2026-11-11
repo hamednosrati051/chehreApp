@@ -86,6 +86,9 @@ data class GenerationStatus(
     // v13: رایگان (هدیه) یا پولی؛ نبودن فیلد یعنی پاسخ قدیمی (پولی فرض نمی‌شود،
     // فقط اعلان نشان داده نمی‌شود مگر ResultGiftContext).
     val is_free: Boolean = false,
+    // v14: در نگارخانه هست یا نه (هر وضعیتی)؛ اعلان ۲۴ ساعته فقط وقتی
+    // نشان داده می‌شود که رایگان باشد و در نگارخانه نباشد.
+    val in_gallery: Boolean = false,
 )
 data class Balance(
     val coins: Int,

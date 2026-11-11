@@ -142,16 +142,21 @@ fun LoginScreen(onDone: () -> Unit) {
                 fontSize = 14.sp,
             )
             Spacer(modifier = Modifier.height(4.dp))
+            // v14: متن دکمه‌ی بازار — هدیه‌ی ورودی + «یک لمس، بدون پیامک».
+            // هدیه دست نخورده است؛ فقط جمله‌ی روی دکمه عوض شده.
             Button(
                 onClick = { startBazaarSignIn() },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier.fillMaxWidth().height(64.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF0EA960),
                     contentColor = Color.White,
                 ),
                 shape = RoundedCornerShape(16.dp),
             ) {
-                Text("ورود امن و راحت با بازار", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("با بازار وارد شو، ۱ عکس رایگان اضافه بگیر", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text("یک لمس، بدون پیامک", fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f))
+                }
             }
             TextButton(
                 onClick = { showOtp = true },
