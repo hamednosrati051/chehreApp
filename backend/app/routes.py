@@ -37,7 +37,6 @@ from .models import (
 )
 from .services import bale as bale_svc
 from .services import bazaar as bazaar_svc
-from .services import cleanup as cleanup_svc
 from .services import coins as coins_svc
 from .services import fcm as fcm_svc
 from .services import sms as sms_svc
@@ -657,9 +656,6 @@ def get_generation(gen_id):
     if not gen or gen.user_id != g.user.id:
         return jsonify({"error": "not found"}), 404
     world = AppWorld.query.get(gen.world_id) if gen.world_id else None
-    # نسخه‌ی ۱۳، افزایشی: is_free / expired / expires_at (اپ‌های قدیمی
-    # نمی‌شناسند و نادیده می‌گیرند).
-    extra = cleanup_svc.generation_extra_fields([gen])[gen.id]
     return jsonify(
         {
             "id": gen.id,
@@ -674,7 +670,6 @@ def get_generation(gen_id):
             "error": gen.error_message,
             "world_id": gen.world_id,
             "world_name": world.name if world else None,
-            **extra,
         }
     )
 
@@ -695,9 +690,6 @@ def my_generations():
         if world_ids
         else {}
     )
-    # نسخه‌ی ۱۳، افزایشی: is_free / expired / expires_at — یک پرس‌وجوی
-    # IN برای دفتر سکه، نه N+1 (اپ‌های قدیمی نمی‌شناسند و نادیده می‌گیرند).
-    extra = cleanup_svc.generation_extra_fields(gens)
     return jsonify(
         [
             {
@@ -711,7 +703,6 @@ def my_generations():
                 ),
                 # نسخه‌ی ۱۰، افزایشی: تاریخ شمسی برای زیرنویس گالری.
                 "created_at_fa": _fa_dt(gen.created_at),
-                **extra[gen.id],
             }
             for gen in gens
         ]

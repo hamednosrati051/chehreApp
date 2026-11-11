@@ -1,4 +1,3 @@
-import click
 from flask import Flask
 
 from .config import Config
@@ -31,22 +30,5 @@ def create_app(config_class=Config):
     @app.get("/health")
     def health():
         return {"ok": True}
-
-    @app.cli.command("cleanup-expired-free-images")
-    def cleanup_expired_free_images_command():
-        """حذف عکس‌های رایگان (هدیه) قدیمی‌تر از ۲۴ ساعت — نسخه‌ی ۱۳.
-
-        اجرا از cron سرور، ساعتی یک بار (بدون scheduler داخل اپ):
-            cd /opt/new-app/backend && /opt/new-app/venv/bin/flask --app run.py cleanup-expired-free-images
-        (مسیر venv پایتون سرور را با مسیر واقعی آن جایگزین کنید.)
-        یک خط خلاصه چاپ می‌کند و با کد ۰ برمی‌گردد.
-        """
-        from .services.cleanup import cleanup_expired_free_images
-
-        result = cleanup_expired_free_images()
-        click.echo(
-            "cleanup-expired-free-images: scanned={scanned} deleted={deleted} "
-            "skipped={skipped} files_missing={files_missing}".format(**result)
-        )
 
     return app

@@ -78,11 +78,6 @@ data class GenerationStatus(
     // نسخه‌ی ۱۰، افزایشی: ورودی خود کاربر (قبل/بعد) و تاریخ شمسی زیرنویس.
     val input_url: String? = null,
     val created_at_fa: String? = null,
-    // نسخه‌ی ۱۳، افزایشی: انقضای ۲۴ ساعته‌ی عکس رایگان. نبودن فیلد
-    // در پاسخ قدیمی یعنی پولی و منقضی‌نشده (پیش‌فرض‌ها پارس را نمی‌شکنند).
-    val is_free: Boolean = false,
-    val expired: Boolean = false,
-    val expires_at: String? = null,
 )
 data class Balance(
     val coins: Int,
