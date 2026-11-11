@@ -1957,7 +1957,7 @@ def admin_gallery_publish_bale(row_id):
     """انتشار یک عکس تأییدشده‌ی گالری در کانال بله @iNourAi.
 
     دکمه‌ی ادمین در «تاریخچه گالری»؛ فقط ردیف تأییدشده، هر ردیف حداکثر
-    یک بار (bale_published_at). کپشن: نام دنیا + «چهره‌ساز».
+    یک بار (bale_published_at). کپشن: نام دنیا + «چهره‌ساز» + لینک بازار.
     وضعیت انتشار فقط بعد از ارسال موفق ثبت می‌شود.
     """
     payload, status = _publish_gallery_row_to_bale(row_id)
@@ -1991,6 +1991,7 @@ def _publish_gallery_row_to_bale(row_id):
         w = AppWorld.query.get(gen.world_id)
         world_name = w.name if w else None
     caption = f"{world_name} — چهره‌ساز" if world_name else "چهره‌ساز"
+    caption = f"{caption}\nhttps://cafebazaar.ir/app/ir.inourai.newapp"
     # فقط فایل لوکال روی همین سرور (مثل حذف ورودی‌ها).
     if current_app.config.get("S3_ENDPOINT"):
         return {"error": "S3-backed storage: bale publish not supported here"}, 400
