@@ -21,6 +21,8 @@ REPOS = [
     "https://dl.google.com/dl/android/maven2",
     "https://repo.maven.apache.org/maven2",
     "https://plugins.gradle.org/m2",
+    # JitPack (v13: CafeBazaarAuth native login).
+    "https://jitpack.io",
 ]
 OUT = os.path.expanduser("~/workspace/chehreApp/android/local-repo")
 NS = {"m": "http://maven.apache.org/POM/4.0.0"}
@@ -257,6 +259,8 @@ def main():
         ("com.google.gms.google-services", "com.google.gms.google-services.gradle.plugin", "4.4.2"),
         ("com.google.gms", "google-services", "4.4.2"),
         ("com.google.firebase", "firebase-messaging", "24.0.1"),
+        # v13: Bazaar native login (CafeBazaarAuth, JitPack).
+        ("com.github.cafebazaar.CafeBazaarAuth", "auth", "1.1.0"),
     ]
     queue = deque(seeds)
     seen = set(seeds)

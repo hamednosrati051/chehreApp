@@ -6,7 +6,10 @@ from .extensions import db
 class AppUser(db.Model):
     __tablename__ = "app_users"
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    mobile = db.Column(db.String(20), unique=True, nullable=False)
+    # نسخه‌ی ۱۳ (ورود با بازار): کاربر بازار موبایل ندارد؛ موبایل از
+    # اینجا nullable شد. bazaar_account_id شناسه‌ی پایدار کاربر در بازار است.
+    mobile = db.Column(db.String(20), unique=True, nullable=True)
+    bazaar_account_id = db.Column(db.String(128), unique=True, nullable=True)
     name = db.Column(db.String(100))
     free_image_credits = db.Column(db.Integer, default=1, nullable=False)
     free_voice_credits = db.Column(db.Integer, default=1, nullable=False)

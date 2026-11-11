@@ -13,9 +13,9 @@ android {
         applicationId = "ir.inourai.newapp"
         minSdk = 26
         targetSdk = 34
-        // v12 rebuild: همه‌ی تغییرات (برچسب هدیه + ناج نتیجه + چک اعلان +
-        // دکمه‌ی ساخت دو ردیف + پیام خطای ایمنی همه‌مدل‌ها) در یک خروجی نسخه‌ی ۱۲.
-        versionCode = 12
+        // v13 rebuild: Bazaar login + 24h free-image notice + double-tap
+        // guard + soft update prompt.
+        versionCode = 13
         versionName = "1.0"
     }
 
@@ -78,6 +78,23 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        // v13: CafeBazaarAuth 1.1.0 با متادیتای Kotlin 2.2 کامپایل شده
+        // ولی پروژه روی Kotlin 1.9.24 است؛ بدون این پرچم، کامپایلر
+        // همه‌ی ارجاع‌ها به کتابخانه را خطا می‌دهد. پرچم فقط بررسی
+        // نسخه‌ی متادیتا را رد می‌کند (API کتابخانه ساده است)؛ جایگزین
+        // آن ارتقای Kotlin به 2.2 است که تغییر زنجیره‌ی ابزار است.
+        freeCompilerArgs += "-Xskip-metadata-version-check"
+    }
+}
+
+// v13: CafeBazaarAuth 1.1.0 وابستگی انتقالی androidx.core:core-ktx:1.17.0
+// می‌آورد که compileSdk 36 و AGP 8.9.1 می‌خواهد؛ پروژه روی compileSdk 34
+// و AGP 8.5.2 است. پس core را روی 1.13.1 (سازگار با 34) پین می‌کنیم.
+// کتابخانه‌ی بازار فقط APIهای پایه‌ی core را استفاده می‌کند.
+configurations.all {
+    resolutionStrategy {
+        force("androidx.core:core:1.13.1")
+        force("androidx.core:core-ktx:1.13.1")
     }
 }
 
@@ -103,8 +120,10 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
-    // اسپلش اول اپ (انیمیشن Lottie با نهایی‌شدن برند اضافه می‌شود).
     implementation("com.airbnb.android:lottie-compose:6.5.0")
+
+    // v13: Bazaar native login (CafeBazaarAuth via JitPack).
+    implementation("com.github.cafebazaar.CafeBazaarAuth:auth:1.1.0")
 
     // پین lifecycle روی 2.8.3 — فیکس کرش لانچ:
     // navigation-compose 2.8.0 در NavHost از viewModel()‎ با CreationExtras

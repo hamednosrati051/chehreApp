@@ -12,7 +12,8 @@ USE new_app;
 -- کاربران خود اپ (حساب جدا از نورا؛ لاگین با موبایل + OTP)
 CREATE TABLE app_users (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  mobile VARCHAR(20) NOT NULL UNIQUE,
+  mobile VARCHAR(20) NULL UNIQUE,
+  bazaar_account_id VARCHAR(128) NULL UNIQUE,  -- نسخه‌ی ۱۳: ورود با بازار (کاربر بازار موبایل ندارد)
   name VARCHAR(100) NULL,
   free_image_credits INT NOT NULL DEFAULT 1,  -- هدیه ورود: ۱ عکس رایگان
   free_voice_credits INT NOT NULL DEFAULT 1,  -- هدیه ورود: ۱ تبدیل صدا رایگان

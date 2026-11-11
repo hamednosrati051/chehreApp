@@ -161,6 +161,9 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
     // همین generation با اعتبار هدیه ثبت شده باشد؛ با خوانده‌شدن،
     // شناسه از ResultGiftContext پاک می‌شود.
     var showGiftNudge by remember(genId) { mutableStateOf(false) }
+    // v13: رایگان (هدیه) بودن این generation — از API؛ برای صفحه‌ی
+    // تازه‌ساخته‌شده، ResultGiftContext هم جایگزین است.
+    var isFree by remember { mutableStateOf(false) }
     var showPacks by remember { mutableStateOf(false) }
     LaunchedEffect(genId) {
         if (fresh && ResultGiftContext.take() == genId) {
@@ -179,6 +182,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
         outputUrl = null
         worldName = null
         error = null
+        isFree = false
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel(currentId.toInt())
         ImageLikes.refresh()
@@ -195,6 +199,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                 status = st.status
                 outputUrl = st.output_url
                 worldName = st.world_name
+                isFree = st.is_free
                 if (st.status == "done" && st.output_url != null) {
                     photoCache = photoCache + (currentId to st.output_url)
                 }
@@ -435,6 +440,19 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                     Text("خرید سکه", color = Color(0xFFFFC107), fontWeight = FontWeight.Bold)
                 }
             }
+        }
+        // v13: اعلان ۲۴ ساعته — فقط برای تصویرهای رایگان (هدیه)؛
+        // تصویر پولی هیچ اعلانی نمی‌گیرد. اگر API هنوز is_free
+        // نفرستد، پیام هدیه‌ی نسخه‌ی ۱۲ جایگزین است.
+        if (outputUrl != null && (isFree || showGiftNudge)) {
+            Text(
+                "هدیه را دانلود کن؛ فقط ۲۴ ساعت می‌ماند",
+                color = Color(0xFFFFC107),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
         }
         Spacer(modifier = Modifier.height(8.dp))
         }

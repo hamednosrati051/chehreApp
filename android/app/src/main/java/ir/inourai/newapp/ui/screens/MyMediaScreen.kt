@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -212,6 +213,7 @@ fun MyMediaScreen(
                     modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 ) {
                     items(likedDone) { item ->
+                        Column(modifier = Modifier.fillMaxWidth()) {
                         Box(
                             modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                                 .clip(RoundedCornerShape(20.dp))
@@ -235,6 +237,18 @@ fun MyMediaScreen(
                                     Text("✓ نگارخانه", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
+                        }
+                        // v13: اعلان ۲۴ ساعته زیر هر تصویر رایگان؛ پولی هیچ اعلانی نمی‌گیرد.
+                        if (item.is_free) {
+                            Text(
+                                "هدیه را دانلود کن؛ فقط ۲۴ ساعت می‌ماند",
+                                color = Color(0xFFB7791F),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            )
+                        }
                         }
                     }
                 }
@@ -275,6 +289,7 @@ fun MyMediaScreen(
                     }
                 }
                 items(done) { item ->
+                    Column(modifier = Modifier.fillMaxWidth()) {
                     Box(
                         modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                             .clip(RoundedCornerShape(20.dp))
@@ -298,6 +313,18 @@ fun MyMediaScreen(
                                 Text("✓ نگارخانه", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+                    }
+                    // v13: اعلان ۲۴ ساعته زیر هر تصویر رایگان؛ پولی هیچ اعلانی نمی‌گیرد.
+                    if (item.is_free) {
+                        Text(
+                            "هدیه را دانلود کن؛ فقط ۲۴ ساعت می‌ماند",
+                            color = Color(0xFFB7791F),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        )
+                    }
                     }
                 }
             }

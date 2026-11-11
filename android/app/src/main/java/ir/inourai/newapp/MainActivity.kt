@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -31,6 +32,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material.icons.Icons
@@ -76,8 +79,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.farsitel.bazaar.core.BazaarSignIn
+import com.farsitel.bazaar.core.callback.BazaarSignInCallback
 import ir.inourai.newapp.billing.BazaarBilling
 import ir.inourai.newapp.data.Api
+import ir.inourai.newapp.data.BazaarLinkRequest
 import ir.inourai.newapp.data.DeviceTokenRequest
 import ir.inourai.newapp.data.Session
 import ir.inourai.newapp.ui.screens.CreateImageScreen
@@ -251,6 +257,59 @@ fun App(initialGenId: Long = -1L) {
     var notificationsEnabled by remember { mutableStateOf(true) }
     var notifBannerDismissed by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
+    // v13 (یک بار در هر اجرا): اتصال خودکار حساب بازار برای کاربرانی
+    // که با موبایل وارد شده‌اند + بررسی نسخه‌ی حداقلی برای اعلان
+    // به‌روزرسانی. هر دو بی‌صدا و fail-open هستند؛ هیچ‌کدام کاربر را
+    // مسدود نمی‌کند و هیچ پیامکی فرستاده نمی‌شود.
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (Session.token != null) {
+            try {
+                val prefs = context.getSharedPreferences("chehre_prefs", Context.MODE_PRIVATE)
+                if (!prefs.getBoolean("bazaar_link_attempted", false)) {
+                    BazaarSignIn.getLastSignedInAccount(
+                        context,
+                        lifecycleOwner,
+                        BazaarSignInCallback { response ->
+                            prefs.edit().putBoolean("bazaar_link_attempted", true).apply()
+                            val account = if (response.isSuccessful) response.data else null
+                            if (account != null) {
+                                scope.launch {
+                                    try {
+                                        Api.service.linkBazaar(BazaarLinkRequest(account.accountId))
+                                    } catch (_: Exception) {
+                                        // ۴۰۹ یا خطای شبکه: دیگر تلاش نمی‌شود.
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }
+            } catch (_: Exception) {
+            }
+        }
+        try {
+            val cfg = Api.service.appConfig()
+            // نسخه‌ی نصب‌شده از PackageManager (به‌جای BuildConfig که
+            // کامپایل جاوا می‌خواهد و Worker Daemon آن در این محیط بسته است).
+            val installedVersionCode = try {
+                val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    pkgInfo.longVersionCode.toInt()
+                } else {
+                    @Suppress("DEPRECATION")
+                    pkgInfo.versionCode
+                }
+            } catch (_: Exception) {
+                0
+            }
+            if (cfg.min_app_version_code > installedVersionCode) {
+                showUpdateDialog = true
+            }
+        } catch (_: Exception) {
+            // خطا در خواندن تنظیمات یعنی هیچ اعلانی (fail-open).
+        }
+    }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -452,6 +511,45 @@ fun App(initialGenId: Long = -1L) {
                         }
                     }
                 }
+            }
+            // v13: اعلان نرم به‌روزرسانی — فقط هشدار است؛ «بعداً» کاربر
+            // را ادامه می‌دهد و نسخه‌ی قدیمی مسدود نمی‌شود.
+            if (showUpdateDialog) {
+                AlertDialog(
+                    onDismissRequest = { showUpdateDialog = false },
+                    title = { Text("نسخه‌ی جدید موجود است", fontWeight = FontWeight.Bold) },
+                    text = { Text("نسخه‌ی جدید چهره‌ساز در کافه‌بازار منتشر شده است؛ برای تجربه‌ی بهتر، اپ را به‌روز کن.") },
+                    confirmButton = {
+                        Button(onClick = {
+                            showUpdateDialog = false
+                            try {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse("bazaar://details?id=${context.packageName}"),
+                                    ),
+                                )
+                            } catch (_: Exception) {
+                                try {
+                                    context.startActivity(
+                                        Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse("https://cafebazaar.ir/app/${context.packageName}"),
+                                        ),
+                                    )
+                                } catch (_: Exception) {
+                                }
+                            }
+                        }) {
+                            Text("به‌روزرسانی")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showUpdateDialog = false }) {
+                            Text("بعداً")
+                        }
+                    },
+                )
             }
             }
         }

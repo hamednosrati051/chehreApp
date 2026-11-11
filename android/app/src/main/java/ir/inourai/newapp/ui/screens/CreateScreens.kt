@@ -355,7 +355,12 @@ fun CreateImageScreen(
     // به‌صورت تابع جدا آمده تا اسنک‌بار «تلاش دوباره» هم همان مسیر را
     // دوباره اجرا کند (نه کپی منطق). ۴۰۲ و ۴۰۱ مثل قبل جدا هندل می‌شوند
     // (بسته‌ها / ورود)؛ بقیه‌ی خطاها نگاشت‌شده به اسنک‌بار می‌روند.
+    // v13: نگهبان ضربه‌ی دوباره — تا وقتی ساختِ همین صفحه در جریان
+    // است، دکمه غیرفعال است و startBuild() بی‌درنگ برمی‌گردد؛ با ترک
+    // صفحه و بازگشت، حالت تازه می‌شود و ساخت دوباره ممکن است.
+    var building by remember { mutableStateOf(false) }
     fun startBuild() {
+        if (building) return
         if (Session.token == null) {
             onLogin()
             return
@@ -373,6 +378,7 @@ fun CreateImageScreen(
                 Manifest.permission.POST_NOTIFICATIONS
             )
         }
+        building = true
         scope.launch {
             try {
                 val uri = picked ?: return@launch
@@ -399,6 +405,8 @@ fun CreateImageScreen(
                     val ue = userError(e)
                     showSnack(ue, if (ue.retryable) { { startBuild() } } else null)
                 }
+            } finally {
+                building = false
             }
         }
     }
@@ -598,6 +606,7 @@ fun CreateImageScreen(
                         // ساخت بیرون از صفحه می‌رفت (۳۸۲dp در ۳۲۸dp جا).
                         Button(
                             onClick = { startBuild() },
+                            enabled = !building,
                             shape = RoundedCornerShape(50),
                             modifier = Modifier.fillMaxWidth(),
                         ) {

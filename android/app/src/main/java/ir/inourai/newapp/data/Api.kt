@@ -26,6 +26,11 @@ private const val BASE_URL = "https://chehre.inourai.ir/api/v1/"
 data class OtpRequest(val mobile: String)
 data class OtpVerify(val mobile: String, val code: String)
 data class TokenResponse(val token: String, val is_new: Boolean? = null)
+// v13: Bazaar native login — server creates/links a user by Bazaar accountId.
+data class BazaarLoginRequest(val account_id: String)
+data class BazaarLinkRequest(val account_id: String)
+data class BazaarLinkResponse(val ok: Boolean)
+data class AppConfig(val min_app_version_code: Int = 0)
 data class MeResponse(val mobile_masked: String)
 data class FavoriteRequest(val world_id: Long)
 data class Category(val id: Long, val name: String, val slug: String)
@@ -78,6 +83,9 @@ data class GenerationStatus(
     // نسخه‌ی ۱۰، افزایشی: ورودی خود کاربر (قبل/بعد) و تاریخ شمسی زیرنویس.
     val input_url: String? = null,
     val created_at_fa: String? = null,
+    // v13: رایگان (هدیه) یا پولی؛ نبودن فیلد یعنی پاسخ قدیمی (پولی فرض نمی‌شود،
+    // فقط اعلان نشان داده نمی‌شود مگر ResultGiftContext).
+    val is_free: Boolean = false,
 )
 data class Balance(
     val coins: Int,
@@ -137,6 +145,8 @@ data class LikedGeneration(
     val status: String?,
     // نسخه‌ی ۱۰، افزایشی: تاریخ شمسی زیرنویس.
     val created_at_fa: String? = null,
+    // v13: رایگان (هدیه) یا پولی (برای اعلان ۲۴ ساعته).
+    val is_free: Boolean = false,
 )
 data class GallerySubmitRequest(val generation_id: Long)
 data class GallerySubmitResponse(val id: Long, val status: String)
@@ -158,6 +168,16 @@ interface ApiService {
 
     @POST("auth/otp/verify")
     suspend fun otpVerify(@Body b: OtpVerify): TokenResponse
+
+    // v13: Bazaar native login + link + soft update-prompt config.
+    @POST("auth/bazaar")
+    suspend fun bazaarLogin(@Body b: BazaarLoginRequest): TokenResponse
+
+    @POST("auth/bazaar/link")
+    suspend fun linkBazaar(@Body b: BazaarLinkRequest): BazaarLinkResponse
+
+    @GET("app-config")
+    suspend fun appConfig(): AppConfig
 
     @GET("auth/me")
     suspend fun me(): MeResponse

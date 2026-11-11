@@ -293,6 +293,11 @@
       <label><input type="checkbox" id="s-gift"> هدیه‌ی ورود برای کاربران جدید (فعال = کاربر جدید ۱ تصویر هدیه می‌گیرد؛ غیرفعال = کاربر جدید هدیه نمی‌گیرد)</label>
       <button>ذخیره هدیه‌ی ورود</button>
     </form>
+    <form class="grid" onsubmit="saveMinVersion(event)">
+      <label>حداقل نسخه‌ی اپ (برای پاپ‌آپ به‌روزرسانی؛ خالی = خاموش)</label>
+      <input id="s-minver" type="number" min="0" step="1" placeholder="مثلا 13">
+      <button>ذخیره حداقل نسخه</button>
+    </form>
     <form class="grid" onsubmit="savePublicSettings(event)">
       <textarea id="ps-about" rows="3" placeholder="درباره ما (متن نمایشی در پروفایل)"></textarea>
       <textarea id="ps-support" rows="3" placeholder="پشتیبانی (متن نمایشی در پروفایل)"></textarea>
@@ -620,9 +625,11 @@ async function delAdmin(id){ if(!confirm('ادمین حذف شود؟')) return; 
 async function loadSettings(){ loadPublicSettings(); const ss = await api('/admin/settings');
   const gm = {}; ss.forEach(s => gm[s.key] = s.value);
   $('s-gift').checked = gm.entry_gift_enabled !== '0' && (gm.entry_gift_enabled || '').toLowerCase() !== 'false';
+  $('s-minver').value = gm.min_app_version_code || '';
   $('s-list').innerHTML = ss.length ? `<table><tr><th>کلید</th><th>مقدار</th></tr>` + ss.map(s => `<tr><td>${esc(s.key)}</td><td>${esc(s.value)}</td></tr>`).join('') + '</table>' : '<p class="muted">تنظیمی نیست.</p>'; }
 async function saveSetting(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: $('s-key').value.trim(), value: $('s-val').value.trim()}); setMsg('تنظیم ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function saveGiftToggle(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'entry_gift_enabled', value: $('s-gift').checked ? '1' : '0'}); setMsg('تنظیم هدیه‌ی ورود ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
+async function saveMinVersion(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'min_app_version_code', value: $('s-minver').value.trim()}); setMsg('حداقل نسخه ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function savePublicSettings(e){ e.preventDefault(); try {
   for (const [k, id] of [['about_us','ps-about'],['support_info','ps-support'],['bug_report_info','ps-bug'],['rules_privacy','ps-rules'],['bazaar_url','ps-bazaar']]) {
     await api('/admin/settings', 'PATCH', {key: k, value: $(id).value.trim()});

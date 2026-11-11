@@ -268,6 +268,59 @@ def otp_verify():
     return jsonify({"token": _token_for(user), "is_new": is_new})
 
 
+@auth_bp.post("/auth/bazaar")
+def bazaar_login():
+    """ورود با بازار (نسخه‌ی ۱۳، جریان native درون‌اپی).
+
+    ورودی فقط account_id است که اپ از کتابخانه‌ی CafeBazaarAuth می‌گیرد.
+    تایید سمت سرور ندارد (پذیرفته‌شده طبق طرح: account_id از اپ واقعی
+    بازار روی گوشی می‌آید و عمومی نیست). کاربر جدید با mobile خالی و
+    همان هدیه‌ی ورود OTP ساخته می‌شود. OTP دست نمی‌خورد؛ نسخه‌های قدیمی
+    مثل قبل با OTP وارد می‌شوند.
+    """
+    body = request.json or {}
+    account_id = body.get("account_id")
+    account_id = account_id.strip() if isinstance(account_id, str) else ""
+    if not account_id:
+        return jsonify({"error": "account_id required"}), 400
+    user = AppUser.query.filter_by(bazaar_account_id=account_id).first()
+    is_new = user is None
+    if user is None:
+        gift = _entry_gift_enabled()
+        user = AppUser(
+            bazaar_account_id=account_id,
+            mobile=None,
+            free_image_credits=1 if gift else 0,
+            free_voice_credits=0,
+        )
+        db.session.add(user)
+    user.last_login_at = datetime.datetime.utcnow()
+    db.session.commit()
+    return jsonify({"token": _token_for(user), "is_new": is_new})
+
+
+@auth_bp.post("/auth/bazaar/link")
+@require_auth
+def bazaar_link():
+    """اتصال حساب بازار به کاربرِ از قبل واردشده (بدون پیامک).
+
+    اپ در اولین اجرای نسخه‌ی ۱۳ با توکن فعلی کاربر، account_id بازار
+    گوشی را به حساب موبایلی او وصل می‌کند تا حساب قدیمی (با سکه‌هایش)
+    حفظ شود. اگر این account_id به کاربر دیگری وصل باشد، 409.
+    """
+    body = request.json or {}
+    account_id = body.get("account_id")
+    account_id = account_id.strip() if isinstance(account_id, str) else ""
+    if not account_id:
+        return jsonify({"error": "account_id required"}), 400
+    other = AppUser.query.filter_by(bazaar_account_id=account_id).first()
+    if other is not None and other.id != g.user.id:
+        return jsonify({"error": "already linked"}), 409
+    g.user.bazaar_account_id = account_id
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 @auth_bp.get("/auth/me")
 @require_auth
 def me():
@@ -649,6 +702,26 @@ def create_generation():
     return jsonify({"id": gen.id, "status": gen.status}), 201
 
 
+def _spent_generation_ids(gen_ids):
+    """شناسه‌ی تولیدهای پولی از روی دفتر سکه: سطر spend یعنی پولی.
+
+    یک پرس‌وجوی IN برای کل لیست (مثل admin_list_generations)؛
+    نبودن سطر یعنی رایگان/هدیه. فقط برای is_free استفاده می‌شود.
+    """
+    if not gen_ids:
+        return set()
+    return {
+        row[0]
+        for row in db.session.query(AppCoinLedger.ref_id)
+        .filter(
+            AppCoinLedger.ref_type == "generation",
+            AppCoinLedger.ref_id.in_(gen_ids),
+            AppCoinLedger.reason == "spend",
+        )
+        .all()
+    }
+
+
 @generations_bp.get("/generations/<int:gen_id>")
 @require_auth
 def get_generation(gen_id):
@@ -656,6 +729,7 @@ def get_generation(gen_id):
     if not gen or gen.user_id != g.user.id:
         return jsonify({"error": "not found"}), 404
     world = AppWorld.query.get(gen.world_id) if gen.world_id else None
+    spent_ids = _spent_generation_ids([gen.id])
     return jsonify(
         {
             "id": gen.id,
@@ -667,6 +741,8 @@ def get_generation(gen_id):
             # اپ‌های قدیمی این فیلد را نمی‌شناسند و نادیده می‌گیرند.
             "input_url": gen.input_url,
             "charged": bool(gen.charged),
+            # نسخه‌ی ۱۳، افزایشی: رایگان/هدیه بودن (برای متن اطلاع ۲۴ ساعته).
+            "is_free": gen.id not in spent_ids,
             "error": gen.error_message,
             "world_id": gen.world_id,
             "world_name": world.name if world else None,
@@ -690,6 +766,7 @@ def my_generations():
         if world_ids
         else {}
     )
+    spent_ids = _spent_generation_ids([gen.id for gen in gens])
     return jsonify(
         [
             {
@@ -701,6 +778,8 @@ def my_generations():
                 "world_name": (
                     worlds[gen.world_id].name if gen.world_id in worlds else None
                 ),
+                # نسخه‌ی ۱۳، افزایشی: رایگان/هدیه بودن (برای متن اطلاع ۲۴ ساعته).
+                "is_free": gen.id not in spent_ids,
                 # نسخه‌ی ۱۰، افزایشی: تاریخ شمسی برای زیرنویس گالری.
                 "created_at_fa": _fa_dt(gen.created_at),
             }
@@ -872,6 +951,24 @@ def public_gallery():
 
 
 PUBLIC_SETTINGS = ("about_us", "support_info", "bug_report_info", "bazaar_url", "rules_privacy", "entry_gift_enabled")
+
+
+@content_bp.get("/app-config")
+def app_config():
+    """حداقل نسخه‌ی اپ برای پاپ‌آپ نرم به‌روزرسانی (نسخه‌ی ۱۳) — بدون احراز هویت.
+
+    مقدار از تنظیم min_app_version_code خوانده می‌شود؛ نبودن یا
+    ناخوانا بودن یعنی ۰ (خاموش؛ هیچ پاپ‌آپی). فقط نسخه‌های ۱۳ به بعد
+    این endpoint را می‌خوانند؛ نسخه‌های قدیمی کاری با آن ندارند.
+    """
+    row = AppSetting.query.get("min_app_version_code")
+    try:
+        value = int(str(row.value).strip()) if row else 0
+    except (TypeError, ValueError):
+        value = 0
+    if value < 0:
+        value = 0
+    return jsonify({"min_app_version_code": value})
 
 
 @content_bp.get("/app/settings")
@@ -1925,7 +2022,17 @@ def admin_gallery_delete(row_id):
 @require_admin
 def admin_list_generations():
     """همه‌ی تولیدهای کاربران، جدیدترین اول (برای تب «همه‌ی تولیدها»ی ادمین)."""
-    query = AppGeneration.query.filter(AppGeneration.status != "failed").order_by(AppGeneration.id.desc())
+    # نسخه‌ی ۱۳: تولیدهای done که خروجی‌شان حذف شده (output_url خالی)
+    # نشان داده نمی‌شوند — عکس رفته و «تمام شده» گمراه‌کننده است.
+    # queued/processing (هنوز در پرواز، output_url خالی) و failedها
+    # همچنان نشان داده می‌شوند.
+    query = AppGeneration.query.filter(
+        AppGeneration.status != "failed",
+        or_(
+            AppGeneration.status != "done",
+            AppGeneration.output_url.isnot(None),
+        ),
+    ).order_by(AppGeneration.id.desc())
     rows, meta = _paginate(query)
     users = {u.id: u.mobile for u in AppUser.query.all()}
     worlds = {w.id: w.name for w in AppWorld.query.all()}
@@ -2233,6 +2340,23 @@ def admin_update_settings():
         ):
             return jsonify({"error": "model not found or not active"}), 400
         body["value"] = str(mid)
+    if body["key"] == "min_app_version_code":
+        # حداقل نسخه‌ی اپ برای پاپ‌آپ به‌روزرسانی (نسخه‌ی ۱۳): عدد صحیح
+        # نامنفی؛ مقدار خالی یعنی خاموش (ردیف حذف می‌شود، مثل نقش‌های مدل).
+        val = str(body["value"]).strip()
+        if val == "":
+            row = AppSetting.query.get(body["key"])
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+            return jsonify({"key": body["key"], "value": ""})
+        try:
+            version = int(val)
+        except (TypeError, ValueError):
+            return jsonify({"error": "min_app_version_code must be an integer"}), 400
+        if version < 0:
+            return jsonify({"error": "min_app_version_code must be >= 0"}), 400
+        body["value"] = str(version)
     row = AppSetting.query.get(body["key"])
     if row:
         row.value = str(body["value"])
