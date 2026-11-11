@@ -1942,6 +1942,13 @@ def admin_list_generations():
         )
         .all()
     }
+    # در نگارخانه رفته یا نه — یک پرس‌وجوی IN برای کل صفحه.
+    gallery_ids = {
+        row[0]
+        for row in db.session.query(AppGallery.generation_id)
+        .filter(AppGallery.generation_id.in_([r.id for r in rows]))
+        .all()
+    }
     out = []
     for r in rows:
         out.append(
@@ -1954,6 +1961,7 @@ def admin_list_generations():
                 "status": r.status,
                 "coin_cost": r.coin_cost,
                 "is_free": r.id not in spent_ids,
+                "in_gallery": r.id in gallery_ids,
                 "output_url": r.output_url,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
