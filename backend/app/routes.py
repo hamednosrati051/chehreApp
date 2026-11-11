@@ -722,6 +722,24 @@ def _spent_generation_ids(gen_ids):
     }
 
 
+def _gallery_generation_ids(gen_ids):
+    """شناسه‌ی تولیدهای دارای ردیف نگارخانه (هر وضعیتی: pending/approved/rejected).
+
+    یک پرس‌وجوی IN برای کل لیست (مثل admin_list_generations)؛
+    نبودن ردیف یعنی در نگارخانه نیست. همان قانونی که پاکسازی
+    ۲۴ ساعته استفاده می‌کند (ردیف نگارخانه‌دار رد می‌شود) و همان
+    چیزی که نشان «✓ نگارخانه»ی اپ نشان می‌دهد.
+    """
+    if not gen_ids:
+        return set()
+    return {
+        row[0]
+        for row in db.session.query(AppGallery.generation_id)
+        .filter(AppGallery.generation_id.in_(gen_ids))
+        .all()
+    }
+
+
 @generations_bp.get("/generations/<int:gen_id>")
 @require_auth
 def get_generation(gen_id):
@@ -767,6 +785,7 @@ def my_generations():
         else {}
     )
     spent_ids = _spent_generation_ids([gen.id for gen in gens])
+    gallery_ids = _gallery_generation_ids([gen.id for gen in gens])
     return jsonify(
         [
             {
@@ -780,6 +799,9 @@ def my_generations():
                 ),
                 # نسخه‌ی ۱۳، افزایشی: رایگان/هدیه بودن (برای متن اطلاع ۲۴ ساعته).
                 "is_free": gen.id not in spent_ids,
+                # نسخه‌ی ۱۴، افزایشی: ردیف نگارخانه دارد یا نه (هر وضعیتی)؛
+                # اپ‌های قدیمی نمی‌شناسند و نادیده می‌گیرند.
+                "in_gallery": gen.id in gallery_ids,
                 # نسخه‌ی ۱۰، افزایشی: تاریخ شمسی برای زیرنویس گالری.
                 "created_at_fa": _fa_dt(gen.created_at),
             }
