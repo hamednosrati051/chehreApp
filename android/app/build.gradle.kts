@@ -13,9 +13,9 @@ android {
         applicationId = "ir.inourai.newapp"
         minSdk = 26
         targetSdk = 34
-        // v14: دکمه‌ی ورود با بازار (جمله‌ی هدیه) + اعلان گالری در «تصاویر من».
-        versionCode = 14
-        versionName = "1.4"
+        // v15: پاپ‌آپ هدیه برای هر ثبت‌نام جدید (حذف محدودیت یک بار در هر گوشی).
+        versionCode = 15
+        versionName = "1.5"
     }
 
     signingConfigs {
