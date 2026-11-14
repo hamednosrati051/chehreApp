@@ -39,6 +39,7 @@ from .services import bale as bale_svc
 from .services import bazaar as bazaar_svc
 from .services import coins as coins_svc
 from .services import fcm as fcm_svc
+from .services import myket as myket_svc
 from .services import sms as sms_svc
 
 auth_bp = Blueprint("auth", __name__)
@@ -1067,11 +1068,14 @@ def submit_gallery():
 @coins_bp.post("/coins/purchases/verify")
 @require_auth
 def verify_purchase_route():
-    """وریفای خرید بازار و شارژ سکه (idempotent).
+    """وریفای خرید بازار یا مایکت و شارژ سکه (idempotent).
 
-    ورودی: pack_id، purchase_token، purchase_data (JSON خام بازار)،
-    signature. بعد از وریفای موفق، اپ باید خرید را در بازار consume
-    کند تا همان پک بلافاصله دوباره قابل خرید باشد.
+    ورودی: pack_id، purchase_token، purchase_data (JSON خام استور)،
+    signature. اپ استور را نمی‌فرستد؛ سرور اول با کلید بازار امضا را
+    چک می‌کند و فقط اگر امضا با کلید بازار نخواند، با کلید مایکت
+    امتحان می‌کند (هر دو استور همان پک‌ها و همان SKUها را دارند).
+    بعد از وریفای موفق، اپ باید خرید را در استورش consume کند تا همان
+    پک بلافاصله دوباره قابل خرید باشد.
     """
     body = request.json or {}
     pack = AppCoinPack.query.get(body.get("pack_id"))
@@ -1086,7 +1090,22 @@ def verify_purchase_route():
             body.get("signature") or "",
         )
     except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+        # فقط عدم تطابق امضا به مایکت می‌افتد؛ بقیه‌ی خطاها (توکنِ
+        # کاربر دیگر، خرید ناتمام، عدم تطابق SKU) همان‌جا ۴۰۰ می‌شوند.
+        if str(exc) != "invalid bazaar signature":
+            return jsonify({"error": str(exc)}), 400
+        try:
+            purchase, already, gift_granted = myket_svc.verify_purchase(
+                g.user,
+                pack,
+                body.get("purchase_token"),
+                body.get("purchase_data") or "",
+                body.get("signature") or "",
+            )
+        except ValueError as exc2:
+            return jsonify({"error": str(exc2)}), 400
+        except RuntimeError as exc2:
+            return jsonify({"error": str(exc2)}), 503
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 503
     resp_pack = AppCoinPack.query.get(purchase.pack_id)
