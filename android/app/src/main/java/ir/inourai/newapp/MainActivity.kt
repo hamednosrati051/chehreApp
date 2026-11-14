@@ -81,7 +81,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.farsitel.bazaar.core.BazaarSignIn
 import com.farsitel.bazaar.core.callback.BazaarSignInCallback
-import ir.inourai.newapp.billing.BazaarBilling
+import ir.inourai.newapp.billing.Billing
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.BazaarLinkRequest
 import ir.inourai.newapp.data.DeviceTokenRequest
@@ -208,7 +208,7 @@ fun App(initialGenId: Long = -1L) {
         if (Session.token != null) {
             scope.launch {
                 try {
-                    BazaarBilling.recoverPurchases(context)
+                    Billing.recoverPurchases(context)
                 } catch (_: Exception) {
                 }
             }

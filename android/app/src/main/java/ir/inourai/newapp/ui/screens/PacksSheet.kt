@@ -35,7 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
-import ir.inourai.newapp.billing.BazaarBilling
+import ir.inourai.newapp.billing.Billing
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Pack
 import ir.inourai.newapp.data.Session
@@ -88,12 +88,12 @@ fun PacksSheet(
                     onError("خرید لغو شد")
                     return@launch
                 }
-                val purchase = BazaarBilling.parsePurchaseResult(result.data)
+                val purchase = Billing.parsePurchaseResult(result.data)
                     ?: run {
                         onError("نتیجه‌ی خرید خوانا نبود")
                         return@launch
                     }
-                val gift = BazaarBilling.verifyAndConsume(context, purchase)
+                val gift = Billing.verifyAndConsume(context, purchase)
                 onPurchased()
                 if (gift > 0) onGift(gift)
                 onDismiss()
@@ -113,7 +113,7 @@ fun PacksSheet(
         scope.launch {
             buyingSku = p.bazaar_sku
             try {
-                val sender = BazaarBilling.getBuyIntentSender(context, p.bazaar_sku)
+                val sender = Billing.getBuyIntentSender(context, p.bazaar_sku)
                 buyLauncher.launch(IntentSenderRequest.Builder(sender).build())
             } catch (e: Exception) {
                 onError(billingErrorMessage(e))

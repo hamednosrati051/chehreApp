@@ -2,8 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- بازار: برای پرداخت درون‌برنامه‌ای لازم است؛ بدون آن getBuyIntent خطای DEVELOPER_ERROR می‌دهد. -->
-    <uses-permission android:name="com.farsitel.bazaar.permission.PAY_THROUGH_BAZAAR" />
+    <!-- مجوز پرداخت هر استور در مانیفست همان فلِیور است (src/bazaar و src/myket)؛
+         دو مجوز پرداخت هرگز در یک APK نمی‌آیند. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

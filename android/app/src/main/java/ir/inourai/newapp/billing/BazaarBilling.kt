@@ -17,13 +17,20 @@ import org.json.JSONObject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/** پرداخت بازار (IAB) — فقط با SKUها و کلید RSA خود اپ.
- *  هیچ کلیدی از اپ نورا استفاده نمی‌شود.
+/** پرداخت درون‌برنامه‌ای استور (v15 مایکت) — بازار یا مایکت، بر اساس فلِیور بیلد.
+ *  هر دو استور همان اینترفیس AIDL گوگل‌پلی (IInAppBillingService) را آینه می‌کنند؛
+ *  فقط پکیج استور + اکشن bind فرق می‌کند (از BuildConfig هر فلِیور می‌آید).
+ *  هیچ کلید RSA در اپ نیست؛ وریفای خرید سروری است (کلید RSA در env بک‌اند).
+ *  ورود با بازار + OTP دست نخورده و در هر دو فلِیور همان است.
  *
  *  چرخه‌ی خرید (پک‌ها consumable هستند):
- *  خرید از بازار ← وریفای سروری (RSA + idempotency) ← consume در بازار
+ *  خرید از استور ← وریفای سروری (RSA + idempotency) ← consume در استور
  *  ← رفرش موجودی. خرید ناتمام (وریفای‌شده ولی consumeنشده، یا برعکس)
  *  موقع شروع اپ با recoverPurchases بازیابی می‌شود.
+ *
+ *  توجه: وریفای سروری فعلاً فقط امضای بازار را می‌شناسد؛ خرید مایکت تا وقتی
+ *  وریفای مایکت در سرور اضافه نشده، در verifyAndConsume رد می‌شود (کار بعدی،
+ *  بعد از دادن کلید مایکت). خود bind و شروع خرید مایکت از همین حالا درست است.
  */
 data class OwnedPurchase(
     val purchaseToken: String,
@@ -35,15 +42,15 @@ data class OwnedPurchase(
 private const val DESCRIPTOR = "com.android.vending.billing.IInAppBillingService"
 
 /** معادل دستیِ Proxy تولیدشده توسط AIDL برای
- *  com.android.vending.billing.IInAppBillingService (بازار IAB نسخه‌ی ۳ را
- *  آینه می‌کند). کدهای تراکنش دقیقاً به ترتیب اعلان AIDL هستند و
+ *  com.android.vending.billing.IInAppBillingService (بازار و مایکت هر دو
+ *  IAB نسخه‌ی ۳ را آینه می‌کنند). کدهای تراکنش دقیقاً به ترتیب اعلان AIDL هستند و
  *  مارشال‌کردن Parcel هم همان الگوی تولیدشده است.
  *
  *  چرا دستی؟ کامپایل فایل Java تولیدشده‌ی AIDL به Gradle Worker Daemon
  *  نیاز دارد که در سندباکس این VM زنده نمی‌ماند؛ با Proxy دستی، پروژه
  *  کاملاً Kotlin می‌شود و آن مرحله حذف می‌شود.
  */
-private class BazaarServiceProxy(private val remote: IBinder) {
+private class InAppBillingProxy(private val remote: IBinder) {
     private fun transact(code: Int, data: Parcel, reply: Parcel) {
         remote.transact(code, data, reply, 0)
         reply.readException()
@@ -213,63 +220,68 @@ private class BazaarServiceProxy(private val remote: IBinder) {
     }
 }
 
-object BazaarBilling {
-    private const val BAZAAR_PACKAGE = "com.farsitel.bazaar"
-    private const val API_VERSION = 3
-    private const val TYPE_INAPP = "inapp"
+private const val API_VERSION = 3
+private const val TYPE_INAPP = "inapp"
 
-    /** سقف انتظار برای اتصال به سرویس بازار؛ بیشتر از این یعنی بازار
-     *  جواب نمی‌دهد و به‌جای سکوتِ بی‌پایان، خطای قابل‌نمایش برمی‌گردد. */
-    private const val BIND_TIMEOUT_MS = 15_000L
+/** سقف انتظار برای اتصال به سرویس استور؛ بیشتر از این یعنی استور
+ *  جواب نمی‌دهد و به‌جای سکوتِ بی‌پایان، خطای قابل‌نمایش برمی‌گردد. */
+private const val BIND_TIMEOUT_MS = 15_000L
 
+/** پرداخت یک استور (بازار یا مایکت) با همان AIDL خام؛ فقط پکیج استور
+ *  و اکشن bind فرق می‌کند. پک‌ها از سرور می‌آیند (GET /coins/packs) و
+ *  SKU مایکت همان مقدار bazaar_sku است — در ادمین چیزی اضافه نمی‌شود. */
+open class StoreBilling(
+    private val marketPackage: String,
+    private val bindAction: String,
+) {
     private suspend fun <T> withService(
         context: Context,
-        block: (BazaarServiceProxy) -> T,
+        block: (InAppBillingProxy) -> T,
     ): T {
         try {
             return withTimeout(BIND_TIMEOUT_MS) {
                 suspendCancellableCoroutine { cont ->
-        val conn = object : ServiceConnection {
-            override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-                try {
-                    val service = binder?.let { BazaarServiceProxy(it) }
-                        ?: throw IllegalStateException("no binder from bazaar")
-                    val result = block(service)
-                    if (cont.isActive) cont.resume(result)
-                } catch (e: Exception) {
-                    if (cont.isActive) cont.resumeWithException(e)
-                } finally {
-                    try {
-                        context.unbindService(this)
-                    } catch (_: Exception) {
+                    val conn = object : ServiceConnection {
+                        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+                            try {
+                                val service = binder?.let { InAppBillingProxy(it) }
+                                    ?: throw IllegalStateException("no binder from $marketPackage")
+                                val result = block(service)
+                                if (cont.isActive) cont.resume(result)
+                            } catch (e: Exception) {
+                                if (cont.isActive) cont.resumeWithException(e)
+                            } finally {
+                                try {
+                                    context.unbindService(this)
+                                } catch (_: Exception) {
+                                }
+                            }
+                        }
+
+                        override fun onServiceDisconnected(name: ComponentName?) {}
+                    }
+                    // اکشن bind مخصوص استور؛ اکشن گوگل‌پلی روی سرویس
+                    // استور این گوشی جواب نمی‌دهد و bindService همان اول false می‌دهد.
+                    val intent = Intent(bindAction)
+                    intent.setPackage(marketPackage)
+                    val bound = context.bindService(intent, conn, Context.BIND_AUTO_CREATE)
+                    if (!bound) {
+                        if (cont.isActive) {
+                            cont.resumeWithException(
+                                IllegalStateException("billing service not available ($marketPackage)"),
+                            )
+                        }
+                    }
+                    cont.invokeOnCancellation {
+                        try {
+                            context.unbindService(conn)
+                        } catch (_: Exception) {
+                        }
                     }
                 }
             }
-
-            override fun onServiceDisconnected(name: ComponentName?) {}
-        }
-        // اکشن مخصوص خود بازار (مثل نورا)؛ اکشن گوگل‌پلی روی سرویس
-        // بازار این گوشی جواب نمی‌دهد و bindService همان اول false می‌دهد.
-        val intent = Intent("ir.cafebazaar.pardakht.InAppBillingService.BIND")
-        intent.setPackage(BAZAAR_PACKAGE)
-        val bound = context.bindService(intent, conn, Context.BIND_AUTO_CREATE)
-        if (!bound) {
-            if (cont.isActive) {
-                cont.resumeWithException(
-                    IllegalStateException("bazaar billing service not available"),
-                )
-            }
-        }
-        cont.invokeOnCancellation {
-            try {
-                context.unbindService(conn)
-            } catch (_: Exception) {
-            }
-        }
-                }
-            }
         } catch (e: TimeoutCancellationException) {
-            throw IllegalStateException("bazaar service timeout")
+            throw IllegalStateException("billing service timeout ($marketPackage)")
         }
     }
 
@@ -282,16 +294,16 @@ object BazaarBilling {
                 sku,
                 TYPE_INAPP,
                 "",
-            ) ?: throw RuntimeException("no buy intent from bazaar")
+            ) ?: throw RuntimeException("no buy intent from $marketPackage")
             if (result.getInt("RESPONSE_CODE") != 0) {
                 throw RuntimeException(
-                    "bazaar buy intent failed: ${result.getInt("RESPONSE_CODE")}",
+                    "buy intent failed: ${result.getInt("RESPONSE_CODE")} ($marketPackage)",
                 )
             }
             @Suppress("DEPRECATION")
             val pendingIntent = result.getParcelable<android.app.PendingIntent>("BUY_INTENT")
             pendingIntent?.intentSender
-                ?: throw RuntimeException("no buy intent from bazaar")
+                ?: throw RuntimeException("no buy intent from $marketPackage")
         }
     }
 
@@ -310,7 +322,7 @@ object BazaarBilling {
         )
     }
 
-    /** خریدهای مصرف‌نشده‌ی بازار (برای بازیابی خریدهای ناتمام). */
+    /** خریدهای مصرف‌نشده‌ی استور (برای بازیابی خریدهای ناتمام). */
     suspend fun getOwnedPurchases(context: Context): List<OwnedPurchase> {
         return withService(context) { service ->
             val out = mutableListOf<OwnedPurchase>()
@@ -344,7 +356,7 @@ object BazaarBilling {
         }
     }
 
-    /** مصرف خرید در بازار بعد از وریفای موفق سرور. */
+    /** مصرف خرید در استور بعد از وریفای موفق سرور. */
     suspend fun consume(context: Context, purchaseToken: String) {
         withService(context) { service ->
             val code = service.consumePurchase(
@@ -389,3 +401,8 @@ object BazaarBilling {
         return recovered
     }
 }
+
+/** نقطه‌ی ورود پرداخت برای همین بیلد: پکیج استور و اکشن bind از
+ *  StoreConfig فلِیور می‌آیند (src/bazaar و src/myket) — فلِیور بازار → بازار،
+ *  فلِیور مایکت → مایکت. رفتار فلِیور بازار دقیقاً مثل قبل است. */
+object Billing : StoreBilling(StoreConfig.MARKET_PACKAGE, StoreConfig.BILLING_BIND_ACTION)

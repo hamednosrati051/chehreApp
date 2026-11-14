@@ -18,6 +18,19 @@ android {
         versionName = "1.5"
     }
 
+    // دو خروجی از یک کد (v15 برای مایکت): بازار و مایکت — همان versionCode/versionName.
+    // پکیج استور + اکشن bind هر فلِیور در StoreConfig همان فلِیور است
+    // (src/bazaar و src/myket)؛ BuildConfig ساخته نمی‌شود (ورکر جاوا در این VM نمی‌ماند).
+    flavorDimensions += "store"
+    productFlavors {
+        create("bazaar") {
+            dimension = "store"
+        }
+        create("myket") {
+            dimension = "store"
+        }
+    }
+
     signingConfigs {
         create("release") {
             storeFile = file("../../../chehre-release.keystore")

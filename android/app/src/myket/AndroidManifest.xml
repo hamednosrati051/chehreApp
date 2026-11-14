@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- فلِیور مایکت: مجوز پرداخت مایکت + دیده‌شدن پکیج مایکت (API 30+).
+     با مجوز پرداخت بازار در یک APK نمی‌آید. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="ir.mservices.market.BILLING" />
+    <queries>
+        <package android:name="ir.mservices.market" />
+    </queries>
+</manifest>
