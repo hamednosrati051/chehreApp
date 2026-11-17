@@ -2847,7 +2847,8 @@ def _purchase_admin(r, mobile, pack_name, pack_coins):
         "pack_coins": pack_coins,
         "amount_irr": r.amount_irr,
         "status": r.status,
-        # توکن کامل خرید هرگز در ادمین نمایش داده نمی‌شود.
+        # توکن کامل خرید بازار در ادمین نمایش داده می‌شود (دستور ۲۰۲۶-۱۱-۱۷).
+        "token": tok,
         "token_tail": ("…" + tok[-6:]) if len(tok) > 6 else tok,
         "verified_at": r.verified_at.isoformat() if r.verified_at else None,
         "created_at": r.created_at.isoformat() if r.created_at else None,
@@ -2921,7 +2922,7 @@ def _verify_attempt_admin(a):
         "id": a.id,
         "user_id": a.user_id,
         "pack_id": a.pack_id,
-        # توکن کامل هرگز در ادمین نمایش داده نمی‌شود (مثل _purchase_admin).
+        # توکن کامل در تلاش‌های وریفای نمایش داده نمی‌شود (فقط ۶ کاراکتر آخر).
         "token_tail": ("…" + tok[-6:]) if len(tok) > 6 else tok,
         "store": a.store,
         "success": bool(a.success),
