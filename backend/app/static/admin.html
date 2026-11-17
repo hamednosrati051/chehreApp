@@ -92,6 +92,9 @@
     <button data-tab="packs" onclick="showTab('packs')">پک‌ها</button>
     <button data-tab="models" onclick="showTab('models')">مدل‌ها</button>
     <button data-tab="purchases" onclick="showTab('purchases')">پرداخت‌ها</button>
+    <button data-tab="verify" onclick="showTab('verify')">تلاش‌های وریفای</button>
+    <button data-tab="stale" onclick="showTab('stale')">خریدهای معلق قدیمی</button>
+    <button data-tab="reports" onclick="showTab('reports')">گزارش‌های عکس</button>
     <button data-tab="gallery" onclick="showTab('gallery')">گالری در انتظار</button>
     <button data-tab="ghist" onclick="showTab('ghist')">تاریخچه گالری</button>
     <button data-tab="gens" onclick="showTab('gens')">همه‌ی تولیدها</button>
@@ -228,6 +231,26 @@
     <div id="pu-detail"></div>
   </section>
 
+  <section id="verify">
+    <h2>تلاش‌های وریفای خرید</h2>
+    <p class="muted">هر تلاش وریفای (موفق یا ناموفق) یک ردیف؛ تازه‌ترین اول. توکن کامل نمایش داده نمی‌شود.</p>
+    <div id="va-list"></div>
+    <div id="va-pager"></div>
+  </section>
+
+  <section id="stale">
+    <h2>خریدهای معلق قدیمی‌تر از ۳۰ دقیقه</h2>
+    <p class="muted">ردیف‌های بدون توکن را اسکریپت انقضا هر ۳۰ دقیقه حذف می‌کند؛ ردیف‌های توکن‌دار هرگز منقضی نمی‌شوند.</p>
+    <div id="st-list"></div>
+    <div id="st-pager"></div>
+  </section>
+
+  <section id="reports">
+    <h2>گزارش‌های عکس کاربران</h2>
+    <div id="rp-list"></div>
+    <div id="rp-pager"></div>
+  </section>
+
   <section id="gallery">
     <h2>عکس‌های در انتظار تأیید</h2>
     <div id="g-list"></div>
@@ -263,6 +286,7 @@
     <form class="grid" onsubmit="applyUserFilter(event)">
       <input id="u-search" placeholder="جستجو (موبایل یا id)">
       <select id="u-status"><option value="">همه وضعیت‌ها</option><option value="true">فعال</option><option value="false">مسدود</option></select>
+      <select id="u-store"><option value="">همه استورها</option><option value="bazaar">بازار</option><option value="myket">مایکت</option></select>
       <button>اعمال فیلتر</button>
     </form>
     <div id="u-list"></div>
@@ -293,6 +317,10 @@
       <label><input type="checkbox" id="s-gift"> هدیه‌ی ورود برای کاربران جدید (فعال = کاربر جدید ۱ تصویر هدیه می‌گیرد؛ غیرفعال = کاربر جدید هدیه نمی‌گیرد)</label>
       <button>ذخیره هدیه‌ی ورود</button>
     </form>
+    <form class="grid" onsubmit="saveSmsToggle(event)">
+      <label><input type="checkbox" id="s-sms"> غیرفعال کردن ورود با پیامک (فعال = ورود با پیامک خاموش و کاربر به ورود با بازار هدایت می‌شود)</label>
+      <button>ذخیره ورود با پیامک</button>
+    </form>
     <form class="grid" onsubmit="saveMinVersion(event)">
       <label>حداقل نسخه‌ی اپ (برای پاپ‌آپ به‌روزرسانی؛ خالی = خاموش)</label>
       <input id="s-minver" type="number" min="0" step="1" placeholder="مثلا 13">
@@ -308,7 +336,7 @@
     </form>
     <p class="muted">این پنج مورد در پروفایل اپ نمایش داده می‌شوند؛ هر کدام خالی باشد، اپ جای آن «به‌زودی» نشان می‌دهد (بازار: لینک خودکار).</p>
     <div id="s-list"></div>
-    <p class="muted">image_coin_price = قیمت پیش‌فرض هر تصویر (سکه) برای دنیاهای جدید. entry_gift_enabled = هدیه‌ی ورود برای کاربران جدید (۱ = فعال، ۰ = غیرفعال؛ نبودن کلید یعنی فعال).</p>
+    <p class="muted">image_coin_price = قیمت پیش‌فرض هر تصویر (سکه) برای دنیاهای جدید. entry_gift_enabled = هدیه‌ی ورود برای کاربران جدید (۱ = فعال، ۰ = غیرفعال؛ نبودن کلید یعنی فعال). sms_login_disabled = ورود با پیامک خاموش (۱ = خاموش، ۰ = روشن؛ نبودن کلید یعنی روشن).</p>
   </section>
 
   <section id="notifs">
@@ -393,7 +421,7 @@ function showTab(tab){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === tab));
   ({worlds: loadWorlds, trends: loadTrends, fresh: loadFresh, cats: loadCats, packs: loadPacks, models: loadModels,
-    purchases: loadPurchases, gallery: loadGallery, ghist: loadGhist, gens: loadGens, inputs: loadInputs, users: loadUsers, admins: loadAdmins,
+    purchases: loadPurchases, verify: loadVerifyAttempts, stale: loadStale, reports: loadReports, gallery: loadGallery, ghist: loadGhist, gens: loadGens, inputs: loadInputs, users: loadUsers, admins: loadAdmins,
     settings: loadSettings, notifs: loadNotifs})[tab]?.().catch(e => setMsg(e.message));
 }
 
@@ -562,6 +590,27 @@ async function loadPurchases(){ const q = new URLSearchParams({status: $('pu-sta
 async function loadPurchaseDetail(id){ const r = await api('/admin/purchases/' + id);
   $('pu-detail').innerHTML = `<h3>پرداخت ${r.id}</h3><p>موبایل: ${esc(r.mobile)} | پک: ${esc(r.pack_name)} (${r.pack_coins} سکه) | مبلغ: ${r.amount_irr.toLocaleString('fa-IR')} ریال | وضعیت: ${purchaseFa[r.status] || esc(r.status)} | توکن: <span class="muted">${esc(r.token_tail)}</span> | تأیید: ${esc(faDate(r.verified_at))} | ثبت: ${esc(faDate(r.created_at))}</p>`; }
 
+let vaPageNo = 1;
+function vaPage(n){ if(n < 1) return; vaPageNo = n; loadVerifyAttempts(); }
+async function loadVerifyAttempts(){ const res = await api('/admin/verify-attempts?page=' + vaPageNo);
+  $('va-list').innerHTML = res.items.length ? `<table><tr><th>id</th><th>کاربر</th><th>پک</th><th>استور</th><th>موفق</th><th>خطا</th><th>pending</th><th>توکن</th><th>تاریخ</th></tr>` +
+    res.items.map(a => `<tr><td>${a.id}</td><td>${a.user_id}</td><td>${a.pack_id ?? '—'}</td><td>${esc(a.store) || '—'}</td><td>${a.success ? '✓' : '—'}</td><td>${esc(a.error) || '—'}</td><td>${a.pending_id ?? '—'}</td><td class="muted">${esc(a.token_tail)}</td><td class="muted">${esc(faDate(a.created_at))}</td></tr>`).join('') + '</table>' : '<p class="muted">تلاشی نیست.</p>';
+  $('va-pager').innerHTML = pagerHTML('va', res); }
+let stPageNo = 1;
+function stPage(n){ if(n < 1) return; stPageNo = n; loadStale(); }
+async function loadStale(){ const res = await api('/admin/purchases/stale?page=' + stPageNo);
+  $('st-list').innerHTML = res.items.length ? `<table><tr><th>id</th><th>پک</th><th>کاربر</th><th>مبلغ (ریال)</th><th>توکن</th><th>ثبت</th></tr>` +
+    res.items.map(r => `<tr><td>${r.id}</td><td>${r.pack_id}</td><td>${r.user_id}</td><td>${r.amount_irr.toLocaleString('fa-IR')}</td><td>${r.has_purchase_token ? 'دارد' : 'ندارد'}</td><td class="muted">${esc(faDate(r.created_at))}</td></tr>`).join('') + '</table>' : '<p class="muted">خرید معلق قدیمی نیست.</p>';
+  $('st-pager').innerHTML = pagerHTML('st', res); }
+let rpPageNo = 1;
+function rpPage(n){ if(n < 1) return; rpPageNo = n; loadReports(); }
+const reportFa = {pending: 'در انتظار', reviewed: 'بررسی‌شده', dismissed: 'ردشده'};
+async function loadReports(){ const res = await api('/admin/reports?page=' + rpPageNo);
+  $('rp-list').innerHTML = res.items.length ? `<table><tr><th>id</th><th>عکس</th><th>گزارش‌دهنده</th><th>دلیل</th><th>وضعیت</th><th>تاریخ</th><th></th></tr>` +
+    res.items.map(r => `<tr><td>${r.id}</td><td>${r.image_url ? `<img class="thumb" src="${esc(r.image_url)}" onclick="openLightbox(this.src)" style="cursor:pointer;">` : '—'}</td><td>${r.user_id}</td><td>${esc(r.reason) || '—'}</td><td>${reportFa[r.status] || esc(r.status)}</td><td class="muted">${esc(faDate(r.created_at))}</td><td>${r.status === 'pending' ? `<button class="small gold" onclick="reportAct(${r.id},'reviewed')">بررسی شد</button> <button class="small danger" onclick="reportAct(${r.id},'dismissed')">رد گزارش</button>` : ''}</td></tr>`).join('') + '</table>' : '<p class="muted">گزارشی نیست.</p>';
+  $('rp-pager').innerHTML = pagerHTML('rp', res); }
+async function reportAct(id, st){ try { await api('/admin/reports/' + id, 'PATCH', {status: st}); loadReports(); } catch(err){ setMsg(err.message); } }
+
 async function loadGallery(){ const rows = await api('/admin/gallery/pending');
   $('g-list').innerHTML = rows.length ? rows.map(r => `<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;"><img class="thumb" src="${esc(r.image_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | generation: ' + r.generation_id)}" onclick="openLightbox(this.src, this.dataset.cap)" style="cursor:pointer;"><div>موبایل: ${esc(r.mobile)}<br><span class="muted">generation: ${r.generation_id}</span></div><button class="small gold" onclick="galleryAct(${r.id},'approve')">تأیید</button><input id="gr-${r.id}" placeholder="دلیل رد (اختیاری)" style="min-width:180px;"><button class="small danger" onclick="galleryReject(${r.id})">رد</button></div>`).join('') : '<p class="muted">عکس در انتظاری نیست.</p>'; }
 async function galleryAct(id, act){ try { await api('/admin/gallery/' + id + '/' + act, 'POST'); loadGallery(); } catch(err){ setMsg(err.message); } }
@@ -600,10 +649,10 @@ function pagerHTML(prefix, meta){ const pages = Math.max(1, Math.ceil(meta.total
   return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;"><button class="small" onclick="${prefix}Page(${meta.page - 1})" ${meta.page <= 1 ? 'disabled' : ''}>قبلی</button><span class="muted">صفحه ${meta.page} از ${pages} (مجموع ${meta.total})</span><button class="small" onclick="${prefix}Page(${meta.page + 1})" ${meta.page >= pages ? 'disabled' : ''}>بعدی</button></div>`; }
 function uPage(n){ if(n < 1) return; uPageNo = n; loadUsers(); }
 function applyUserFilter(e){ e.preventDefault(); uPageNo = 1; loadUsers(); }
-async function loadUsers(){ const q = new URLSearchParams({search: $('u-search').value.trim(), is_active: $('u-status').value, page: uPageNo});
+async function loadUsers(){ const q = new URLSearchParams({search: $('u-search').value.trim(), is_active: $('u-status').value, store: $('u-store').value, page: uPageNo});
   const res = await api('/admin/users?' + q);
-  $('u-list').innerHTML = res.items.length ? `<table><tr><th>id</th><th>موبایل</th><th>بازار</th><th>نام</th><th>وضعیت</th><th>اعتبار رایگان</th><th>موجودی سکه</th><th>آخرین ورود</th><th></th></tr>` +
-    res.items.map(u => `<tr><td>${u.id}</td><td>${esc(u.mobile)}</td><td>${esc(shortId(u.bazaar_account_id))}</td><td>${esc(u.name)}</td><td>${esc(u.status)}</td><td>${u.free_image_credits}</td><td>${u.balance}</td><td class="muted">${esc(faDate(u.last_login_at))}</td><td><button class="small" onclick="loadUserDetail(${u.id})">جزئیات</button> <button class="small gold" onclick="giftImage(${u.id})">هدیه +۱</button> ${u.status === 'blocked' ? `<button class="small gold" onclick="userStatus(${u.id},'active')">رفع مسدود</button>` : `<button class="small danger" onclick="userStatus(${u.id},'blocked')">مسدود</button>`}</td></tr>`).join('') + '</table>' : '<p class="muted">کاربری نیست.</p>';
+  $('u-list').innerHTML = res.items.length ? `<table><tr><th>id</th><th>موبایل</th><th>بازار</th><th>نام</th><th>وضعیت</th><th>استور</th><th>اعتبار رایگان</th><th>موجودی سکه</th><th>آخرین ورود</th><th></th></tr>` +
+    res.items.map(u => `<tr><td>${u.id}</td><td>${esc(u.mobile)}</td><td>${esc(shortId(u.bazaar_account_id))}</td><td>${esc(u.name)}</td><td>${esc(u.status)}</td><td>${esc(u.store) || '—'}</td><td>${u.free_image_credits}</td><td>${u.balance}</td><td class="muted">${esc(faDate(u.last_login_at))}</td><td><button class="small" onclick="loadUserDetail(${u.id})">جزئیات</button> <button class="small gold" onclick="giftImage(${u.id})">هدیه +۱</button> ${u.status === 'blocked' ? `<button class="small gold" onclick="userStatus(${u.id},'active')">رفع مسدود</button>` : `<button class="small danger" onclick="userStatus(${u.id},'blocked')">مسدود</button>`}</td></tr>`).join('') + '</table>' : '<p class="muted">کاربری نیست.</p>';
   $('u-pager').innerHTML = pagerHTML('u', res); }
 async function userStatus(id, st){ try { await api('/admin/users/' + id, 'PATCH', {status: st}); loadUsers(); } catch(err){ setMsg(err.message); } }
 async function giftImage(id){ try { const r = await api('/admin/users/' + id + '/gift-image', 'POST', {}); setMsg('۱ تصویر هدیه اضافه شد؛ اعتبار رایگان: ' + r.free_image_credits + '.', true); loadUsers(); } catch(err){ setMsg(err.message); } }
@@ -630,10 +679,12 @@ async function delAdmin(id){ if(!confirm('ادمین حذف شود؟')) return; 
 async function loadSettings(){ loadPublicSettings(); const ss = await api('/admin/settings');
   const gm = {}; ss.forEach(s => gm[s.key] = s.value);
   $('s-gift').checked = gm.entry_gift_enabled !== '0' && (gm.entry_gift_enabled || '').toLowerCase() !== 'false';
+  $('s-sms').checked = gm.sms_login_disabled === '1';
   $('s-minver').value = gm.min_app_version_code || '';
   $('s-list').innerHTML = ss.length ? `<table><tr><th>کلید</th><th>مقدار</th></tr>` + ss.map(s => `<tr><td>${esc(s.key)}</td><td>${esc(s.value)}</td></tr>`).join('') + '</table>' : '<p class="muted">تنظیمی نیست.</p>'; }
 async function saveSetting(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: $('s-key').value.trim(), value: $('s-val').value.trim()}); setMsg('تنظیم ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function saveGiftToggle(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'entry_gift_enabled', value: $('s-gift').checked ? '1' : '0'}); setMsg('تنظیم هدیه‌ی ورود ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
+async function saveSmsToggle(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'sms_login_disabled', value: $('s-sms').checked ? '1' : '0'}); setMsg('تنظیم ورود با پیامک ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function saveMinVersion(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'min_app_version_code', value: $('s-minver').value.trim()}); setMsg('حداقل نسخه ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function savePublicSettings(e){ e.preventDefault(); try {
   for (const [k, id] of [['about_us','ps-about'],['support_info','ps-support'],['bug_report_info','ps-bug'],['rules_privacy','ps-rules'],['bazaar_url','ps-bazaar']]) {

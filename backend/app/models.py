@@ -20,6 +20,48 @@ class AppUser(db.Model):
     )
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
     last_login_at = db.Column(db.DateTime)
+    # نسخه‌ی ۱۶: استوری که اپ از آن نصب شده (bazaar/myket)؛ اپ‌های قدیمی
+    # نمی‌فرستند و NULL می‌ماند (نامشخص).
+    store = db.Column(db.String(16))
+
+
+class AppVerifyAttempt(db.Model):
+    """هر تلاش وریفای خرید (موفق یا ناموفق) — نسخه‌ی ۱۶.
+
+    تا پیش از این، وریفای ردشده هیچ ردی نمی‌گذاشت؛ حالا هر تلاش
+    در verify_purchase_route یک ردیف می‌گیرد تا خرید پرداخت‌شده‌ی
+    وریفای‌نشده قابل پیگیری باشد.
+    """
+
+    __tablename__ = "app_verify_attempts"
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.BigInteger, nullable=False)
+    pack_id = db.Column(db.BigInteger)
+    purchase_token = db.Column(db.String(500))
+    # کدام سرویس رسیدگی کرد: "bazaar" یا "myket"؛ پیش از تعیین استور None.
+    store = db.Column(db.String(16))
+    success = db.Column(db.Boolean, nullable=False)
+    error = db.Column(db.String(500))
+    pending_id = db.Column(db.BigInteger)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+
+class AppImageReport(db.Model):
+    """گزارش کاربر روی یک تصویر تولیدشده (UGC، قانون مایکت) — نسخه‌ی ۱۶."""
+
+    __tablename__ = "app_image_reports"
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    generation_id = db.Column(db.BigInteger, nullable=False)
+    user_id = db.Column(db.BigInteger, nullable=False)
+    reason = db.Column(db.String(500))
+    status = db.Column(db.String(16), default="pending", nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id", "generation_id", name="uq_report_user_generation"
+        ),
+    )
 
 
 class AppOtpCode(db.Model):

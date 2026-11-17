@@ -36,7 +36,7 @@ from flask import current_app
 from sqlalchemy import and_, or_
 
 from ..extensions import db
-from ..models import AppCoinLedger, AppGallery, AppGeneration, AppSetting
+from ..models import AppCoinLedger, AppGallery, AppGeneration, AppPurchase, AppSetting
 
 CUTOFF_SETTING_KEY = "cleanup_free_images_cutoff"
 FREE_TTL = datetime.timedelta(hours=24)
@@ -249,3 +249,32 @@ def cleanup_expired_free_images():
         "gallery_deleted": gallery_deleted,
         "gallery_skipped": gallery_skipped,
     }
+
+
+STALE_PENDING_MINUTES = 30
+
+
+def expire_stale_pending_purchases():
+    """حذف خریدهای pendingِ قدیمیِ بدون توکن (نسخه‌ی ۱۶).
+
+    فقط ردیف‌هایی که status=pending و bazaar_purchase_token IS NULL و
+    قدیمی‌تر از ۳۰ دقیقه‌اند حذف می‌شوند — یعنی پرداخت‌هایی که کاربر
+    لغو کرد و اپ هیچ‌وقت وریفای نکرد. ردیفی که توکن دارد هرگز لمس
+    نمی‌شود (وریفای در جریان یا قابل بازیابی است).
+    برمی‌گرداند: تعداد ردیف‌های حذف‌شده.
+    """
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(
+        minutes=STALE_PENDING_MINUTES
+    )
+    stale = (
+        AppPurchase.query.filter(
+            AppPurchase.status == "pending",
+            AppPurchase.bazaar_purchase_token.is_(None),
+            AppPurchase.created_at < cutoff,
+        ).all()
+    )
+    count = len(stale)
+    for row in stale:
+        db.session.delete(row)
+    db.session.commit()
+    return count

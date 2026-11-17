@@ -8,7 +8,9 @@ import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
 import android.os.Parcel
+import android.util.Log
 import ir.inourai.newapp.data.Api
+import ir.inourai.newapp.data.CreatePendingPurchaseRequest
 import ir.inourai.newapp.data.PurchaseVerifyRequest
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -370,8 +372,14 @@ open class StoreBilling(
 
     /** وریفای سروری + consume؛ سرور idempotency را تضمین می‌کند
      *  (توکن تکراری دوباره شارژ نمی‌شود). برمی‌گرداند سکه‌ی هدیه‌ی
-     *  اعطاشده در این خرید (v11؛ ۰ اگر هدیه‌ای نبود). */
-    suspend fun verifyAndConsume(context: Context, purchase: OwnedPurchase): Int {
+     *  اعطاشده در این خرید (v11؛ ۰ اگر هدیه‌ای نبود).
+     *  v16: pendingId شناسه‌ی ردیف pending ساخته‌شده موقع tap-buy است؛
+     *  null یعنی همان جریان قدیمی بدون pending (وریفای بدون تغییر). */
+    suspend fun verifyAndConsume(
+        context: Context,
+        purchase: OwnedPurchase,
+        pendingId: Long? = null,
+    ): Int {
         val packs = Api.service.packs()
         val pack = packs.firstOrNull { it.bazaar_sku == purchase.sku }
             ?: throw RuntimeException("unknown sku: ${purchase.sku}")
@@ -381,22 +389,49 @@ open class StoreBilling(
                 purchase_token = purchase.purchaseToken,
                 purchase_data = purchase.purchaseData,
                 signature = purchase.signature,
+                pending_id = pendingId,
             ),
         )
         consume(context, purchase.purchaseToken)
         return resp.gift_coins
     }
 
+    /** v16: ساخت ردیف pending روی سرور پیش از بازشدن پرداخت استور.
+     *  شناسه را برمی‌گرداند؛ هر خطایی (شبکه، سرور) null می‌دهد تا خرید
+     *  هرگز روی این تماس مسدود نشود — خریدار به جریان قدیمی می‌افتد. */
+    suspend fun createPendingPurchase(packId: Long): Long? {
+        return try {
+            Api.service.createPendingPurchase(CreatePendingPurchaseRequest(pack_id = packId)).id
+        } catch (e: Exception) {
+            Log.w("ChehreSazBilling", "createPendingPurchase failed (falling back to legacy flow)", e)
+            null
+        }
+    }
+
     /** بازیابی خریدهای ناتمام: همه‌ی ownedها وریفای و consume می‌شوند.
-     *  تعداد بازیابی‌شده را برمی‌گرداند تا پیام دکمه دروغ نگوید. */
+     *  تعداد بازیابی‌شده را برمی‌گرداند تا پیام دکمه دروغ نگوید.
+     *  v16: شکست دیگر بی‌صدا بلعیده نمی‌شود — هر شکست لاگ می‌شود و
+     *  اگر دست‌کم یکی شکست بخورد، بعد از تلاش روی همه، خطا پرتاب
+     *  می‌شود تا فراخواننده آن را به کاربر نشان دهد. */
     suspend fun recoverPurchases(context: Context): Int {
         var recovered = 0
+        var firstFailure: Exception? = null
+        var failures = 0
         for (purchase in getOwnedPurchases(context)) {
             try {
                 verifyAndConsume(context, purchase)
                 recovered++
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                failures++
+                if (firstFailure == null) firstFailure = e
+                Log.e("ChehreSazBilling", "recoverPurchases failed for sku=${purchase.sku}", e)
             }
+        }
+        if (firstFailure != null) {
+            throw RuntimeException(
+                "بازیابی $failures خرید ناتمام ناموفق بود؛ دوباره تلاش کن",
+                firstFailure,
+            )
         }
         return recovered
     }

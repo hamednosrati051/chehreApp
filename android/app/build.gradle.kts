@@ -13,9 +13,9 @@ android {
         applicationId = "ir.inourai.newapp"
         minSdk = 26
         targetSdk = 34
-        // v15: پاپ‌آپ هدیه برای هر ثبت‌نام جدید (حذف محدودیت یک بار در هر گوشی).
-        versionCode = 15
-        versionName = "1.5"
+        // v16: پاپ‌آپ هدیه برای هر ثبت‌نام جدید (حذف محدودیت یک بار در هر گوشی).
+        versionCode = 16
+        versionName = "1.6"
     }
 
     // دو خروجی از یک کد (v15 برای مایکت): بازار و مایکت — همان versionCode/versionName.

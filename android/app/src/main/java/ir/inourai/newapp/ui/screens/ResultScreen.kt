@@ -35,6 +35,7 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.AlertDialog
@@ -47,6 +48,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -72,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import ir.inourai.newapp.data.Api
+import ir.inourai.newapp.data.GalleryReportRequest
 import ir.inourai.newapp.data.ImageLikes
 import ir.inourai.newapp.data.GallerySubmitRequest
 import ir.inourai.newapp.data.Session
@@ -155,6 +158,10 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
     var error by remember { mutableStateOf<String?>(null) }
     var submitted by remember { mutableStateOf(false) }
     var showGalleryConfirm by remember { mutableStateOf(false) }
+    // v16: گزارش UGC روی همین تصویر (قانون مایکت) — دلیل اختیاری است.
+    var showReportConfirm by remember { mutableStateOf(false) }
+    var reportReason by remember { mutableStateOf("") }
+    var reported by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var ratingDismissed by remember { mutableStateOf(false) }
     // پیام هدیه (نسخه‌ی ۱۲): فقط در صفحه‌ی تازه‌ساخته‌شده و فقط وقتی
@@ -411,6 +418,22 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                         Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(28.dp))
                     }
                 }
+                // v16: گزارش تصویر (UGC) — فقط وقتی وارد شده باشد؛
+                // بعد از گزارش موفق، پرچم خاکستری و غیرفعال می‌شود.
+                if (Session.token != null) {
+                    IconButton(
+                        onClick = { if (!reported) showReportConfirm = true },
+                        enabled = !reported,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.Flag,
+                            contentDescription = null,
+                            tint = if (reported) Color.Gray else Color.White,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
+                }
             }
         }
         // پیام هدیه (نسخه‌ی ۱۲): خط اول کوچک و کم‌رنگ، خط دوم بزرگ و
@@ -502,6 +525,63 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
             },
             dismissButton = {
                 TextButton(onClick = { showGalleryConfirm = false }) {
+                    Text("انصراف", color = Color.White)
+                }
+            },
+        )
+    }
+
+    // v16: تایید گزارش تصویر — دلیل اختیاری است؛ «گزارش» همان
+    // POST /gallery/reports را می‌زند و گزارش تکراری هم «ثبت شد» می‌گیرد.
+    if (showReportConfirm) {
+        AlertDialog(
+            onDismissRequest = { showReportConfirm = false },
+            containerColor = Color(0xFF222222),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
+            title = { Text("گزارش این تصویر؟", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("اگر این تصویر نامناسب است، گزارش بده؛ ادمین آن را بررسی می‌کند.")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = reportReason,
+                        onValueChange = { reportReason = it },
+                        label = { Text("دلیل (اختیاری)", color = Color.White.copy(alpha = 0.7f)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp),
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showReportConfirm = false
+                        scope.launch {
+                            try {
+                                Api.service.reportGeneration(
+                                    GalleryReportRequest(
+                                        generation_id = currentId,
+                                        reason = reportReason.ifBlank { null },
+                                    ),
+                                )
+                                reported = true
+                                reportReason = ""
+                                notice = "گزارش ثبت شد؛ ممنون"
+                            } catch (_: Exception) {
+                                notice = "ثبت گزارش ناموفق بود؛ دوباره تلاش کن"
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),
+                    shape = RoundedCornerShape(50),
+                ) {
+                    Text("گزارش", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReportConfirm = false }) {
                     Text("انصراف", color = Color.White)
                 }
             },

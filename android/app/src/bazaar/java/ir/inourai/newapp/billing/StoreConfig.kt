@@ -6,4 +6,6 @@ package ir.inourai.newapp.billing
 object StoreConfig {
     const val MARKET_PACKAGE = "com.farsitel.bazaar"
     const val BILLING_BIND_ACTION = "ir.cafebazaar.pardakht.InAppBillingService.BIND"
+    // v16: شناسه‌ی استور همین فلِیور که در لاگین/ثبت‌نام به سرور فرستاده می‌شود.
+    const val STORE_ID = "bazaar"
 }

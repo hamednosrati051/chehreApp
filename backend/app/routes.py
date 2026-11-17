@@ -24,6 +24,7 @@ from .models import (
     AppGallery,
     AppGeneration,
     AppImageLike,
+    AppImageReport,
     AppModel,
     AppOtpCode,
     AppPricing,
@@ -33,6 +34,7 @@ from .models import (
     AppTrend,
     AppTrendWorld,
     AppUser,
+    AppVerifyAttempt,
     AppWorld,
 )
 from .services import bale as bale_svc
@@ -95,6 +97,25 @@ def _entry_gift_enabled():
     if row is None:
         return True
     return str(row.value).strip().lower() not in ("0", "false", "no", "off")
+
+
+def _sms_login_disabled():
+    """ورود با پیامک خاموش است؟ (نسخه‌ی ۱۶، کلید sms_login_disabled).
+
+    "1" = خاموش (otp_request با 503 رد می‌شود)؛ نبودن کلید یا "0" =
+    روشن (رفتار فعلی).
+    """
+    row = AppSetting.query.get("sms_login_disabled")
+    if row is None:
+        return False
+    return str(row.value).strip() == "1"
+
+
+def _valid_store(body):
+    """استور فرستاده‌شده در لاگین (bazaar/myket)؛ بقیه‌ی مقدارها نادیده
+    گرفته می‌شوند تا اپ قدیمی یا مقدار اشتباه، ستون را خراب نکند."""
+    store = (body or {}).get("store")
+    return store if store in ("bazaar", "myket") else None
 
 
 def _default_image_model():
@@ -205,6 +226,11 @@ def otp_request():
     mobile = (request.json or {}).get("mobile", "").strip()
     if not mobile:
         return jsonify({"error": "mobile required"}), 400
+    # نسخه‌ی ۱۶: وقتی ورود با پیامک خاموش است، پیش از rate-limit و
+    # ساخت OTP و هر تماس پیامکی، با 503 رد می‌شود (اپ کاربر را به
+    # ورود با بازار هدایت می‌کند).
+    if _sms_login_disabled():
+        return jsonify({"error": "sms_disabled"}), 503
     since = datetime.datetime.utcnow() - datetime.timedelta(hours=1)
     recent = (
         AppOtpCode.query.filter(
@@ -262,8 +288,13 @@ def otp_verify():
             mobile=mobile,
             free_image_credits=1 if gift else 0,
             free_voice_credits=0,
+            store=_valid_store(body),
         )
         db.session.add(user)
+    else:
+        store = _valid_store(body)
+        if store:
+            user.store = store
     user.last_login_at = datetime.datetime.utcnow()
     db.session.commit()
     return jsonify({"token": _token_for(user), "is_new": is_new})
@@ -293,8 +324,13 @@ def bazaar_login():
             mobile=None,
             free_image_credits=1 if gift else 0,
             free_voice_credits=0,
+            store=_valid_store(body),
         )
         db.session.add(user)
+    else:
+        store = _valid_store(body)
+        if store:
+            user.store = store
     user.last_login_at = datetime.datetime.utcnow()
     db.session.commit()
     return jsonify({"token": _token_for(user), "is_new": is_new})
@@ -318,6 +354,9 @@ def bazaar_link():
     if other is not None and other.id != g.user.id:
         return jsonify({"error": "already linked"}), 409
     g.user.bazaar_account_id = account_id
+    store = _valid_store(body)
+    if store:
+        g.user.store = store
     db.session.commit()
     return jsonify({"ok": True})
 
@@ -1062,7 +1101,59 @@ def submit_gallery():
     return jsonify({"id": row.id, "status": row.status}), 201
 
 
+@gallery_bp.post("/gallery/reports")
+@require_auth
+def report_generation():
+    """گزارش کاربر روی یک تصویر تولیدشده (UGC، قانون مایکت — نسخه‌ی ۱۶).
+
+    هر کاربر می‌تواند هر تولید تمام‌شده را گزارش کند (نه فقط مال خودش).
+    گزارش تکراری همان کاربر برای همان تولید، ردیف موجود را برمی‌گرداند
+    (200، بدون ردیف تازه).
+    """
+    body = request.json or {}
+    gen = AppGeneration.query.get(body.get("generation_id"))
+    if not gen or gen.status != "done":
+        return jsonify({"error": "generation not found"}), 404
+    existing = AppImageReport.query.filter_by(
+        user_id=g.user.id, generation_id=gen.id
+    ).first()
+    if existing:
+        return jsonify(
+            {"id": existing.id, "status": existing.status, "duplicate": True}
+        )
+    row = AppImageReport(
+        user_id=g.user.id,
+        generation_id=gen.id,
+        reason=(str(body.get("reason") or "").strip() or None),
+        status="pending",
+    )
+    db.session.add(row)
+    db.session.commit()
+    return jsonify({"id": row.id, "status": row.status}), 201
+
+
 # ---------------- purchases: verify + pending + ledger ----------------
+
+
+def _log_verify_attempt(user_id, pack_id, purchase_token, store, success,
+                        error, pending_id):
+    """یک ردیف در app_verify_attempts؛ هر تلاش وریفای (موفق/ناموفق) یکی.
+    خطای لاگ نباید وریفای را خراب کند، پس جداگانه commit می‌شود."""
+    try:
+        db.session.add(
+            AppVerifyAttempt(
+                user_id=user_id,
+                pack_id=pack_id,
+                purchase_token=purchase_token,
+                store=store,
+                success=bool(success),
+                error=(str(error)[:500] if error else None),
+                pending_id=pending_id,
+            )
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 @coins_bp.post("/coins/purchases/verify")
@@ -1071,43 +1162,92 @@ def verify_purchase_route():
     """وریفای خرید بازار یا مایکت و شارژ سکه (idempotent).
 
     ورودی: pack_id، purchase_token، purchase_data (JSON خام استور)،
-    signature. اپ استور را نمی‌فرستد؛ سرور اول با کلید بازار امضا را
-    چک می‌کند و فقط اگر امضا با کلید بازار نخواند، با کلید مایکت
-    امتحان می‌کند (هر دو استور همان پک‌ها و همان SKUها را دارند).
-    بعد از وریفای موفق، اپ باید خرید را در استورش consume کند تا همان
-    پک بلافاصله دوباره قابل خرید باشد.
+    signature، و (نسخه‌ی ۱۶، اختیاری) pending_id — شناسه‌ی ردیف pending
+    که اپ موقع tap-buy ساخته بود؛ سرور همان ردیف را به توکن وصل می‌کند
+    به‌جای ساختن ردیف تازه. اپ استور را نمی‌فرستد؛ سرور اول با کلید
+    بازار امضا را چک می‌کند و فقط اگر امضا با کلید بازار نخواند، با
+    کلید مایکت امتحان می‌کند (هر دو استور همان پک‌ها و همان SKUها را
+    دارند). بعد از وریفای موفق، اپ باید خرید را در استورش consume کند
+    تا همان پک بلافاصله دوباره قابل خرید باشد.
+    هر تلاش (موفق و هر شاخه‌ی خطا) یک ردیف در app_verify_attempts
+    می‌گیرد.
     """
     body = request.json or {}
     pack = AppCoinPack.query.get(body.get("pack_id"))
+    pack_id = pack.id if pack else body.get("pack_id")
+    try:
+        pack_id = int(pack_id) if pack_id is not None else None
+    except (TypeError, ValueError):
+        pack_id = None
+    purchase_token = body.get("purchase_token")
+    pending_id = body.get("pending_id")
+    if pending_id is not None:
+        try:
+            pending_id = int(pending_id)
+        except (TypeError, ValueError):
+            _log_verify_attempt(
+                g.user.id, pack_id, purchase_token, None, False,
+                "pending_id must be an integer", None,
+            )
+            return jsonify({"error": "pending_id must be an integer"}), 400
     if pack is not None and not pack.is_active:
+        _log_verify_attempt(
+            g.user.id, pack_id, purchase_token, None, False,
+            "pack not found", pending_id,
+        )
         return jsonify({"error": "pack not found"}), 404
     try:
         purchase, already, gift_granted = bazaar_svc.verify_purchase(
             g.user,
             pack,
-            body.get("purchase_token"),
+            purchase_token,
             body.get("purchase_data") or "",
             body.get("signature") or "",
+            pending_id=pending_id,
         )
+        store = "bazaar"
     except ValueError as exc:
         # فقط عدم تطابق امضا به مایکت می‌افتد؛ بقیه‌ی خطاها (توکنِ
-        # کاربر دیگر، خرید ناتمام، عدم تطابق SKU) همان‌جا ۴۰۰ می‌شوند.
+        # کاربر دیگر، خرید ناتمام، عدم تطابق SKU، pending نامعتبر)
+        # همان‌جا ۴۰۰ می‌شوند.
         if str(exc) != "invalid bazaar signature":
+            _log_verify_attempt(
+                g.user.id, pack_id, purchase_token, "bazaar", False,
+                str(exc), pending_id,
+            )
             return jsonify({"error": str(exc)}), 400
         try:
             purchase, already, gift_granted = myket_svc.verify_purchase(
                 g.user,
                 pack,
-                body.get("purchase_token"),
+                purchase_token,
                 body.get("purchase_data") or "",
                 body.get("signature") or "",
+                pending_id=pending_id,
             )
+            store = "myket"
         except ValueError as exc2:
+            _log_verify_attempt(
+                g.user.id, pack_id, purchase_token, "myket", False,
+                str(exc2), pending_id,
+            )
             return jsonify({"error": str(exc2)}), 400
         except RuntimeError as exc2:
+            _log_verify_attempt(
+                g.user.id, pack_id, purchase_token, "myket", False,
+                str(exc2), pending_id,
+            )
             return jsonify({"error": str(exc2)}), 503
     except RuntimeError as exc:
+        _log_verify_attempt(
+            g.user.id, pack_id, purchase_token, "bazaar", False,
+            str(exc), pending_id,
+        )
         return jsonify({"error": str(exc)}), 503
+    _log_verify_attempt(
+        g.user.id, purchase.pack_id, purchase_token, store, True, None,
+        pending_id,
+    )
     resp_pack = AppCoinPack.query.get(purchase.pack_id)
     return jsonify(
         {
@@ -2423,6 +2563,7 @@ def _user_admin(u):
         "bazaar_account_id": u.bazaar_account_id,
         "name": u.name,
         "status": u.status,
+        "store": u.store,
         "free_image_credits": u.free_image_credits,
         "free_voice_credits": u.free_voice_credits,
         "balance": coins_svc.get_balance(u),
@@ -2451,6 +2592,9 @@ def admin_list_users():
         query = query.filter_by(status="active")
     elif is_active == "false":
         query = query.filter_by(status="blocked")
+    store = request.args.get("store")
+    if store in ("bazaar", "myket"):
+        query = query.filter_by(store=store)
     query = query.order_by(AppUser.id.desc())
     users, meta = _paginate(query)
     return jsonify({"items": [_user_admin(u) for u in users], **meta})
@@ -2766,6 +2910,137 @@ def admin_get_purchase(purchase_id):
             pack.coins if pack else None,
         )
     )
+
+
+# ---------------- admin: verify attempts + stale pendings (نسخه‌ی ۱۶) ----------------
+
+
+def _verify_attempt_admin(a):
+    tok = a.purchase_token or ""
+    return {
+        "id": a.id,
+        "user_id": a.user_id,
+        "pack_id": a.pack_id,
+        # توکن کامل هرگز در ادمین نمایش داده نمی‌شود (مثل _purchase_admin).
+        "token_tail": ("…" + tok[-6:]) if len(tok) > 6 else tok,
+        "store": a.store,
+        "success": bool(a.success),
+        "error": a.error,
+        "pending_id": a.pending_id,
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+    }
+
+
+@admin_bp.get("/admin/verify-attempts")
+@require_admin
+def admin_list_verify_attempts():
+    query = AppVerifyAttempt.query.order_by(AppVerifyAttempt.id.desc())
+    rows, meta = _paginate(query)
+    return jsonify({"items": [_verify_attempt_admin(a) for a in rows], **meta})
+
+
+STALE_PENDING_MINUTES = 30
+
+
+@admin_bp.get("/admin/purchases/stale")
+@require_admin
+def admin_list_stale_purchases():
+    """خریدهای pending قدیمی‌تر از ۳۰ دقیقه (مانیتور نسخه‌ی ۱۶).
+
+    ردیف‌های بدون توکن همان‌هایی‌اند که expire_pending_purchases.py
+    حذف می‌کند؛ ردیف‌های توکن‌دار هرگز منقضی نمی‌شوند و اینجا فقط
+    برای پیگیری دیده می‌شوند.
+    """
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(
+        minutes=STALE_PENDING_MINUTES
+    )
+    query = (
+        AppPurchase.query.filter(
+            AppPurchase.status == "pending", AppPurchase.created_at < cutoff
+        ).order_by(AppPurchase.id.desc())
+    )
+    rows, meta = _paginate(query)
+    return jsonify(
+        {
+            "items": [
+                {
+                    "id": r.id,
+                    "pack_id": r.pack_id,
+                    "user_id": r.user_id,
+                    "amount_irr": r.amount_irr,
+                    # توکن کامل هرگز به ادمین نمی‌رسد؛ فقط دم آن (مثل
+                    # _purchase_admin) تا معلوم باشد توکن هست یا نه.
+                    "purchase_token": (
+                        ("…" + tok[-6:])
+                        if (tok := r.bazaar_purchase_token) and len(tok) > 6
+                        else tok
+                    ),
+                    "has_purchase_token": bool(r.bazaar_purchase_token),
+                    "created_at": (
+                        r.created_at.isoformat() if r.created_at else None
+                    ),
+                }
+                for r in rows
+            ],
+            **meta,
+        }
+    )
+
+
+# ---------------- admin: image reports (UGC، نسخه‌ی ۱۶) ----------------
+
+
+@admin_bp.get("/admin/reports")
+@require_admin
+def admin_list_reports():
+    query = AppImageReport.query.order_by(AppImageReport.id.desc())
+    rows, meta = _paginate(query)
+    gen_ids = {r.generation_id for r in rows}
+    gens = {
+        g.id: g
+        for g in AppGeneration.query.filter(
+            AppGeneration.id.in_(gen_ids)
+        ).all()
+    } if gen_ids else {}
+    return jsonify(
+        {
+            "items": [
+                {
+                    "id": r.id,
+                    "generation_id": r.generation_id,
+                    "image_url": (
+                        gens[r.generation_id].output_url
+                        if r.generation_id in gens else None
+                    ),
+                    "user_id": r.user_id,
+                    "reason": r.reason,
+                    "status": r.status,
+                    "created_at": (
+                        r.created_at.isoformat() if r.created_at else None
+                    ),
+                }
+                for r in rows
+            ],
+            **meta,
+        }
+    )
+
+
+@admin_bp.patch("/admin/reports/<int:report_id>")
+@require_admin
+def admin_update_report(report_id):
+    row = AppImageReport.query.get(report_id)
+    if not row:
+        return jsonify({"error": "report not found"}), 404
+    body = request.json or {}
+    status = body.get("status")
+    if status not in ("reviewed", "dismissed"):
+        return jsonify(
+            {"error": "status must be reviewed or dismissed"}
+        ), 400
+    row.status = status
+    db.session.commit()
+    return jsonify({"id": row.id, "status": row.status})
 
 
 # ---------------- admin: models (ساخت مدل جدید) ----------------

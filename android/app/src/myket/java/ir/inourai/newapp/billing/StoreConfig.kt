@@ -7,4 +7,6 @@ package ir.inourai.newapp.billing
 object StoreConfig {
     const val MARKET_PACKAGE = "ir.mservices.market"
     const val BILLING_BIND_ACTION = "ir.mservices.market.InAppBillingService.BIND"
+    // v16: شناسه‌ی استور همین فلِیور که در لاگین/ثبت‌نام به سرور فرستاده می‌شود.
+    const val STORE_ID = "myket"
 }

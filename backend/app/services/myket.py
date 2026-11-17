@@ -61,7 +61,8 @@ def verify_signature(purchase_data: str, signature_b64: str) -> bool:
         return False
 
 
-def verify_purchase(user, pack, purchase_token, purchase_data, signature):
+def verify_purchase(user, pack, purchase_token, purchase_data, signature,
+                    pending_id=None):
     """خرید را وریفای و (فقط یک بار) سکه شارژ می‌کند.
 
     برمی‌گرداند: (purchase, already_credited: bool, gift_granted: int).
@@ -69,6 +70,9 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature):
     وقتی پک gift_coins>0 دارد؛ در همان تراکنش شارژ می‌شود.
     خطا می‌دهد (ValueError) اگر امضا نامعتبر باشد یا داده با پک نخواند؛
     در آن صورت خرید pending می‌ماند و سکه‌ای شارژ نمی‌شود.
+    نسخه‌ی ۱۶ (pending_id، اختیاری): اگر توکن هنوز ردیفی ندارد و
+    pending_id داده شده، همان ردیف pending به توکن وصل می‌شود
+    (به‌جای ساختن ردیف تازه) — ردیفی که اپ موقع tap-buy ساخته بود.
     """
     if not purchase_token:
         raise ValueError("purchase_token required")
@@ -87,6 +91,25 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature):
         raise ValueError("purchase token belongs to another user")
     if existing is not None and existing.status in ("verified", "consumed"):
         return existing, True, 0
+
+    # نسخه‌ی ۱۶: وصل‌کردن ردیف pendingِ از قبل ساخته‌شده به این توکن.
+    # فقط وقتی توکن هنوز ردیفی ندارد؛ idempotency توکن دست نمی‌خورد.
+    if existing is None and pending_id is not None:
+        pending = AppPurchase.query.get(pending_id)
+        if pending is None:
+            raise ValueError("pending purchase not found")
+        if pending.user_id != user.id:
+            raise ValueError("pending purchase belongs to another user")
+        if pending.status != "pending":
+            raise ValueError("pending purchase is not pending")
+        if (
+            pending.bazaar_purchase_token
+            and pending.bazaar_purchase_token != purchase_token
+        ):
+            raise ValueError("pending purchase token mismatch")
+        if pack is not None and pack.id != pending.pack_id:
+            raise ValueError("pending purchase pack mismatch")
+        existing = pending
 
     # اگر پک داده نشده ولی خرید pending از قبل هست، از همان ردیف بردار.
     if pack is None and existing is not None:
@@ -155,6 +178,9 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature):
     # شارژ سکه و تغییر وضعیت در یک تراکنش: اگر بین آن دو خطا رخ دهد،
     # نه سکه‌ای بی‌سند شارژ می‌شود و نه خریدی pending می‌ماند که بعداً
     # دوباره شارژ شود.
+    # نسخه‌ی ۱۶: ردیف pendingِ وصل‌شده اینجا توکنش را می‌گیرد.
+    if not existing.bazaar_purchase_token:
+        existing.bazaar_purchase_token = purchase_token
     coins_svc.credit_coins(
         user, pack.coins if pack else 0,
         reason="purchase", ref_type="purchase", ref_id=existing.id,

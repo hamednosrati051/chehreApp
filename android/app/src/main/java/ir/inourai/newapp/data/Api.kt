@@ -24,11 +24,12 @@ import retrofit2.http.Path
 private const val BASE_URL = "https://chehre.inourai.ir/api/v1/"
 
 data class OtpRequest(val mobile: String)
-data class OtpVerify(val mobile: String, val code: String)
+// v16: store اختیاری است (bazaar/myket)؛ نبودنش یعنی رفتار قدیمی.
+data class OtpVerify(val mobile: String, val code: String, val store: String? = null)
 data class TokenResponse(val token: String, val is_new: Boolean? = null)
 // v13: Bazaar native login — server creates/links a user by Bazaar accountId.
-data class BazaarLoginRequest(val account_id: String)
-data class BazaarLinkRequest(val account_id: String)
+data class BazaarLoginRequest(val account_id: String, val store: String? = null)
+data class BazaarLinkRequest(val account_id: String, val store: String? = null)
 data class BazaarLinkResponse(val ok: Boolean)
 data class AppConfig(val min_app_version_code: Int = 0)
 data class MeResponse(val mobile_masked: String)
@@ -112,7 +113,17 @@ data class PurchaseVerifyRequest(
     val purchase_token: String,
     val purchase_data: String,
     val signature: String,
+    // v16: شناسه‌ی ردیف pending ساخته‌شده موقع tap-buy؛ اختیاری است.
+    val pending_id: Long? = null,
 )
+// v16: ساخت ردیف pending موقع tap-buy (قبل از بازشدن پرداخت استور)؛
+// purchase_token هنوز نیست و موقع وریفای وصل می‌شود.
+data class CreatePendingPurchaseRequest(val pack_id: Long)
+data class PendingPurchaseCreated(val id: Long, val status: String)
+// v16: گزارش کاربر روی یک تصویر تولیدشده (UGC، قانون مایکت)؛
+// reason اختیاری است و خالی هم قبول است.
+data class GalleryReportRequest(val generation_id: Long, val reason: String? = null)
+data class GalleryReportResponse(val id: Long, val status: String, val duplicate: Boolean = false)
 data class PurchaseVerifyResponse(
     val id: Long,
     val status: String,
@@ -232,6 +243,14 @@ interface ApiService {
 
     @POST("coins/purchases/verify")
     suspend fun verifyPurchase(@Body b: PurchaseVerifyRequest): PurchaseVerifyResponse
+
+    // v16: ردیف pending موقع tap-buy، پیش از پرداخت استور.
+    @POST("coins/purchases")
+    suspend fun createPendingPurchase(@Body b: CreatePendingPurchaseRequest): PendingPurchaseCreated
+
+    // v16: گزارش UGC روی یک تصویر تولیدشده.
+    @POST("gallery/reports")
+    suspend fun reportGeneration(@Body b: GalleryReportRequest): GalleryReportResponse
 
     @GET("coins/purchases/pending")
     suspend fun pendingPurchases(): List<PendingPurchase>

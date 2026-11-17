@@ -40,6 +40,7 @@ import com.farsitel.bazaar.BazaarClientProxy
 import com.farsitel.bazaar.core.BazaarSignIn
 import com.farsitel.bazaar.core.model.BazaarSignInOptions
 import com.farsitel.bazaar.core.model.SignInOption
+import ir.inourai.newapp.billing.StoreConfig
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.BazaarLoginRequest
 import ir.inourai.newapp.data.OtpRequest
@@ -65,6 +66,11 @@ fun LoginScreen(onDone: () -> Unit) {
     // هرگز متن خام)؛ seq کاری می‌کند که دو خطای یکسان پشت سر هم هم
     // هر دو نمایش داده شوند.
     var error by remember { mutableStateOf<String?>(null) }
+    // v16: خطای ارسال کد (۵۰۲/۵۰۳) هم‌زمان با اسنک‌بار، به‌صورت
+    // متنی ثابت زیر دکمه‌ی ارسال هم نشان داده می‌شود تا دکمه‌ی
+    // «ورود با بازار» زیر همان خطا بماند و با محوشدن اسنک‌بار گم نشود.
+    var otpInlineError by remember { mutableStateOf<String?>(null) }
+    var showBazaarFallback by remember { mutableStateOf(false) }
     var snackSeq by remember { mutableStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
     fun showError(msg: String) {
@@ -94,7 +100,9 @@ fun LoginScreen(onDone: () -> Unit) {
         }
         scope.launch {
             try {
-                val res = Api.service.bazaarLogin(BazaarLoginRequest(account.accountId))
+                val res = Api.service.bazaarLogin(
+                    BazaarLoginRequest(account.accountId, store = StoreConfig.STORE_ID),
+                )
                 Session.token = res.token
                 Session.justRegistered = res.is_new == true
                 onDone()
@@ -202,14 +210,29 @@ fun LoginScreen(onDone: () -> Unit) {
                         scope.launch {
                             try {
                                 val resp = Api.service.otpRequest(OtpRequest(mobile))
-                                if (resp.isSuccessful) sent = true
-                                else showError(
-                                    when (resp.code()) {
-                                        429 -> "تعداد درخواست زیاد است؛ کمی بعد دوباره تلاش کن"
-                                        400 -> "شماره موبایل معتبر نیست"
-                                        else -> "ارسال کد ناموفق بود"
+                                if (resp.isSuccessful) {
+                                    otpInlineError = null
+                                    showBazaarFallback = false
+                                    sent = true
+                                } else when (resp.code()) {
+                                    // v16: ورود با پیامک از ادمین خاموش است؛
+                                    // کاربر به ورود با بازار هدایت می‌شود.
+                                    503 -> {
+                                        otpInlineError = "ورود با پیامک غیرفعال است؛ لطفاً از ورود با بازار استفاده کنید"
+                                        showBazaarFallback = true
+                                        showError(otpInlineError!!)
                                     }
-                                )
+                                    // v16: ارسال پیامک ناموفق بود؛ راه
+                                    // جایگزین (ورود با بازار) گفته می‌شود.
+                                    502 -> {
+                                        otpInlineError = "ارسال کد ناموفق بود؛ می‌توانید با بازار هم وارد شوید"
+                                        showBazaarFallback = true
+                                        showError(otpInlineError!!)
+                                    }
+                                    429 -> showError("تعداد درخواست زیاد است؛ کمی بعد دوباره تلاش کن")
+                                    400 -> showError("شماره موبایل معتبر نیست")
+                                    else -> showError("ارسال کد ناموفق بود")
+                                }
                             } catch (e: Exception) {
                                 showError(
                                     if (e is IOException) "مشکل شبکه؛ دوباره تلاش کن"
@@ -221,6 +244,25 @@ fun LoginScreen(onDone: () -> Unit) {
                     modifier = Modifier.weight(1f),
                 ) {
                     Text("ارسال کد")
+                }
+            }
+            // v16: وقتی ارسال کد ناموفق است (۵۰۲/۵۰۳)، خطا به‌صورت
+            // ثابت همین‌جا می‌ماند و دکمه‌ی «ورود با بازار» زیر آن،
+            // همان جریان ورود با بازار را باز می‌کند.
+            otpInlineError?.let {
+                Text(it, color = Color(0xFFB00020), fontSize = 14.sp)
+            }
+            if (showBazaarFallback) {
+                Button(
+                    onClick = { startBazaarSignIn() },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF0EA960),
+                        contentColor = Color.White,
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Text("ورود با بازار", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
             }
         } else {
@@ -249,7 +291,9 @@ fun LoginScreen(onDone: () -> Unit) {
                 onClick = {
                     scope.launch {
                         try {
-                            val res = Api.service.otpVerify(OtpVerify(mobile, code))
+                            val res = Api.service.otpVerify(
+                                OtpVerify(mobile, code, store = StoreConfig.STORE_ID),
+                            )
                             Session.token = res.token
                             Session.justRegistered = res.is_new == true
                             onDone()

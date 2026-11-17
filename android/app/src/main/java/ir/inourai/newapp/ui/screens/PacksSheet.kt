@@ -66,6 +66,9 @@ fun PacksSheet(
     // پیام دریافت ناموفق نشان داده می‌شود.
     var packsLoadFailed by remember { mutableStateOf(false) }
     var buyingSku by remember { mutableStateOf<String?>(null) }
+    // v16: شناسه‌ی ردیف pending ساخته‌شده موقع tap-buy؛ موقع وریفای
+    // همراه توکن فرستاده می‌شود تا سرور همان ردیف را وصل کند.
+    var pendingPurchaseId by remember { mutableStateOf<Long?>(null) }
     val loggedIn = Session.token != null
 
     LaunchedEffect(Unit) {
@@ -93,7 +96,8 @@ fun PacksSheet(
                         onError("نتیجه‌ی خرید خوانا نبود")
                         return@launch
                     }
-                val gift = Billing.verifyAndConsume(context, purchase)
+                val gift = Billing.verifyAndConsume(context, purchase, pendingPurchaseId)
+                pendingPurchaseId = null
                 onPurchased()
                 if (gift > 0) onGift(gift)
                 onDismiss()
@@ -113,6 +117,11 @@ fun PacksSheet(
         scope.launch {
             buyingSku = p.bazaar_sku
             try {
+                // v16: پیش از بازشدن پرداخت استور، ردیف pending روی
+                // سرور ساخته می‌شود تا خریدِ پرداخت‌شده هیچ‌وقت بی‌رد
+                // نماند. اگر این تماس شکست بخورد (مثلاً قطعی شبکه)،
+                // null برمی‌گردد و خرید با جریان قدیمی ادامه پیدا می‌کند.
+                pendingPurchaseId = Billing.createPendingPurchase(p.id)
                 val sender = Billing.getBuyIntentSender(context, p.bazaar_sku)
                 buyLauncher.launch(IntentSenderRequest.Builder(sender).build())
             } catch (e: Exception) {

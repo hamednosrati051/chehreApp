@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -82,6 +83,7 @@ import androidx.navigation.navArgument
 import com.farsitel.bazaar.core.BazaarSignIn
 import com.farsitel.bazaar.core.callback.BazaarSignInCallback
 import ir.inourai.newapp.billing.Billing
+import ir.inourai.newapp.billing.StoreConfig
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.BazaarLinkRequest
 import ir.inourai.newapp.data.DeviceTokenRequest
@@ -204,12 +206,17 @@ fun App(initialGenId: Long = -1L) {
 
     // بازیابی خریدهای ناتمام موقع شروع اپ (فقط وقتی لاگین کرده باشد):
     // خریدهای owned بازار دوباره به سرور فرستاده و (یک‌بار) شارژ و consume می‌شوند.
+    // v16: شکست دیگر بی‌صدا بلعیده نمی‌شود — لاگ می‌شود و بنر خطا به
+    // کاربر نشان داده می‌شود تا خرید گم‌شده دیده شود، نه پنهان.
+    var recoveryError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Session.token) {
         if (Session.token != null) {
             scope.launch {
                 try {
                     Billing.recoverPurchases(context)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    Log.e("ChehreSaz", "recoverPurchases failed", e)
+                    recoveryError = "بازیابی خرید ناتمام ناموفق بود؛ دوباره تلاش کن"
                 }
             }
         }
@@ -276,7 +283,12 @@ fun App(initialGenId: Long = -1L) {
                             if (account != null) {
                                 scope.launch {
                                     try {
-                                        Api.service.linkBazaar(BazaarLinkRequest(account.accountId))
+                                        Api.service.linkBazaar(
+                                            BazaarLinkRequest(
+                                                account.accountId,
+                                                store = StoreConfig.STORE_ID,
+                                            ),
+                                        )
                                     } catch (_: Exception) {
                                         // ۴۰۹ یا خطای شبکه: دیگر تلاش نمی‌شود.
                                     }
@@ -459,6 +471,32 @@ fun App(initialGenId: Long = -1L) {
                             popUpTo(nav.graph.startDestinationId) { inclusive = true }
                         }
                     })
+                }
+            }
+            // v16: بنر خطای بازیابی خرید ناتمام — تا وقتی کاربر
+            // نبندد می‌ماند؛ بستن فقط برای همین اجراست.
+            if (recoveryError != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF7F1D1D)),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(16.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    ) {
+                        Text(
+                            recoveryError!!,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = { recoveryError = null }) {
+                            Icon(Icons.Rounded.Close, contentDescription = null, tint = Color.White)
+                        }
+                    }
                 }
             }
             // بنر اعلان (نسخه‌ی ۱۲): فقط وقتی اعلان‌ها خاموش‌اند و در
