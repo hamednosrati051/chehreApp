@@ -3415,6 +3415,35 @@ def admin_list_verify_attempts():
     return jsonify({"items": [_verify_attempt_admin(a) for a in rows], **meta})
 
 
+@admin_bp.delete("/admin/verify-attempts/bulk")
+@require_admin
+def admin_bulk_delete_verify_attempts():
+    """حذف گروهی تلاش‌های وریفای — فقط ردیف‌های تشخیصی.
+
+    ورودی: {"ids": [...]} یا {"all": true}. تلاش‌ها فقط لاگ
+    تشخیصی‌اند (توکن کامل ندارند، هیچ FKای به آن‌ها نیست و ردیف
+    خرید سند اصلی است)؛ حذفشان خریدها، سکه‌ها و ledger را دست
+    نمی‌زند.
+    """
+    body = request.get_json(silent=True) or {}
+    ids = body.get("ids") or []
+    if body.get("all"):
+        deleted = AppVerifyAttempt.query.delete(synchronize_session=False)
+        db.session.commit()
+        return jsonify({"ok": True, "deleted": deleted})
+    if not ids:
+        return jsonify({"error": "ids or all required"}), 400
+    try:
+        ids = [int(i) for i in ids]
+    except (TypeError, ValueError):
+        return jsonify({"error": "bad ids"}), 400
+    deleted = AppVerifyAttempt.query.filter(
+        AppVerifyAttempt.id.in_(ids)
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify({"ok": True, "deleted": deleted})
+
+
 STALE_PENDING_MINUTES = 30
 
 

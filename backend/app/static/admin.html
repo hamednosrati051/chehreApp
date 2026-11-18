@@ -238,6 +238,7 @@
   <section id="verify">
     <h2>تلاش‌های وریفای خرید</h2>
     <p class="muted">هر تلاش وریفای (موفق یا ناموفق) یک ردیف؛ تازه‌ترین اول. توکن کامل نمایش داده نمی‌شود.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button class="small danger" onclick="vaDeleteSelected()">حذف تیک‌خورده‌ها</button><button class="small danger" onclick="vaDeleteAll()">حذف همه</button></div>
     <div id="va-list"></div>
     <div id="va-pager"></div>
   </section>
@@ -611,9 +612,11 @@ async function loadPurchaseDetail(id){ const r = await api('/admin/purchases/' +
 let vaPageNo = 1;
 function vaPage(n){ if(n < 1) return; vaPageNo = n; loadVerifyAttempts(); }
 async function loadVerifyAttempts(){ const res = await api('/admin/verify-attempts?page=' + vaPageNo);
-  $('va-list').innerHTML = res.items.length ? `<table><tr><th>id</th><th>کاربر</th><th>پک</th><th>استور</th><th>موفق</th><th>خطا</th><th>pending</th><th>توکن</th><th>تاریخ</th></tr>` +
-    res.items.map(a => `<tr><td>${a.id}</td><td>${a.user_id}</td><td>${a.pack_id ?? '—'}</td><td>${esc(a.store) || '—'}</td><td>${a.success ? '✓' : '—'}</td><td>${esc(a.error) || '—'}</td><td>${a.pending_id ?? '—'}</td><td class="muted">${esc(a.token_tail)}</td><td class="muted">${esc(faDate(a.created_at))}</td></tr>`).join('') + '</table>' : '<p class="muted">تلاشی نیست.</p>';
+  $('va-list').innerHTML = res.items.length ? `<table><tr><th></th><th>id</th><th>کاربر</th><th>پک</th><th>استور</th><th>موفق</th><th>خطا</th><th>pending</th><th>توکن</th><th>تاریخ</th></tr>` +
+    res.items.map(a => `<tr><td><input type="checkbox" class="va-check" value="${a.id}"></td><td>${a.id}</td><td>${a.user_id}</td><td>${a.pack_id ?? '—'}</td><td>${esc(a.store) || '—'}</td><td>${a.success ? '✓' : '—'}</td><td>${esc(a.error) || '—'}</td><td>${a.pending_id ?? '—'}</td><td class="muted">${esc(a.token_tail)}</td><td class="muted">${esc(faDate(a.created_at))}</td></tr>`).join('') + '</table>' : '<p class="muted">تلاشی نیست.</p>';
   $('va-pager').innerHTML = pagerHTML('va', res); }
+async function vaDeleteSelected(){ const ids = [...document.querySelectorAll('.va-check:checked')].map(c => parseInt(c.value)); if(!ids.length){ setMsg('چیزی تیک نخورده است.'); return; } if(!confirm(ids.length + ' تلاش وریفای حذف شود؟')) return; try { const r = await api('/admin/verify-attempts/bulk', 'DELETE', {ids}); setMsg(r.deleted + ' تلاش حذف شد.', true); loadVerifyAttempts(); } catch(err){ setMsg(err.message); } }
+async function vaDeleteAll(){ if(!confirm('همه‌ی تلاش‌های وریفای حذف شوند؟')) return; try { const r = await api('/admin/verify-attempts/bulk', 'DELETE', {all: true}); setMsg(r.deleted + ' تلاش حذف شد.', true); loadVerifyAttempts(); } catch(err){ setMsg(err.message); } }
 let stPageNo = 1;
 function stPage(n){ if(n < 1) return; stPageNo = n; loadStale(); }
 async function loadStale(){ const res = await api('/admin/purchases/stale?page=' + stPageNo);

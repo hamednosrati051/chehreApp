@@ -28,6 +28,7 @@
   processing رد می‌شود؛ آدرس خارجی رد می‌شود؛ تک‌تک هنوز کار می‌کند.
   پرداخت‌ها: فقط pending/failed → حذف؛ consumed/verified هرگز
   (سند مالی + لنگر idempotency)؛ ledger دست نمی‌خورد.
+  تلاش‌های وریفای: تیک‌خورده + همه (فقط لاگ تشخیصی).
 - (i) حذف همه‌ی ورودی‌ها (all=true) + فایل‌های یتیم: helper فقط
   فایل قدیمیِ بدون ارجاع را می‌دهد؛ GET شمارش + همه‌ی فایل‌ها
   (نام/آدرس/حجم، برای مودال — بدون سقف ۱۰۰تایی) و DELETE حذف واقعی
@@ -838,6 +839,46 @@ def main():
         r = _admin(client, "/admin/purchases/bulk", "DELETE", {})
         check("purchases bulk empty body: 400",
               r.status_code == 400, f"got {r.status_code} {r.data!r}")
+
+        # تلاش‌های وریفای: لاگ تشخیصی — حذف تیک‌خورده + حذف همه.
+        va1 = AppVerifyAttempt(
+            id=next_id(), user_id=user.id, pack_id=pack_pu.id,
+            purchase_token="va1", store="bazaar", success=True,
+            pending_id=pu_ids[1],
+        )
+        va2 = AppVerifyAttempt(
+            id=next_id(), user_id=user.id, pack_id=pack_pu.id,
+            purchase_token="va2", store="zibal", success=False,
+            error="not paid", pending_id=999,
+        )
+        va3 = AppVerifyAttempt(
+            id=next_id(), user_id=user.id, pack_id=pack_pu.id,
+            purchase_token="va3", store="bazaar", success=False,
+            error="bad sig", pending_id=998,
+        )
+        db.session.add_all([va1, va2, va3])
+        db.session.commit()
+        va_ids = (va1.id, va2.id, va3.id)
+        r = _admin(client, "/admin/verify-attempts/bulk", "DELETE",
+                   {"ids": [va_ids[0], va_ids[1]]})
+        check("verify-attempts bulk by ids: deletes 2, 1 stays",
+              r.status_code == 200
+              and (r.get_json() or {}).get("deleted") == 2
+              and AppVerifyAttempt.query.get(va_ids[0]) is None
+              and AppVerifyAttempt.query.get(va_ids[1]) is None
+              and AppVerifyAttempt.query.get(va_ids[2]) is not None,
+              f"got {r.status_code} {r.data!r}")
+        r = _admin(client, "/admin/verify-attempts/bulk", "DELETE", {})
+        check("verify-attempts bulk empty body: 400",
+              r.status_code == 400, f"got {r.status_code} {r.data!r}")
+        before = AppVerifyAttempt.query.count()
+        r = _admin(client, "/admin/verify-attempts/bulk", "DELETE",
+                   {"all": True})
+        check("verify-attempts bulk all: deletes the rest",
+              r.status_code == 200
+              and (r.get_json() or {}).get("deleted") == before
+              and AppVerifyAttempt.query.count() == 0,
+              f"got {r.status_code} {r.data!r}")
 
         # --- (j) جاروکننده‌ی نسل‌های گیرکرده (۲ دقیقه، هر عکس جدا) ---
         past = datetime.datetime.utcnow() - datetime.timedelta(minutes=5)
