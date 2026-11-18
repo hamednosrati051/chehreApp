@@ -27,9 +27,9 @@
   pending با وضعیت → ۴۰۰؛ با id → حذف؛ ورودی‌ها: ۲ done حذف + ۱
   processing رد می‌شود؛ آدرس خارجی رد می‌شود؛ تک‌تک هنوز کار می‌کند.
 - (i) حذف همه‌ی ورودی‌ها (all=true) + فایل‌های یتیم: helper فقط
-  فایل قدیمیِ بدون ارجاع را می‌دهد؛ GET شمارش + لیست فایل‌ها (نام/
-  آدرس/حجم، برای مودال) و DELETE حذف واقعی با uploads موقت (بدون
-  دست‌زدن به uploads واقعی).
+  فایل قدیمیِ بدون ارجاع را می‌دهد؛ GET شمارش + همه‌ی فایل‌ها
+  (نام/آدرس/حجم، برای مودال — بدون سقف ۱۰۰تایی) و DELETE حذف واقعی
+  با uploads موقت (بدون دست‌زدن به uploads واقعی).
 - (j) جاروکننده‌ی نسل‌های گیرکرده: processing/queued قدیمی‌تر از
   ۲ دقیقه → failed + completed_at + برگرداندن رزرو (سکه یا اعتبار
   هدیه)؛ تازه و تمام‌شده دست نمی‌خورند؛ اجرای دوم صفر می‌دهد.
@@ -744,6 +744,27 @@ def main():
                       f"got {r.status_code} {j}")
         finally:
             routes_mod._uploads_dir = orig_uploads_dir
+
+        # مودال صفحه‌بندی می‌خواهد: GET باید همه‌ی فایل‌ها را بدهد، نه ۱۰۰ تای اول
+        orig_uploads_dir2 = routes_mod._uploads_dir
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                for i in range(25):
+                    p = os.path.join(tmp, f"o{i:02d}.jpg")
+                    with open(p, "wb") as f:
+                        f.write(b"y" * 10)
+                    t = time.time() - 7200
+                    os.utime(p, (t, t))
+                routes_mod._uploads_dir = lambda: tmp
+                r = _admin(client, "/admin/inputs/orphans", "GET")
+                j = r.get_json() or {}
+                check("orphans GET: returns all files (no 100 cap)",
+                      r.status_code == 200
+                      and j.get("count") == 25
+                      and len(j.get("files") or []) == 25,
+                      f"got {r.status_code} {j}")
+        finally:
+            routes_mod._uploads_dir = orig_uploads_dir2
 
         # --- (j) جاروکننده‌ی نسل‌های گیرکرده (۲ دقیقه، هر عکس جدا) ---
         past = datetime.datetime.utcnow() - datetime.timedelta(minutes=5)

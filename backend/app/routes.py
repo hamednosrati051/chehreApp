@@ -2851,7 +2851,7 @@ def admin_list_orphan_inputs():
                     "bytes": size,
                     "mtime": mtime,
                 }
-                for name, size, mtime in files[:100]
+                for name, size, mtime in files
             ],
         }
     )
