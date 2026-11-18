@@ -223,6 +223,10 @@ class AppCoinPack(db.Model):
     # جداگانه از ادمین روشن/خاموش می‌شوند؛ پیش‌فرض زیبال خاموش است.
     bazaar_enabled = db.Column(db.Boolean, default=True, nullable=False)
     zibal_enabled = db.Column(db.Boolean, default=False, nullable=False)
+    # v17 فالبک یک‌باره: اگر روشن باشد، بعد از خطای واقعی یک درگاه،
+    # دکمه‌ی درگاه دیگر یک بار (در همان باز شدن شیت خرید) نشان داده
+    # می‌شود — حتی اگر پرچم آن درگاه خاموش باشد؛ پیش‌فرض خاموش است.
+    show_fallback_button = db.Column(db.Boolean, default=False, nullable=False)
 
 
 class AppPurchase(db.Model):

@@ -110,6 +110,9 @@ data class Pack(
     // v17 زیبال: هر پک دو دکمه دارد (بازار + زیبال)؛ پیش‌فرض زیبال خاموش است.
     val bazaar_enabled: Boolean = true,
     val zibal_enabled: Boolean = false,
+    // v17 فالبک یک‌باره: اگر روشن باشد، بعد از خطای واقعی یک درگاه،
+    // دکمه‌ی درگاه دیگر یک بار نشان داده می‌شود (حتی با پرچم خاموش).
+    val show_fallback_button: Boolean = false,
 )
 data class PurchaseVerifyRequest(
     val pack_id: Long,
@@ -124,7 +127,10 @@ data class PurchaseVerifyRequest(
 data class CreatePendingPurchaseRequest(val pack_id: Long)
 data class PendingPurchaseCreated(val id: Long, val status: String)
 // v17 زیبال: ساخت پرداخت + بررسی دوباره (recheck).
-data class ZibalPurchaseRequest(val pack_id: Long)
+// fallback=true یعنی دکمه‌ی جایگزین یک‌باره بعد از خطای بازار است؛
+// سرور فقط وقتی تنظیم show_fallback_button همان پک روشن باشد، با
+// پرچم خاموش هم می‌سازد.
+data class ZibalPurchaseRequest(val pack_id: Long, val fallback: Boolean = false)
 data class ZibalPurchaseCreated(val purchase_id: Long, val payment_url: String, val status: String)
 data class ZibalRecheckResponse(
     val id: Long,

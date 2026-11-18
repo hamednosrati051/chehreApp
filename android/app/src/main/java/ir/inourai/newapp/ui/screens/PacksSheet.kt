@@ -42,6 +42,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import ir.inourai.newapp.billing.Billing
+import ir.inourai.newapp.billing.BillingLaunchException
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Pack
 import ir.inourai.newapp.data.Session
@@ -76,6 +77,12 @@ fun PacksSheet(
     // v16: شناسه‌ی ردیف pending ساخته‌شده موقع tap-buy؛ موقع وریفای
     // همراه توکن فرستاده می‌شود تا سرور همان ردیف را وصل کند.
     var pendingPurchaseId by remember { mutableStateOf<Long?>(null) }
+    // v17 فالبک یک‌باره: بعد از خطای واقعی یک درگاه، دکمه‌ی درگاه دیگر
+    // فقط در همین باز شدن شیت یک بار نشان داده می‌شود؛ با بستن شیت
+    // می‌رود (remember همین کامپوزابل است). fallbackUsed جلوی پیشنهاد
+    // دوباره در همان باز شدن را می‌گیرد.
+    var fallbackOffer by remember { mutableStateOf<Pair<Long, String>?>(null) }
+    var fallbackUsed by remember { mutableStateOf(false) }
     val loggedIn = Session.token != null
 
     LaunchedEffect(Unit) {
@@ -175,6 +182,12 @@ fun PacksSheet(
                     buyLauncher.launch(IntentSenderRequest.Builder(sender).build())
                 }
             } catch (e: Exception) {
+                // v17 فالبک: فقط خطای راه‌اندازی خرید (BillingLaunchException) —
+                // نه لغو کاربر (null برمی‌گردد، نه استثنا) و نه خطای وریفای
+                // بعد از پرداخت — پیشنهاد یک‌باره‌ی درگاه دیگر را می‌آورد.
+                if (e is BillingLaunchException && p.show_fallback_button && !fallbackUsed) {
+                    fallbackOffer = p.id to "zibal"
+                }
                 onError(billingErrorMessage(e))
             } finally {
                 buyingSku = null
@@ -186,7 +199,7 @@ fun PacksSheet(
     // خارجی (G1)؛ نتیجه موقع برگشت به اپ، با recheck از سرور خوانده
     // می‌شود (اثر ON_RESUME همین فایل). دکمه‌ی زیبال فقط وقتی هست که
     // پک zibal_enabled باشد؛ سرور هم نبودنش را با ۴۰۳ رد می‌کند.
-    fun buyZibal(p: Pack) {
+    fun buyZibal(p: Pack, fallback: Boolean = false) {
         if (!loggedIn) {
             onDismiss()
             onError("برای خرید اول وارد شوید")
@@ -196,9 +209,14 @@ fun PacksSheet(
         scope.launch {
             buyingSku = p.bazaar_sku
             try {
-                val created = Api.service.createZibalPurchase(ZibalPurchaseRequest(pack_id = p.id))
+                val created = Api.service.createZibalPurchase(ZibalPurchaseRequest(pack_id = p.id, fallback = fallback))
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(created.payment_url)))
             } catch (e: Exception) {
+                // v17 فالبک: خطای ساخت زیبال (قبل از باز شدن مرورگر) —
+                // پیشنهاد یک‌باره‌ی بازار را می‌آورد.
+                if (p.show_fallback_button && !fallbackUsed) {
+                    fallbackOffer = p.id to "bazaar"
+                }
                 onError("خرید ناموفق بود؛ دوباره تلاش کن")
             } finally {
                 buyingSku = null
@@ -285,6 +303,37 @@ fun PacksSheet(
                                     enabled = buyingSku == null,
                                 ) {
                                     Text(if (buyingSku == p.bazaar_sku) "در حال انتقال…" else "پرداخت با زیبال")
+                                }
+                            }
+                            // v17 فالبک یک‌باره: بعد از خطای واقعی یک درگاه،
+                            // دکمه‌ی درگاه دیگر فقط در همین باز شدن شیت می‌آید —
+                            // حتی اگر پرچم آن درگاه خاموش باشد.
+                            if (fallbackOffer?.first == p.id && fallbackOffer?.second == "zibal") {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "پرداخت با بازار نشد؛ با زیبال امتحان کن؟",
+                                    fontSize = 12.sp,
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Button(
+                                    onClick = { fallbackUsed = true; fallbackOffer = null; buyZibal(p, fallback = true) },
+                                    enabled = buyingSku == null,
+                                ) {
+                                    Text(if (buyingSku == p.bazaar_sku) "در حال انتقال…" else "پرداخت با زیبال")
+                                }
+                            }
+                            if (fallbackOffer?.first == p.id && fallbackOffer?.second == "bazaar") {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "پرداخت با زیبال نشد؛ با بازار امتحان کن؟",
+                                    fontSize = 12.sp,
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Button(
+                                    onClick = { fallbackUsed = true; fallbackOffer = null; buy(p) },
+                                    enabled = buyingSku == null,
+                                ) {
+                                    Text(if (buyingSku == p.bazaar_sku) "در حال اتصال…" else "خرید")
                                 }
                             }
                         }

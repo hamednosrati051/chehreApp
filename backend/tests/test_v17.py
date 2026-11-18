@@ -20,6 +20,9 @@
 - (e) انقضا (G3): بازارِ بدون توکنِ قدیمی حذف می‌شود؛ زیبالِ ۴۰ دقیقه‌ای
   نه؛ زیبالِ ۸ روزه حذف می‌شود؛ بازارِ دارای توکن می‌ماند.
 - (f) myket_url در تنظیمات عمومی (S2) + صفحه‌ی bounce (G2).
+- (g) فالبک یک‌باره: show_fallback_button در پک‌ها + PATCH ادمین؛
+  زیبال با fallback=true و تنظیم روشن → ۲۰۱ با وجود پرچم خاموش؛
+  با تنظیم خاموش → ۴۰۳؛ تکرار → همان ردیف.
 """
 
 import datetime
@@ -143,7 +146,18 @@ def main():
             gift_scope="first",
             zibal_enabled=True,
         )
-        db.session.add_all([pack, pack2])
+        pack3 = AppCoinPack(
+            id=next_id(),
+            name="fallback pack",
+            coins=10,
+            price_toman=29900,
+            bazaar_sku="pack_fallback",
+            is_active=True,
+            gift_coins=0,
+            gift_scope="every",
+            zibal_enabled=False,
+        )
+        db.session.add_all([pack, pack2, pack3])
         db.session.commit()
 
         user = AppUser(
@@ -225,6 +239,51 @@ def main():
         r = _auth(client, auth, "/coins/purchases/zibal", "POST",
                   {"pack_id": pack.id})
         check("zibal create with flag OFF: 403",
+              r.status_code == 403,
+              f"got {r.status_code} {r.data!r}")
+        # --- (g) فالبک یک‌باره: تنظیم show_fallback_button ---
+        r = client.get("/api/v1/coins/packs")
+        p3 = next((p for p in (r.get_json() or []) if p["id"] == pack3.id), None)
+        check("packs: show_fallback_button present, OFF by default",
+              p3 is not None and p3.get("show_fallback_button") is False,
+              f"got {p3}")
+        r = _auth(client, auth, "/coins/purchases/zibal", "POST",
+                  {"pack_id": pack3.id, "fallback": True})
+        check("zibal fallback with setting OFF: 403",
+              r.status_code == 403,
+              f"got {r.status_code} {r.data!r}")
+        r = _admin(client, f"/admin/packs/{pack3.id}", "PATCH",
+                   {"show_fallback_button": True})
+        check("admin PATCH: show_fallback_button flips on",
+              r.status_code == 200
+              and (r.get_json() or {}).get("show_fallback_button") is True,
+              f"got {r.status_code} {r.data!r}")
+        r = _auth(client, auth, "/coins/purchases/zibal", "POST",
+                  {"pack_id": pack3.id, "fallback": True})
+        j = r.get_json() or {}
+        check("zibal fallback with setting ON: 201 despite flag OFF",
+              r.status_code == 201
+              and "/coins/purchases/zibal/go/" in (j.get("payment_url") or ""),
+              f"got {r.status_code} {j}")
+        pid3 = j.get("purchase_id")
+        row3 = AppPurchase.query.get(pid3)
+        check("zibal fallback: row is gateway=zibal, pending",
+              row3 is not None
+              and row3.gateway == "zibal"
+              and row3.status == "pending",
+              f"got {row3.gateway if row3 else None}")
+        r = _auth(client, auth, "/coins/purchases/zibal", "POST",
+                  {"pack_id": pack3.id, "fallback": True})
+        check("zibal fallback again: same row, no second Zibal request",
+              r.status_code == 200
+              and (r.get_json() or {}).get("purchase_id") == pid3,
+              f"got {r.status_code} {r.data!r}")
+        r = _admin(client, f"/admin/packs/{pack3.id}", "PATCH",
+                   {"show_fallback_button": False})
+        assert r.status_code == 200
+        r = _auth(client, auth, "/coins/purchases/zibal", "POST",
+                  {"pack_id": pack3.id, "fallback": True})
+        check("zibal fallback after setting OFF again: 403",
               r.status_code == 403,
               f"got {r.status_code} {r.data!r}")
         _admin(client, f"/admin/packs/{pack.id}", "PATCH",

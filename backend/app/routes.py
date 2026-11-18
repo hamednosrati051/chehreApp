@@ -888,6 +888,7 @@ def coin_packs():
                 "gift_scope": p.gift_scope or "every",
                 "bazaar_enabled": bool(getattr(p, "bazaar_enabled", True)),
                 "zibal_enabled": bool(getattr(p, "zibal_enabled", False)),
+                "show_fallback_button": bool(getattr(p, "show_fallback_button", False)),
             }
             for p in packs
         ]
@@ -1166,8 +1167,11 @@ def _zibal_result_page(title, message, ok, footer):
 def zibal_create_purchase():
     """ساخت پرداخت زیبال برای یک پک (نسخه‌ی ۱۷).
 
-    ورودی: pack_id. پک باید فعال و zibal_enabled باشد (وگرنه ۴۰۳ —
-    مخفی‌کردن دکمه در اپ کافی نیست). اگر برای همین کاربر و همین پک
+    ورودی: pack_id (+ fallback اختیاری). پک باید فعال و zibal_enabled
+    باشد (وگرنه ۴۰۳ — مخفی‌کردن دکمه در اپ کافی نیست)؛ استثنا: وقتی
+    درخواست fallback=true است و تنظیم show_fallback_button همان پک
+    روشن است (دکمه‌ی جایگزین یک‌باره بعد از خطای بازار)، ساخت با
+    پرچم خاموش هم مجاز است. اگر برای همین کاربر و همین پک
     یک خرید زیبال pending با trackId زنده هست، همان ردیف + آدرس
     برگردد (idempotency؛ درخواست دوم، درخواست دوم به زیبال نمی‌سازد).
     اگر ساخت درخواست در زیبال شکست بخورد، ردیف pendingِ ساخته‌شده
@@ -1180,7 +1184,10 @@ def zibal_create_purchase():
     pack = AppCoinPack.query.get(body.get("pack_id"))
     if not pack or not pack.is_active:
         return jsonify({"error": "pack not found"}), 404
-    if not getattr(pack, "zibal_enabled", False):
+    is_fallback = bool(body.get("fallback", False))
+    if not getattr(pack, "zibal_enabled", False) and not (
+        is_fallback and getattr(pack, "show_fallback_button", False)
+    ):
         return jsonify({"error": "zibal is not enabled for this pack"}), 403
     existing = (
         AppPurchase.query.filter_by(
@@ -2232,6 +2239,7 @@ def _pack_admin(p):
         "gift_scope": p.gift_scope or "every",
         "bazaar_enabled": bool(getattr(p, "bazaar_enabled", True)),
         "zibal_enabled": bool(getattr(p, "zibal_enabled", False)),
+        "show_fallback_button": bool(getattr(p, "show_fallback_button", False)),
     }
 
 
@@ -2277,6 +2285,7 @@ def admin_create_pack():
         gift_scope=_gift_scope_value(body.get("gift_scope", "every")),
         bazaar_enabled=bool(body.get("bazaar_enabled", True)),
         zibal_enabled=bool(body.get("zibal_enabled", False)),
+        show_fallback_button=bool(body.get("show_fallback_button", False)),
     )
     db.session.add(p)
     db.session.commit()
@@ -2307,6 +2316,8 @@ def admin_update_pack(pack_id):
         p.bazaar_enabled = bool(body["bazaar_enabled"])
     if "zibal_enabled" in body:
         p.zibal_enabled = bool(body["zibal_enabled"])
+    if "show_fallback_button" in body:
+        p.show_fallback_button = bool(body["show_fallback_button"])
     db.session.commit()
     return jsonify(_pack_admin(p))
 
