@@ -554,6 +554,9 @@ def main():
         )
         db.session.add_all([rep1, rep2, rep3])
         db.session.commit()
+        # شناسه‌ها پیش از حذف گرفته می‌شوند: query.delete ردیف را از DB
+        # پاک می‌کند و دسترسی بعدی به ویژگی شیء حذف‌شده خطا می‌دهد.
+        rep_ids = (rep1.id, rep2.id, rep3.id)
         r = _admin(client, "/admin/reports/bulk", "DELETE",
                    {"statuses": ["pending"]})
         check("reports bulk with pending status: 400",
@@ -564,12 +567,12 @@ def main():
         check("reports bulk by status: deletes 2, pending stays",
               r.status_code == 200
               and (r.get_json() or {}).get("deleted") == 2
-              and AppImageReport.query.get(rep1.id) is not None
-              and AppImageReport.query.get(rep2.id) is None
-              and AppImageReport.query.get(rep3.id) is None,
+              and AppImageReport.query.get(rep_ids[0]) is not None
+              and AppImageReport.query.get(rep_ids[1]) is None
+              and AppImageReport.query.get(rep_ids[2]) is None,
               f"got {r.status_code} {r.data!r}")
         r = _admin(client, "/admin/reports/bulk", "DELETE",
-                   {"ids": [rep1.id]})
+                   {"ids": [rep_ids[0]]})
         check("reports bulk by ids: deletes the pending one",
               r.status_code == 200
               and (r.get_json() or {}).get("deleted") == 1
