@@ -398,6 +398,10 @@ def main():
               f"got {AppVerifyAttempt.query.filter_by(store='zibal').count()}")
 
         # --- (e) انقضا (G3) ---
+        # ردیف‌های ساخته‌شده از راه API شناسه‌ی خودکار گرفته‌اند؛ شمارنده‌ی
+        # دستی را جلوتر از بزرگ‌ترین شناسه‌ی موجود می‌بریم تا برخورد نکند.
+        max_pid = db.session.query(db.func.max(AppPurchase.id)).scalar() or 0
+        _NEXT_ID[0] = max(_NEXT_ID[0], max_pid)
         now = datetime.datetime.utcnow()
         old = now - datetime.timedelta(minutes=40)
         old8d = now - datetime.timedelta(days=8)
