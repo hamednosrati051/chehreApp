@@ -27,8 +27,9 @@
   pending با وضعیت → ۴۰۰؛ با id → حذف؛ ورودی‌ها: ۲ done حذف + ۱
   processing رد می‌شود؛ آدرس خارجی رد می‌شود؛ تک‌تک هنوز کار می‌کند.
 - (i) حذف همه‌ی ورودی‌ها (all=true) + فایل‌های یتیم: helper فقط
-  فایل قدیمیِ بدون ارجاع را می‌دهد؛ GET شمارش و DELETE حذف واقعی
-  با uploads موقت (بدون دست‌زدن به uploads واقعی).
+  فایل قدیمیِ بدون ارجاع را می‌دهد؛ GET شمارش + لیست فایل‌ها (نام/
+  آدرس/حجم، برای مودال) و DELETE حذف واقعی با uploads موقت (بدون
+  دست‌زدن به uploads واقعی).
 """
 
 import datetime
@@ -700,7 +701,8 @@ def main():
             os.utime(old, (old_mtime, old_mtime))
             found = _orphan_upload_files(tmp, {"ref.jpg"})
             check("orphan helper: only old unreferenced file listed",
-                  [n for n, _ in found] == ["old.jpg"],
+                  [n for n, _, _ in found] == ["old.jpg"]
+                  and found[0][2] < time.time() - 3600,
                   f"got {found}")
 
         orig_uploads_dir = routes_mod._uploads_dir
@@ -717,7 +719,12 @@ def main():
                 check("orphans GET: counts the old unreferenced file",
                       r.status_code == 200
                       and j.get("count") == 1
-                      and j.get("bytes") == 10,
+                      and j.get("bytes") == 10
+                      and len(j.get("files") or []) == 1
+                      and (j.get("files") or [{}])[0].get("name") == "victim.jpg"
+                      and (j.get("files") or [{}])[0].get("url", "").endswith(
+                          "/static/uploads/victim.jpg"
+                      ),
                       f"got {r.status_code} {j}")
                 r = _admin(client, "/admin/inputs/orphans", "DELETE", {})
                 j = r.get_json() or {}

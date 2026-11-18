@@ -2802,7 +2802,8 @@ def _referenced_upload_basenames():
 
 def _orphan_upload_files(uploads_dir, referenced, older_than_s=3600):
     """فایل‌های یتیم زیر uploads: قدیمی‌تر از آستانه و بدون ارجاع.
-    فقط فایل‌های مستقیم زیر پوشه؛ زیردایرکتوری لمس نمی‌شود."""
+    فقط فایل‌های مستقیم زیر پوشه؛ زیردایرکتوری لمس نمی‌شود.
+    برمی‌گرداند لیستی از (نام، حجم، mtime)."""
     import stat
     import time
 
@@ -2824,7 +2825,7 @@ def _orphan_upload_files(uploads_dir, referenced, older_than_s=3600):
             continue
         if now - st.st_mtime < older_than_s:
             continue
-        found.append((name, st.st_size))
+        found.append((name, st.st_size, st.st_mtime))
     return found
 
 
@@ -2842,7 +2843,16 @@ def admin_list_orphan_inputs():
         {
             "ok": True,
             "count": len(files),
-            "bytes": sum(size for _, size in files),
+            "bytes": sum(size for _, size, _ in files),
+            "files": [
+                {
+                    "name": name,
+                    "url": "/static/uploads/" + name,
+                    "bytes": size,
+                    "mtime": mtime,
+                }
+                for name, size, mtime in files[:100]
+            ],
         }
     )
 
@@ -2860,7 +2870,7 @@ def admin_delete_orphan_inputs():
     files = _orphan_upload_files(uploads_dir, _referenced_upload_basenames())
     deleted = 0
     freed = 0
-    for name, size in files:
+    for name, size, _mtime in files:
         path = os.path.realpath(os.path.join(uploads_dir, name))
         if os.path.commonpath([path, uploads_dir]) != uploads_dir:
             continue
