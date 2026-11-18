@@ -36,7 +36,14 @@ from flask import current_app
 from sqlalchemy import and_, or_
 
 from ..extensions import db
-from ..models import AppCoinLedger, AppGallery, AppGeneration, AppPurchase, AppSetting
+from ..models import (
+    AppCoinLedger,
+    AppGallery,
+    AppGeneration,
+    AppPurchase,
+    AppSetting,
+    AppUser,
+)
 
 CUTOFF_SETTING_KEY = "cleanup_free_images_cutoff"
 FREE_TTL = datetime.timedelta(hours=24)
@@ -294,3 +301,53 @@ def expire_stale_pending_purchases():
         db.session.delete(row)
     db.session.commit()
     return count
+
+
+STALE_GENERATION_SECONDS = 120
+
+STALE_GENERATION_ERROR = "generation timed out (stale for more than 120s)"
+
+
+def fail_stale_generations(older_than_s=STALE_GENERATION_SECONDS):
+    """ناموفق‌کردن نسل‌های گیرکرده (دستور حامد ۲۰۲۶-۱۱-۱۸).
+
+    هر نسل جدا با ساعت شروع خودش سنجیده می‌شود: ردیف‌های processing یا
+    queued که از created_atشان بیشتر از older_than_s گذشته باشد —
+    یعنی تسک Celeryشان مرده یا گیر کرده و هیچ‌وقت تمام نمی‌شوند
+    (مثل نسل ۱۱۲۵ که ری‌استارت ورکر وسط دیپلوی کشتش). هر ردیف
+    failed می‌شود + completed_at می‌خورد + اگر شارژ شده بود رزرو
+    برمی‌گردد (refund_reservation؛ سکه یا اعتبار هدیه) تا کاربر
+    بتواند دوباره بزند؛ اپ با دیدن failed حلقه‌ی نظرسنجی را می‌شکند
+    و «ناموفق تولید عکس» نشان می‌دهد.
+    برمی‌گرداند: تعداد ردیف‌های ناموفق‌شده.
+    """
+    from app.services import coins as coins_svc
+
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(seconds=older_than_s)
+    stale = (
+        AppGeneration.query.filter(
+            AppGeneration.status.in_(("queued", "processing")),
+            AppGeneration.created_at < cutoff,
+        ).all()
+    )
+    failed = 0
+    for gen in stale:
+        try:
+            user = AppUser.query.get(gen.user_id)
+            gen.status = "failed"
+            gen.error_message = STALE_GENERATION_ERROR
+            if gen.charged and user is not None:
+                try:
+                    coins_svc.refund_reservation(user, gen)
+                except Exception:
+                    gen.error_message = (
+                        gen.error_message + " | refund failed"
+                    )[:500]
+            gen.completed_at = db.func.now()
+            db.session.add(gen)
+            db.session.commit()
+            failed += 1
+        except Exception:
+            db.session.rollback()
+            continue
+    return failed

@@ -30,6 +30,9 @@
   فایل قدیمیِ بدون ارجاع را می‌دهد؛ GET شمارش + لیست فایل‌ها (نام/
   آدرس/حجم، برای مودال) و DELETE حذف واقعی با uploads موقت (بدون
   دست‌زدن به uploads واقعی).
+- (j) جاروکننده‌ی نسل‌های گیرکرده: processing/queued قدیمی‌تر از
+  ۲ دقیقه → failed + completed_at + برگرداندن رزرو (سکه یا اعتبار
+  هدیه)؛ تازه و تمام‌شده دست نمی‌خورند؛ اجرای دوم صفر می‌دهد.
 """
 
 import datetime
@@ -46,6 +49,8 @@ from app import create_app  # noqa: E402
 from app.config import Config  # noqa: E402
 from app.extensions import db  # noqa: E402
 from app.models import (  # noqa: E402
+    AppCoinBalance,
+    AppCoinLedger,
     AppCoinPack,
     AppGeneration,
     AppImageReport,
@@ -59,7 +64,10 @@ from app.models import (  # noqa: E402
 )
 from app.services import coins as coins_svc  # noqa: E402
 from app.services import zibal as zibal_svc  # noqa: E402
-from app.services.cleanup import expire_stale_pending_purchases  # noqa: E402
+from app.services.cleanup import (  # noqa: E402
+    expire_stale_pending_purchases,
+    fail_stale_generations,
+)
 
 PASSED = 0
 FAILED = 0
@@ -736,6 +744,71 @@ def main():
                       f"got {r.status_code} {j}")
         finally:
             routes_mod._uploads_dir = orig_uploads_dir
+
+        # --- (j) جاروکننده‌ی نسل‌های گیرکرده (۲ دقیقه، هر عکس جدا) ---
+        past = datetime.datetime.utcnow() - datetime.timedelta(minutes=5)
+        user.free_image_credits = 0
+        db.session.add(AppCoinBalance(user_id=user.id, balance=50))
+        db.session.commit()
+        stale_coins = AppGeneration(
+            id=next_id(), user_id=user.id, kind="image",
+            world_id=world.id, model_id=model.id,
+            input_url=inA, status="processing", coin_cost=10,
+        )
+        db.session.add(stale_coins)
+        db.session.commit()
+        src = coins_svc.reserve_for_generation(user, "image", 10, stale_coins.id)
+        stale_coins.charged = True
+        stale_coins.created_at = past
+        db.session.commit()
+        user2.free_image_credits = 0
+        stale_gift = AppGeneration(
+            id=next_id(), user_id=user2.id, kind="image",
+            world_id=world.id, model_id=model.id,
+            input_url=inB, status="queued", coin_cost=10,
+        )
+        db.session.add(stale_gift)
+        db.session.commit()
+        stale_gift.charged = True
+        stale_gift.created_at = past
+        db.session.commit()
+        fresh = AppGeneration(
+            id=next_id(), user_id=user.id, kind="image",
+            world_id=world.id, model_id=model.id,
+            input_url=inA, status="processing", coin_cost=10,
+        )
+        old_done = AppGeneration(
+            id=next_id(), user_id=user.id, kind="image",
+            world_id=world.id, model_id=model.id,
+            input_url=inB, status="done", coin_cost=10,
+        )
+        db.session.add_all([fresh, old_done])
+        db.session.commit()
+        old_done.created_at = past
+        db.session.commit()
+        n = fail_stale_generations()
+        db.session.expire_all()
+        check("stale sweeper: fails 2 stale, refunds coins + gift",
+              n == 2
+              and src == "coins"
+              and balance() == 50
+              and AppGeneration.query.get(stale_coins.id).status == "failed"
+              and AppGeneration.query.get(stale_coins.id).charged is False
+              and AppGeneration.query.get(stale_coins.id).completed_at is not None
+              and AppCoinLedger.query.filter_by(
+                  ref_type="generation", ref_id=stale_coins.id,
+                  reason="refund").first() is not None
+              and AppUser.query.get(user2.id).free_image_credits == 1
+              and AppGeneration.query.get(stale_gift.id).status == "failed"
+              and AppGeneration.query.get(stale_gift.id).charged is False,
+              f"got n={n} src={src} bal={balance()}")
+        check("stale sweeper: fresh processing + old done untouched",
+              AppGeneration.query.get(fresh.id).status == "processing"
+              and AppGeneration.query.get(old_done.id).status == "done",
+              "fresh/done changed")
+        check("stale sweeper: second run finds nothing",
+              fail_stale_generations() == 0,
+              "second run non-zero")
 
     print(f"\n{PASSED} passed, {FAILED} failed")
     return 1 if FAILED else 0
