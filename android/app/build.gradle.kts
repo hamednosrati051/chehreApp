@@ -14,8 +14,8 @@ android {
         minSdk = 26
         targetSdk = 34
         // v17: اصلاح پرداخت بازار — isBillingSupported قبل از getBuyIntent + پیام خطای مشخص.
-        versionCode = 17
-        versionName = "1.7"
+        versionCode = 18
+        versionName = "1.8"
     }
 
     // دو خروجی از یک کد (v15 برای مایکت): بازار و مایکت — همان versionCode/versionName.

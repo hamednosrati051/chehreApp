@@ -20,7 +20,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -279,7 +278,9 @@ fun PacksSheet(
                             }
                             if (p.zibal_enabled) {
                                 Spacer(modifier = Modifier.height(8.dp))
-                                OutlinedButton(
+                                // v18: دکمه‌ی زیبال دقیقاً همان دکمه‌ی بازار است
+                                // (Button پر، نه Outlined) — فقط متنش فرق می‌کند.
+                                Button(
                                     onClick = { buyZibal(p) },
                                     enabled = buyingSku == null,
                                 ) {
