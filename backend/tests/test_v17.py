@@ -823,8 +823,11 @@ def main():
         r = _admin(client, "/admin/purchases/bulk", "DELETE",
                    {"statuses": ["pending", "failed"]})
         j = r.get_json() or {}
+        # deleted >= 1: بخش‌های قبلی تست هم ردیف pending/failed
+        # به‌جا گذاشته‌اند؛ مهم این است که failed ما پاک و
+        # verified/consumed ما سر جایشان باشند.
         check("purchases bulk by status: deletes failed, verified stays",
-              r.status_code == 200 and j.get("deleted") == 1
+              r.status_code == 200 and j.get("deleted", 0) >= 1
               and AppPurchase.query.get(pu_ids[2]) is None
               and AppPurchase.query.get(pu_ids[3]) is not None
               and AppPurchase.query.get(pu_ids[1]) is not None,
