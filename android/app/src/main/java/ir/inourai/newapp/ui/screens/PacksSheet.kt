@@ -278,7 +278,7 @@ fun PacksSheet(
                             }
                             if (p.zibal_enabled) {
                                 Spacer(modifier = Modifier.height(8.dp))
-                                // v18: دکمه‌ی زیبال دقیقاً همان دکمه‌ی بازار است
+                                // v17: دکمه‌ی زیبال دقیقاً همان دکمه‌ی بازار است
                                 // (Button پر، نه Outlined) — فقط متنش فرق می‌کند.
                                 Button(
                                     onClick = { buyZibal(p) },
