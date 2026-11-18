@@ -250,6 +250,10 @@
 
   <section id="reports">
     <h2>گزارش‌های عکس کاربران</h2>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <button class="small danger" onclick="reportsDeleteSelected()">حذف تیک‌خورده‌ها</button>
+      <button class="small danger" onclick="reportsDeleteReviewed()">حذف همه‌ی بررسی‌شده/ردشده</button>
+    </div>
     <div id="rp-list"></div>
     <div id="rp-pager"></div>
   </section>
@@ -279,6 +283,9 @@
   <section id="inputs">
     <h2>عکس‌های ورودی کاربران</h2>
     <p class="muted">روی هر عکس بزنید تا بزرگ شود. حذف، فایل را از روی سرور پاک می‌کند و آدرس آن را در نسل‌ها خالی می‌کند؛ خروجی‌ها دست نمی‌خورند.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <button class="small danger" onclick="inputsDeleteSelected()">حذف تیک‌خورده‌ها</button>
+    </div>
     <div id="in-summary"></div>
     <div id="in-list"></div>
     <div id="in-pager"></div>
@@ -610,10 +617,13 @@ let rpPageNo = 1;
 function rpPage(n){ if(n < 1) return; rpPageNo = n; loadReports(); }
 const reportFa = {pending: 'در انتظار', reviewed: 'بررسی‌شده', dismissed: 'ردشده'};
 async function loadReports(){ const res = await api('/admin/reports?page=' + rpPageNo);
-  $('rp-list').innerHTML = res.items.length ? `<table><tr><th>id</th><th>عکس</th><th>گزارش‌دهنده</th><th>دلیل</th><th>وضعیت</th><th>تاریخ</th><th></th></tr>` +
-    res.items.map(r => `<tr><td>${r.id}</td><td>${r.image_url ? `<img class="thumb" src="${esc(r.image_url)}" onclick="openLightbox(this.src)" style="cursor:pointer;">` : '—'}</td><td>${r.user_id}</td><td>${esc(r.reason) || '—'}</td><td>${reportFa[r.status] || esc(r.status)}</td><td class="muted">${esc(faDate(r.created_at))}</td><td>${r.status === 'pending' ? `<button class="small gold" onclick="reportAct(${r.id},'reviewed')">بررسی شد</button> <button class="small danger" onclick="reportAct(${r.id},'dismissed')">رد گزارش</button>` : ''}</td></tr>`).join('') + '</table>' : '<p class="muted">گزارشی نیست.</p>';
+  $('rp-list').innerHTML = res.items.length ? `<table><tr><th></th><th>id</th><th>عکس</th><th>گزارش‌دهنده</th><th>دلیل</th><th>وضعیت</th><th>تاریخ</th><th></th></tr>` +
+    res.items.map(r => `<tr><td><input type="checkbox" class="rp-check" value="${r.id}"></td><td>${r.id}</td><td>${r.image_url ? `<img class="thumb" src="${esc(r.image_url)}" onclick="openLightbox(this.src)" style="cursor:pointer;">` : '—'}</td><td>${r.user_id}</td><td>${esc(r.reason) || '—'}</td><td>${reportFa[r.status] || esc(r.status)}</td><td class="muted">${esc(faDate(r.created_at))}</td><td>${r.status === 'pending' ? `<button class="small gold" onclick="reportAct(${r.id},'reviewed')">بررسی شد</button> <button class="small danger" onclick="reportAct(${r.id},'dismissed')">رد گزارش</button>` : ''}</td></tr>`).join('') + '</table>' : '<p class="muted">گزارشی نیست.</p>';
   $('rp-pager').innerHTML = pagerHTML('rp', res); }
 async function reportAct(id, st){ try { await api('/admin/reports/' + id, 'PATCH', {status: st}); loadReports(); } catch(err){ setMsg(err.message); } }
+function rpChecked(){ return [...document.querySelectorAll('.rp-check:checked')].map(c => +c.value); }
+async function reportsDeleteSelected(){ const ids = rpChecked(); if(!ids.length){ setMsg('چیزی تیک نخورده است.'); return; } if(!confirm(ids.length + ' گزارش حذف شود؟')) return; try { const r = await api('/admin/reports/bulk', 'DELETE', {ids}); setMsg(r.deleted + ' گزارش حذف شد.', true); loadReports(); } catch(err){ setMsg(err.message); } }
+async function reportsDeleteReviewed(){ if(!confirm('همه‌ی گزارش‌های بررسی‌شده و ردشده حذف شوند؟')) return; try { const r = await api('/admin/reports/bulk', 'DELETE', {statuses: ['reviewed', 'dismissed']}); setMsg(r.deleted + ' گزارش حذف شد.', true); loadReports(); } catch(err){ setMsg(err.message); } }
 
 async function loadGallery(){ const rows = await api('/admin/gallery/pending');
   $('g-list').innerHTML = rows.length ? rows.map(r => `<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;"><img class="thumb" src="${esc(r.image_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | generation: ' + r.generation_id)}" onclick="openLightbox(this.src, this.dataset.cap)" style="cursor:pointer;"><div>موبایل: ${esc(r.mobile)}<br><span class="muted">generation: ${r.generation_id}</span></div><button class="small gold" onclick="galleryAct(${r.id},'approve')">تأیید</button><input id="gr-${r.id}" placeholder="دلیل رد (اختیاری)" style="min-width:180px;"><button class="small danger" onclick="galleryReject(${r.id})">رد</button></div>`).join('') : '<p class="muted">عکس در انتظاری نیست.</p>'; }
@@ -641,9 +651,11 @@ function inPage(n){ if(n < 1) return; inPageNo = n; loadInputs(); }
 async function loadInputs(){ const res = await api('/admin/inputs?page=' + inPageNo);
   const t = res.totals || {};
   $('in-summary').innerHTML = `<p class="muted">مجموع ${t.distinct_inputs ?? res.total} عکس ورودی از ${t.users ?? '—'} کاربر | مجموع ${t.usages ?? '—'} استفاده</p>`;
-  $('in-list').innerHTML = res.items.length ? `<div class="gen-grid">` + res.items.map(r => `<div class="gen-item"><img class="gthumb" src="${esc(r.input_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | استفاده: ' + r.uses + ' | ' + (r.last_used ? faDate(r.last_used) : ''))}" onclick="openLightbox(this.src, this.dataset.cap)"><div class="muted">${r.mobile ? esc(r.mobile) : esc(shortId(r.bazaar_account_id))}<br>استفاده: ${r.uses}</div><button class="small danger" data-url="${esc(r.input_url)}" onclick="inputDelete(this.dataset.url)">حذف</button></div>`).join('') + `</div>` : '<p class="muted">عکس ورودی نیست.</p>';
+  $('in-list').innerHTML = res.items.length ? `<div class="gen-grid">` + res.items.map(r => `<div class="gen-item"><img class="gthumb" src="${esc(r.input_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | استفاده: ' + r.uses + ' | ' + (r.last_used ? faDate(r.last_used) : ''))}" onclick="openLightbox(this.src, this.dataset.cap)"><div class="muted">${r.mobile ? esc(r.mobile) : esc(shortId(r.bazaar_account_id))}<br>استفاده: ${r.uses}</div><input type="checkbox" class="in-check" value="${esc(r.input_url)}" title="انتخاب برای حذف گروهی"> <button class="small danger" data-url="${esc(r.input_url)}" onclick="inputDelete(this.dataset.url)">حذف</button></div>`).join('') + `</div>` : '<p class="muted">عکس ورودی نیست.</p>';
   $('in-pager').innerHTML = pagerHTML('in', res); }
 async function inputDelete(url){ if(!confirm('عکس ورودی از روی سرور حذف شود؟ خروجی‌ها دست نمی‌خورند.')) return; try { await api('/admin/inputs', 'DELETE', {input_url: url}); loadInputs(); } catch(err){ setMsg(err.message); } }
+function inChecked(){ return [...document.querySelectorAll('.in-check:checked')].map(c => c.value); }
+async function inputsDeleteSelected(){ const urls = inChecked(); if(!urls.length){ setMsg('چیزی تیک نخورده است.'); return; } if(!confirm(urls.length + ' عکس ورودی از روی سرور حذف شود؟ خروجی‌ها دست نمی‌خورند.')) return; try { const r = await api('/admin/inputs/bulk', 'DELETE', {input_urls: urls}); let m = r.deleted + ' عکس حذف شد.'; if((r.skipped || []).length) m += ' ' + r.skipped.length + ' تا رد شد (در حال ساخت یا آدرس بد).'; setMsg(m, true); loadInputs(); } catch(err){ setMsg(err.message); } }
 async function galleryRequeue(id){ try { await api('/admin/gallery/' + id + '/requeue', 'POST'); loadGhist(); } catch(err){ setMsg(err.message); } }
 async function galleryDelete(id){ if(!confirm('ردیف گالری حذف شود؟')) return; try { await api('/admin/gallery/' + id, 'DELETE'); loadGhist(); } catch(err){ setMsg(err.message); } }
 async function galleryPublishBale(id){ if(!confirm('این عکس در کانال بله @iNourAi منتشر شود؟')) return; try { await api('/admin/gallery/' + id + '/publish-bale', 'POST'); loadGhist(); } catch(err){ setMsg(err.message); } }

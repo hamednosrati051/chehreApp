@@ -2672,38 +2672,43 @@ def admin_list_inputs():
     )
 
 
-@admin_bp.delete("/admin/inputs")
-@require_admin
-def admin_delete_input():
-    """حذف فیزیکی یک عکس ورودی از روی سرور + خالی‌کردن آدرس آن در نسل‌ها.
-    خروجی‌ها، تاریخچه و سکه دست نمی‌خورند. قانون عدم حذف فقط شامل عکس‌های
-    تولیدشده است، نه ورودی‌های کاربر."""
+class _InputDeleteError(ValueError):
+    """خطای حذف یک ورودی، با کد وضعیت HTTP خودش."""
+
+    def __init__(self, message, status):
+        super().__init__(message)
+        self.status = status
+
+
+def _delete_one_input(input_url):
+    """حذف فیزیکی یک عکس ورودی + خالی‌کردن آدرس آن در نسل‌ها؛
+    همان منطق تک‌تک که حذف گروهی هم برای هر آدرس صدا می‌زند.
+    برمی‌گرداند (deleted_file, nulled)؛ خطا → _InputDeleteError."""
     from urllib.parse import urlparse
 
-    data = request.get_json(silent=True) or {}
-    input_url = (data.get("input_url") or "").strip()
+    input_url = (input_url or "").strip()
     if not input_url:
-        return jsonify({"error": "input_url required"}), 400
+        raise _InputDeleteError("input_url required", 400)
     if current_app.config.get("S3_ENDPOINT"):
-        return jsonify({"error": "S3-backed storage: file delete not supported here"}), 400
+        raise _InputDeleteError("S3-backed storage: file delete not supported here", 400)
     parsed = urlparse(input_url)
     if parsed.netloc not in ("", "chehre.inourai.ir", "171.22.25.152:5001") or not parsed.path.startswith(
         "/static/uploads/"
     ):
-        return jsonify({"error": "only local upload files can be deleted"}), 400
+        raise _InputDeleteError("only local upload files can be deleted", 400)
     filename = os.path.basename(parsed.path)
     if not filename or filename in (".", "..") or "/" in filename or "\\" in filename:
-        return jsonify({"error": "bad filename"}), 400
+        raise _InputDeleteError("bad filename", 400)
     busy = AppGeneration.query.filter(
         AppGeneration.input_url == input_url,
         AppGeneration.status.in_(["processing", "queued"]),
     ).first()
     if busy:
-        return jsonify({"error": "input in use by an in-flight generation"}), 409
+        raise _InputDeleteError("input in use by an in-flight generation", 409)
     uploads_dir = os.path.realpath(os.path.join(current_app.static_folder, "uploads"))
     path = os.path.realpath(os.path.join(uploads_dir, filename))
     if os.path.commonpath([path, uploads_dir]) != uploads_dir:
-        return jsonify({"error": "bad path"}), 400
+        raise _InputDeleteError("bad path", 400)
     deleted_file = False
     if os.path.exists(path):
         os.unlink(path)
@@ -2712,7 +2717,43 @@ def admin_delete_input():
         {"input_url": None}
     )
     db.session.commit()
+    return deleted_file, nulled
+
+
+@admin_bp.delete("/admin/inputs")
+@require_admin
+def admin_delete_input():
+    """حذف فیزیکی یک عکس ورودی از روی سرور + خالی‌کردن آدرس آن در نسل‌ها.
+    خروجی‌ها، تاریخچه و سکه دست نمی‌خورند. قانون عدم حذف فقط شامل عکس‌های
+    تولیدشده است، نه ورودی‌های کاربر."""
+    data = request.get_json(silent=True) or {}
+    try:
+        deleted_file, nulled = _delete_one_input(data.get("input_url"))
+    except _InputDeleteError as exc:
+        return jsonify({"error": str(exc)}), exc.status
     return jsonify({"ok": True, "deleted_file": deleted_file, "nulled": nulled})
+
+
+@admin_bp.delete("/admin/inputs/bulk")
+@require_admin
+def admin_bulk_delete_inputs():
+    """حذف گروهی عکس‌های ورودی (همان منطق تک‌تک، برای هر آدرس):
+    فایل از روی سرور پاک می‌شود + آدرس در نسل‌ها خالی می‌شود؛
+    ورودیِ در حال ساخت (processing/queued) یا آدرس بد رد می‌شود و در
+    skipped می‌آید؛ بقیه پاک می‌شوند. خروجی‌ها دست نمی‌خورند."""
+    body = request.get_json(silent=True) or {}
+    urls = body.get("input_urls") or []
+    if not urls:
+        return jsonify({"error": "input_urls required"}), 400
+    deleted = 0
+    skipped = []
+    for url in urls:
+        try:
+            _delete_one_input(url)
+            deleted += 1
+        except _InputDeleteError as exc:
+            skipped.append({"input_url": url, "reason": str(exc)})
+    return jsonify({"ok": True, "deleted": deleted, "skipped": skipped})
 
 
 # ---------------- admin: categories ----------------
@@ -3349,6 +3390,35 @@ def admin_update_report(report_id):
     row.status = status
     db.session.commit()
     return jsonify({"id": row.id, "status": row.status})
+
+
+@admin_bp.delete("/admin/reports/bulk")
+@require_admin
+def admin_bulk_delete_reports():
+    """حذف گروهی گزارش‌های عکس — فقط ردیف گزارش؛ عکس و نسل دست نمی‌خورند.
+    ورودی: {"ids": [...]} یا {"statuses": ["reviewed", "dismissed"]}؛
+    حذف بر اساس وضعیت فقط reviewed/dismissed را می‌پذیرد — pending
+    هرگز با این مسیر پاک نمی‌شود."""
+    body = request.get_json(silent=True) or {}
+    ids = body.get("ids") or []
+    statuses = body.get("statuses") or []
+    if not ids and not statuses:
+        return jsonify({"error": "ids or statuses required"}), 400
+    query = AppImageReport.query
+    if ids:
+        try:
+            ids = [int(i) for i in ids]
+        except (TypeError, ValueError):
+            return jsonify({"error": "bad ids"}), 400
+        query = query.filter(AppImageReport.id.in_(ids))
+    if statuses:
+        allowed = {"reviewed", "dismissed"}
+        if any(s not in allowed for s in statuses):
+            return jsonify({"error": "statuses must be reviewed or dismissed"}), 400
+        query = query.filter(AppImageReport.status.in_(statuses))
+    deleted = query.delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify({"ok": True, "deleted": deleted})
 
 
 # ---------------- admin: models (ساخت مدل جدید) ----------------

@@ -23,6 +23,9 @@
 - (g) فالبک یک‌باره: show_fallback_button در پک‌ها + PATCH ادمین؛
   زیبال با fallback=true و تنظیم روشن → ۲۰۱ با وجود پرچم خاموش؛
   با تنظیم خاموش → ۴۰۳؛ تکرار → همان ردیف.
+- (h) حذف گروهی ادمین: گزارش‌ها با وضعیت reviewed/dismissed → حذف؛
+  pending با وضعیت → ۴۰۰؛ با id → حذف؛ ورودی‌ها: ۲ done حذف + ۱
+  processing رد می‌شود؛ آدرس خارجی رد می‌شود؛ تک‌تک هنوز کار می‌کند.
 """
 
 import datetime
@@ -38,11 +41,15 @@ from app.config import Config  # noqa: E402
 from app.extensions import db  # noqa: E402
 from app.models import (  # noqa: E402
     AppCoinPack,
+    AppGeneration,
+    AppImageReport,
+    AppModel,
     AppOtpCode,
     AppPurchase,
     AppSetting,
     AppUser,
     AppVerifyAttempt,
+    AppWorld,
 )
 from app.services import coins as coins_svc  # noqa: E402
 from app.services import zibal as zibal_svc  # noqa: E402
@@ -531,6 +538,118 @@ def main():
               r.status_code == 200
               and b"https://gateway.zibal.ir/start/777001" in r.data,
               f"got {r.status_code} {r.data[:120]!r}")
+
+        # --- (h) حذف گروهی ادمین: گزارش‌ها + ورودی‌ها ---
+        rep1 = AppImageReport(
+            id=next_id(), generation_id=next_id(), user_id=user.id,
+            reason="x", status="pending",
+        )
+        rep2 = AppImageReport(
+            id=next_id(), generation_id=next_id(), user_id=user.id,
+            reason="y", status="reviewed",
+        )
+        rep3 = AppImageReport(
+            id=next_id(), generation_id=next_id(), user_id=user.id,
+            reason="z", status="dismissed",
+        )
+        db.session.add_all([rep1, rep2, rep3])
+        db.session.commit()
+        r = _admin(client, "/admin/reports/bulk", "DELETE",
+                   {"statuses": ["pending"]})
+        check("reports bulk with pending status: 400",
+              r.status_code == 400,
+              f"got {r.status_code} {r.data!r}")
+        r = _admin(client, "/admin/reports/bulk", "DELETE",
+                   {"statuses": ["reviewed", "dismissed"]})
+        check("reports bulk by status: deletes 2, pending stays",
+              r.status_code == 200
+              and (r.get_json() or {}).get("deleted") == 2
+              and AppImageReport.query.get(rep1.id) is not None
+              and AppImageReport.query.get(rep2.id) is None
+              and AppImageReport.query.get(rep3.id) is None,
+              f"got {r.status_code} {r.data!r}")
+        r = _admin(client, "/admin/reports/bulk", "DELETE",
+                   {"ids": [rep1.id]})
+        check("reports bulk by ids: deletes the pending one",
+              r.status_code == 200
+              and (r.get_json() or {}).get("deleted") == 1
+              and AppImageReport.query.count() == 0,
+              f"got {r.status_code} {r.data!r}")
+        r = _admin(client, "/admin/reports/bulk", "DELETE", {})
+        check("reports bulk empty body: 400",
+              r.status_code == 400,
+              f"got {r.status_code} {r.data!r}")
+
+        model = AppModel(
+            id=next_id(), kind="image", name="m-bulk", slug="m-bulk",
+            provider="test", capability="edit_image", is_active=True,
+        )
+        world = AppWorld(
+            id=next_id(), name="w-bulk", slug="w-bulk", hidden_prompt="p",
+            model_id=model.id, coin_price=10, is_active=True,
+        )
+        db.session.add_all([model, world])
+        db.session.commit()
+        in1 = "https://chehre.inourai.ir/static/uploads/in1.jpg"
+        in2 = "https://chehre.inourai.ir/static/uploads/in2.jpg"
+        in3 = "https://chehre.inourai.ir/static/uploads/in3.jpg"
+        in4 = "https://chehre.inourai.ir/static/uploads/in4.jpg"
+        gens = [
+            AppGeneration(
+                id=next_id(), user_id=user.id, kind="image",
+                world_id=world.id, model_id=model.id,
+                input_url=in1, status="done", coin_cost=0,
+            ),
+            AppGeneration(
+                id=next_id(), user_id=user.id, kind="image",
+                world_id=world.id, model_id=model.id,
+                input_url=in2, status="done", coin_cost=0,
+            ),
+            AppGeneration(
+                id=next_id(), user_id=user.id, kind="image",
+                world_id=world.id, model_id=model.id,
+                input_url=in3, status="processing", coin_cost=0,
+            ),
+            AppGeneration(
+                id=next_id(), user_id=user.id, kind="image",
+                world_id=world.id, model_id=model.id,
+                input_url=in4, status="done", coin_cost=0,
+            ),
+        ]
+        db.session.add_all(gens)
+        db.session.commit()
+        r = _admin(client, "/admin/inputs/bulk", "DELETE",
+                   {"input_urls": [in1, in2, in3]})
+        j = r.get_json() or {}
+        db.session.expire_all()
+        check("inputs bulk: 2 done deleted, 1 processing skipped",
+              r.status_code == 200
+              and j.get("deleted") == 2
+              and len(j.get("skipped") or []) == 1
+              and (j.get("skipped") or [{}])[0].get("input_url") == in3
+              and AppGeneration.query.get(gens[0].id).input_url is None
+              and AppGeneration.query.get(gens[1].id).input_url is None
+              and AppGeneration.query.get(gens[2].id).input_url == in3,
+              f"got {r.status_code} {j}")
+        r = _admin(client, "/admin/inputs/bulk", "DELETE",
+                   {"input_urls": ["https://example.invalid/x.jpg"]})
+        j = r.get_json() or {}
+        check("inputs bulk with foreign URL: 0 deleted, 1 skipped",
+              r.status_code == 200
+              and j.get("deleted") == 0
+              and len(j.get("skipped") or []) == 1,
+              f"got {r.status_code} {j}")
+        r = _admin(client, "/admin/inputs/bulk", "DELETE", {})
+        check("inputs bulk empty body: 400",
+              r.status_code == 400,
+              f"got {r.status_code} {r.data!r}")
+        r = _admin(client, "/admin/inputs", "DELETE", {"input_url": in4})
+        j = r.get_json() or {}
+        check("inputs single delete still works after refactor",
+              r.status_code == 200
+              and j.get("ok") is True
+              and AppGeneration.query.get(gens[3].id).input_url is None,
+              f"got {r.status_code} {j}")
 
     print(f"\n{PASSED} passed, {FAILED} failed")
     return 1 if FAILED else 0
