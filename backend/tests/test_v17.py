@@ -26,11 +26,16 @@
 - (h) حذف گروهی ادمین: گزارش‌ها با وضعیت reviewed/dismissed → حذف؛
   pending با وضعیت → ۴۰۰؛ با id → حذف؛ ورودی‌ها: ۲ done حذف + ۱
   processing رد می‌شود؛ آدرس خارجی رد می‌شود؛ تک‌تک هنوز کار می‌کند.
+- (i) حذف همه‌ی ورودی‌ها (all=true) + فایل‌های یتیم: helper فقط
+  فایل قدیمیِ بدون ارجاع را می‌دهد؛ GET شمارش و DELETE حذف واقعی
+  با uploads موقت (بدون دست‌زدن به uploads واقعی).
 """
 
 import datetime
 import os
 import sys
+import tempfile
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -653,6 +658,77 @@ def main():
               and j.get("ok") is True
               and AppGeneration.query.get(gens[3].id).input_url is None,
               f"got {r.status_code} {j}")
+
+        # --- (i) حذف همه‌ی ورودی‌ها + فایل‌های یتیم ---
+        inA = "https://chehre.inourai.ir/static/uploads/inA.jpg"
+        inB = "https://chehre.inourai.ir/static/uploads/inB.jpg"
+        genA = AppGeneration(
+            id=next_id(), user_id=user.id, kind="image",
+            world_id=world.id, model_id=model.id,
+            input_url=inA, status="done", coin_cost=0,
+        )
+        genB = AppGeneration(
+            id=next_id(), user_id=user.id, kind="image",
+            world_id=world.id, model_id=model.id,
+            input_url=inB, status="done", coin_cost=0,
+        )
+        db.session.add_all([genA, genB])
+        db.session.commit()
+        r = _admin(client, "/admin/inputs/bulk", "DELETE", {"all": True})
+        j = r.get_json() or {}
+        db.session.expire_all()
+        check("inputs bulk all: deletes done ones, skips processing",
+              r.status_code == 200
+              and j.get("deleted") == 2
+              and len(j.get("skipped") or []) == 1
+              and AppGeneration.query.get(genA.id).input_url is None
+              and AppGeneration.query.get(genB.id).input_url is None
+              and AppGeneration.query.get(gens[2].id).input_url == in3,
+              f"got {r.status_code} {j}")
+
+        from app.routes import _orphan_upload_files
+        import app.routes as routes_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            old = os.path.join(tmp, "old.jpg")
+            fresh = os.path.join(tmp, "fresh.jpg")
+            ref = os.path.join(tmp, "ref.jpg")
+            for p in (old, fresh, ref):
+                with open(p, "wb") as f:
+                    f.write(b"x")
+            old_mtime = time.time() - 7200
+            os.utime(old, (old_mtime, old_mtime))
+            found = _orphan_upload_files(tmp, {"ref.jpg"})
+            check("orphan helper: only old unreferenced file listed",
+                  [n for n, _ in found] == ["old.jpg"],
+                  f"got {found}")
+
+        orig_uploads_dir = routes_mod._uploads_dir
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                victim = os.path.join(tmp, "victim.jpg")
+                with open(victim, "wb") as f:
+                    f.write(b"y" * 10)
+                vt = time.time() - 7200
+                os.utime(victim, (vt, vt))
+                routes_mod._uploads_dir = lambda: tmp
+                r = _admin(client, "/admin/inputs/orphans", "GET")
+                j = r.get_json() or {}
+                check("orphans GET: counts the old unreferenced file",
+                      r.status_code == 200
+                      and j.get("count") == 1
+                      and j.get("bytes") == 10,
+                      f"got {r.status_code} {j}")
+                r = _admin(client, "/admin/inputs/orphans", "DELETE", {})
+                j = r.get_json() or {}
+                check("orphans DELETE: removes it and reports bytes",
+                      r.status_code == 200
+                      and j.get("deleted") == 1
+                      and j.get("bytes") == 10
+                      and not os.path.exists(victim),
+                      f"got {r.status_code} {j}")
+        finally:
+            routes_mod._uploads_dir = orig_uploads_dir
 
     print(f"\n{PASSED} passed, {FAILED} failed")
     return 1 if FAILED else 0

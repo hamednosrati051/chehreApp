@@ -285,6 +285,8 @@
     <p class="muted">روی هر عکس بزنید تا بزرگ شود. حذف، فایل را از روی سرور پاک می‌کند و آدرس آن را در نسل‌ها خالی می‌کند؛ خروجی‌ها دست نمی‌خورند.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
       <button class="small danger" onclick="inputsDeleteSelected()">حذف تیک‌خورده‌ها</button>
+      <button class="small danger" onclick="inputsDeleteAll()">حذف همه</button>
+      <button class="small" onclick="orphansDelete()">حذف فایل‌های یتیم</button>
     </div>
     <div id="in-summary"></div>
     <div id="in-list"></div>
@@ -656,6 +658,8 @@ async function loadInputs(){ const res = await api('/admin/inputs?page=' + inPag
 async function inputDelete(url){ if(!confirm('عکس ورودی از روی سرور حذف شود؟ خروجی‌ها دست نمی‌خورند.')) return; try { await api('/admin/inputs', 'DELETE', {input_url: url}); loadInputs(); } catch(err){ setMsg(err.message); } }
 function inChecked(){ return [...document.querySelectorAll('.in-check:checked')].map(c => c.value); }
 async function inputsDeleteSelected(){ const urls = inChecked(); if(!urls.length){ setMsg('چیزی تیک نخورده است.'); return; } if(!confirm(urls.length + ' عکس ورودی از روی سرور حذف شود؟ خروجی‌ها دست نمی‌خورند.')) return; try { const r = await api('/admin/inputs/bulk', 'DELETE', {input_urls: urls}); let m = r.deleted + ' عکس حذف شد.'; if((r.skipped || []).length) m += ' ' + r.skipped.length + ' تا رد شد (در حال ساخت یا آدرس بد).'; setMsg(m, true); loadInputs(); } catch(err){ setMsg(err.message); } }
+async function inputsDeleteAll(){ if(!confirm('همه‌ی عکس‌های ورودی از روی سرور حذف شود؟ خروجی‌ها دست نمی‌خورند.')) return; try { const r = await api('/admin/inputs/bulk', 'DELETE', {all: true}); let m = r.deleted + ' عکس حذف شد.'; if((r.skipped || []).length) m += ' ' + r.skipped.length + ' تا رد شد (در حال ساخت).'; setMsg(m, true); loadInputs(); } catch(err){ setMsg(err.message); } }
+async function orphansDelete(){ try { const c = await api('/admin/inputs/orphans'); if(!c.count){ setMsg('فایل یتیمی نیست.'); return; } const mb = (c.bytes / 1048576).toFixed(1); if(!confirm(c.count + ' فایل یتیم (' + mb + ' مگابایت) از روی سرور حذف شود؟')) return; const r = await api('/admin/inputs/orphans', 'DELETE', {}); setMsg(r.deleted + ' فایل یتیم حذف شد (' + (r.bytes / 1048576).toFixed(1) + ' مگابایت).', true); } catch(err){ setMsg(err.message); } }
 async function galleryRequeue(id){ try { await api('/admin/gallery/' + id + '/requeue', 'POST'); loadGhist(); } catch(err){ setMsg(err.message); } }
 async function galleryDelete(id){ if(!confirm('ردیف گالری حذف شود؟')) return; try { await api('/admin/gallery/' + id, 'DELETE'); loadGhist(); } catch(err){ setMsg(err.message); } }
 async function galleryPublishBale(id){ if(!confirm('این عکس در کانال بله @iNourAi منتشر شود؟')) return; try { await api('/admin/gallery/' + id + '/publish-bale', 'POST'); loadGhist(); } catch(err){ setMsg(err.message); } }

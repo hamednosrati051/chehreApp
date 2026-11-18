@@ -2740,11 +2740,21 @@ def admin_bulk_delete_inputs():
     """حذف گروهی عکس‌های ورودی (همان منطق تک‌تک، برای هر آدرس):
     فایل از روی سرور پاک می‌شود + آدرس در نسل‌ها خالی می‌شود؛
     ورودیِ در حال ساخت (processing/queued) یا آدرس بد رد می‌شود و در
-    skipped می‌آید؛ بقیه پاک می‌شوند. خروجی‌ها دست نمی‌خورند."""
+    skipped می‌آید؛ بقیه پاک می‌شوند. خروجی‌ها دست نمی‌خورند.
+    ورودی: {"input_urls": [...]} یا {"all": true} برای همه‌ی ورودی‌ها."""
     body = request.get_json(silent=True) or {}
-    urls = body.get("input_urls") or []
-    if not urls:
-        return jsonify({"error": "input_urls required"}), 400
+    if body.get("all") is True:
+        urls = [
+            row[0]
+            for row in db.session.query(AppGeneration.input_url)
+            .filter(AppGeneration.input_url.isnot(None))
+            .distinct()
+            .all()
+        ]
+    else:
+        urls = body.get("input_urls") or []
+        if not urls:
+            return jsonify({"error": "input_urls required"}), 400
     deleted = 0
     skipped = []
     for url in urls:
@@ -2754,6 +2764,113 @@ def admin_bulk_delete_inputs():
         except _InputDeleteError as exc:
             skipped.append({"input_url": url, "reason": str(exc)})
     return jsonify({"ok": True, "deleted": deleted, "skipped": skipped})
+
+
+def _uploads_dir():
+    """مسیر واقعی پوشه‌ی آپلودها زیر static."""
+    return os.path.realpath(os.path.join(current_app.static_folder, "uploads"))
+
+
+def _referenced_upload_basenames():
+    """نام فایل‌هایی از static/uploads که جایی ارجاع شده‌اند:
+    ورودی و خروجی نسل‌ها + عکس گالری."""
+    from urllib.parse import urlparse
+
+    names = set()
+    for column in (
+        AppGeneration.input_url,
+        AppGeneration.output_url,
+        AppGallery.image_url,
+    ):
+        for (url,) in (
+            db.session.query(column).filter(column.isnot(None)).all()
+        ):
+            if not url:
+                continue
+            parsed = urlparse(url)
+            if parsed.netloc not in (
+                "",
+                "chehre.inourai.ir",
+                "171.22.25.152:5001",
+            ):
+                continue
+            if not parsed.path.startswith("/static/uploads/"):
+                continue
+            names.add(os.path.basename(parsed.path))
+    return names
+
+
+def _orphan_upload_files(uploads_dir, referenced, older_than_s=3600):
+    """فایل‌های یتیم زیر uploads: قدیمی‌تر از آستانه و بدون ارجاع.
+    فقط فایل‌های مستقیم زیر پوشه؛ زیردایرکتوری لمس نمی‌شود."""
+    import stat
+    import time
+
+    now = time.time()
+    found = []
+    try:
+        entries = os.listdir(uploads_dir)
+    except OSError:
+        return found
+    for name in entries:
+        if name in referenced:
+            continue
+        path = os.path.join(uploads_dir, name)
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        if not stat.S_ISREG(st.st_mode):
+            continue
+        if now - st.st_mtime < older_than_s:
+            continue
+        found.append((name, st.st_size))
+    return found
+
+
+@admin_bp.get("/admin/inputs/orphans")
+@require_admin
+def admin_list_orphan_inputs():
+    """شمارش فایل‌های ورودی یتیم (آپلود شده ولی به هیچ نسلی وصل نیست)؛
+    فقط شمارش — چیزی پاک نمی‌شود. فایل‌های زیر ۱ ساعت حساب نمی‌شوند."""
+    if current_app.config.get("S3_ENDPOINT"):
+        return jsonify(
+            {"error": "S3-backed storage: orphan scan not supported here"}
+        ), 400
+    files = _orphan_upload_files(_uploads_dir(), _referenced_upload_basenames())
+    return jsonify(
+        {
+            "ok": True,
+            "count": len(files),
+            "bytes": sum(size for _, size in files),
+        }
+    )
+
+
+@admin_bp.delete("/admin/inputs/orphans")
+@require_admin
+def admin_delete_orphan_inputs():
+    """حذف فایل‌های ورودی یتیم (همان قانون شمارش، دوباره موقع حذف
+    محاسبه می‌شود)؛ فایل‌های زیر ۱ ساعت هرگز پاک نمی‌شوند."""
+    if current_app.config.get("S3_ENDPOINT"):
+        return jsonify(
+            {"error": "S3-backed storage: orphan delete not supported here"}
+        ), 400
+    uploads_dir = _uploads_dir()
+    files = _orphan_upload_files(uploads_dir, _referenced_upload_basenames())
+    deleted = 0
+    freed = 0
+    for name, size in files:
+        path = os.path.realpath(os.path.join(uploads_dir, name))
+        if os.path.commonpath([path, uploads_dir]) != uploads_dir:
+            continue
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            continue
+        deleted += 1
+        freed += size
+    return jsonify({"ok": True, "deleted": deleted, "bytes": freed})
 
 
 # ---------------- admin: categories ----------------
