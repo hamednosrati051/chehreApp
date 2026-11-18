@@ -461,7 +461,10 @@ fun CreateImageScreen(
             Spacer(modifier = Modifier.weight(1f))
             // بخش پایین (مثل رقیب).
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                if (isWorking) {
+                // v17: باکس «در حال ساخت» از همان لحظه‌ی لمس دکمه می‌آید —
+                // حین آپلود و صدا زدن سرور هم (building)، نه فقط بعد از
+                // قبول سرور (isWorking). خطا همان اسنک‌بار قبلی است.
+                if (building || isWorking) {
                     // لودینگ ساخت: عکس خود کاربر تیره + اسپینر + نام دنیا.
                     Card(
                         shape = RoundedCornerShape(28.dp),
