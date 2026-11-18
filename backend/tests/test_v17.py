@@ -26,6 +26,8 @@
 - (h) حذف گروهی ادمین: گزارش‌ها با وضعیت reviewed/dismissed → حذف؛
   pending با وضعیت → ۴۰۰؛ با id → حذف؛ ورودی‌ها: ۲ done حذف + ۱
   processing رد می‌شود؛ آدرس خارجی رد می‌شود؛ تک‌تک هنوز کار می‌کند.
+  پرداخت‌ها: فقط pending/failed → حذف؛ consumed/verified هرگز
+  (سند مالی + لنگر idempotency)؛ ledger دست نمی‌خورد.
 - (i) حذف همه‌ی ورودی‌ها (all=true) + فایل‌های یتیم: helper فقط
   فایل قدیمیِ بدون ارجاع را می‌دهد؛ GET شمارش + همه‌ی فایل‌ها
   (نام/آدرس/حجم، برای مودال — بدون سقف ۱۰۰تایی) و DELETE حذف واقعی
@@ -765,6 +767,74 @@ def main():
                       f"got {r.status_code} {j}")
         finally:
             routes_mod._uploads_dir = orig_uploads_dir2
+
+        # پرداخت‌ها: فقط pending/failed پاک می‌شوند؛ consumed/verified
+        # سند مالی + لنگر idempotency‌اند و هرگز پاک نمی‌شوند.
+        pack_pu = AppCoinPack(
+            id=next_id(), name="pu pack", coins=20, price_toman=59900,
+            bazaar_sku="pack_pu", is_active=True,
+        )
+        db.session.add(pack_pu)
+        db.session.commit()
+        pu_pending = AppPurchase(
+            id=next_id(), user_id=user.id, pack_id=pack_pu.id,
+            amount_irr=59900, status="pending",
+        )
+        pu_consumed = AppPurchase(
+            id=next_id(), user_id=user.id, pack_id=pack_pu.id,
+            bazaar_purchase_token="tc1",
+            amount_irr=59900, status="consumed",
+        )
+        pu_failed = AppPurchase(
+            id=next_id(), user_id=user.id, pack_id=pack_pu.id,
+            amount_irr=59900, status="failed",
+        )
+        pu_verified = AppPurchase(
+            id=next_id(), user_id=user.id, pack_id=pack_pu.id,
+            bazaar_purchase_token="tv1",
+            amount_irr=59900, status="verified",
+        )
+        db.session.add_all(
+            [pu_pending, pu_consumed, pu_failed, pu_verified]
+        )
+        db.session.commit()
+        led = AppCoinLedger(
+            user_id=user.id, delta=20, reason="purchase",
+            ref_type="purchase", ref_id=pu_consumed.id,
+        )
+        db.session.add(led)
+        db.session.commit()
+        pu_ids = (
+            pu_pending.id, pu_consumed.id, pu_failed.id, pu_verified.id,
+        )
+        r = _admin(client, "/admin/purchases/bulk", "DELETE",
+                   {"ids": [pu_ids[0], pu_ids[1]]})
+        j = r.get_json() or {}
+        check("purchases bulk by ids: deletes pending, skips consumed",
+              r.status_code == 200 and j.get("deleted") == 1
+              and len(j.get("skipped") or []) == 1
+              and AppPurchase.query.get(pu_ids[0]) is None
+              and AppPurchase.query.get(pu_ids[1]) is not None,
+              f"got {r.status_code} {r.data!r}")
+        r = _admin(client, "/admin/purchases/bulk", "DELETE",
+                   {"statuses": ["consumed"]})
+        check("purchases bulk with consumed status: 400",
+              r.status_code == 400, f"got {r.status_code} {r.data!r}")
+        r = _admin(client, "/admin/purchases/bulk", "DELETE",
+                   {"statuses": ["pending", "failed"]})
+        j = r.get_json() or {}
+        check("purchases bulk by status: deletes failed, verified stays",
+              r.status_code == 200 and j.get("deleted") == 1
+              and AppPurchase.query.get(pu_ids[2]) is None
+              and AppPurchase.query.get(pu_ids[3]) is not None
+              and AppPurchase.query.get(pu_ids[1]) is not None,
+              f"got {r.status_code} {r.data!r}")
+        check("purchases bulk: consumed ledger row untouched",
+              AppCoinLedger.query.filter_by(ref_id=pu_ids[1]).count() == 1,
+              "ledger row missing")
+        r = _admin(client, "/admin/purchases/bulk", "DELETE", {})
+        check("purchases bulk empty body: 400",
+              r.status_code == 400, f"got {r.status_code} {r.data!r}")
 
         # --- (j) جاروکننده‌ی نسل‌های گیرکرده (۲ دقیقه، هر عکس جدا) ---
         past = datetime.datetime.utcnow() - datetime.timedelta(minutes=5)

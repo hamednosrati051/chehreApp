@@ -3548,6 +3548,51 @@ def admin_bulk_delete_reports():
     return jsonify({"ok": True, "deleted": deleted})
 
 
+@admin_bp.delete("/admin/purchases/bulk")
+@require_admin
+def admin_bulk_delete_purchases():
+    """حذف گروهی پرداخت‌ها — فقط ردیف‌های pending و failed.
+
+    ورودی: {"ids": [...]} یا {"statuses": ["pending", "failed"]}؛
+    حذف بر اساس وضعیت فقط pending/failed را می‌پذیرد — consumed و
+    verified هرگز با این مسیر پاک نمی‌شوند: آن‌ها سند مالی‌اند و
+    لنگر idempotency وریفای (جست‌وجو بر اساس توکن/ترک‌آیدی)؛ حذف
+    یک ردیف مصرف‌شده یعنی ارسال دوباره‌ی همان توکن یک پرداخت تازه
+    می‌سازد و سکه را دوباره واریز می‌کند. ردیف‌های ledger دست
+    نمی‌خورند (ref_id فقط نوشته می‌شود، هیچ joinای روی آن نیست).
+    در حذف با ids، ردیف‌های consumed/verified رد می‌شوند و در
+    skipped برمی‌گردند.
+    """
+    body = request.get_json(silent=True) or {}
+    ids = body.get("ids") or []
+    statuses = body.get("statuses") or []
+    if not ids and not statuses:
+        return jsonify({"error": "ids or statuses required"}), 400
+    allowed = {"pending", "failed"}
+    query = AppPurchase.query
+    if ids:
+        try:
+            ids = [int(i) for i in ids]
+        except (TypeError, ValueError):
+            return jsonify({"error": "bad ids"}), 400
+        query = query.filter(AppPurchase.id.in_(ids))
+    if statuses:
+        if any(s not in allowed for s in statuses):
+            return jsonify({"error": "statuses must be pending or failed"}), 400
+        query = query.filter(AppPurchase.status.in_(statuses))
+    rows = query.all()
+    deleted = 0
+    skipped = []
+    for row in rows:
+        if row.status not in allowed:
+            skipped.append({"id": row.id, "reason": "not pending/failed"})
+            continue
+        db.session.delete(row)
+        deleted += 1
+    db.session.commit()
+    return jsonify({"ok": True, "deleted": deleted, "skipped": skipped})
+
+
 # ---------------- admin: models (ساخت مدل جدید) ----------------
 # ویرایش مدل از قبل بود؛ ساخت مدل جدید اضافه شد.
 

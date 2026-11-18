@@ -229,6 +229,7 @@
       <label>تا تاریخ: <input id="pu-to" type="date"></label>
       <button>اعمال فیلتر</button>
     </form>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button class="small danger" onclick="purchasesDeleteSelected()">حذف تیک‌خورده‌ها</button><button class="small danger" onclick="purchasesDeletePending()">حذف همه‌ی در انتظار/ناموفق</button></div>
     <div id="pu-list"></div>
     <div id="pu-pager"></div>
     <div id="pu-detail"></div>
@@ -599,9 +600,11 @@ function applyPuFilter(e){ e.preventDefault(); puPageNo = 1; loadPurchases(); }
 const purchaseFa = {pending: 'در انتظار', verified: 'تأییدشده', consumed: 'مصرف‌شده', failed: 'ناموفق'};
 async function loadPurchases(){ const q = new URLSearchParams({status: $('pu-status').value, mobile: $('pu-mobile').value.trim(), date_from: $('pu-from').value, date_to: $('pu-to').value, page: puPageNo});
   const res = await api('/admin/purchases?' + q);
-  $('pu-list').innerHTML = res.items.length ? `<table><tr><th>id</th><th>کاربر</th><th>موبایل</th><th>پک</th><th>سکه</th><th>مبلغ (ریال)</th><th>وضعیت</th><th>توکن</th><th>توکن بازار</th><th>تاریخ</th><th></th></tr>` +
-    res.items.map(r => `<tr><td>${r.id}</td><td>${r.user_id}</td><td>${esc(r.mobile)}</td><td>${esc(r.pack_name)}</td><td>${r.pack_coins}</td><td>${r.amount_irr.toLocaleString('fa-IR')}</td><td>${purchaseFa[r.status] || esc(r.status)}</td><td class="muted">${esc(r.token_tail)}</td><td class="muted" style="word-break:break-all;font-size:11px;">${esc(r.token || r.zibal_track_id || '')}</td><td class="muted">${esc(faDate(r.created_at))}</td><td><button class="small" onclick="loadPurchaseDetail(${r.id})">جزئیات</button></td></tr>`).join('') + '</table>' : '<p class="muted">پرداختی نیست.</p>';
+  $('pu-list').innerHTML = res.items.length ? `<table><tr><th></th><th>id</th><th>کاربر</th><th>موبایل</th><th>پک</th><th>سکه</th><th>مبلغ (ریال)</th><th>وضعیت</th><th>توکن</th><th>توکن بازار</th><th>تاریخ</th><th></th></tr>` +
+    res.items.map(r => `<tr><td>${(r.status==='pending'||r.status==='failed') ? `<input type="checkbox" class="pu-check" value="${r.id}">` : ''}</td><td>${r.id}</td><td>${r.user_id}</td><td>${esc(r.mobile)}</td><td>${esc(r.pack_name)}</td><td>${r.pack_coins}</td><td>${r.amount_irr.toLocaleString('fa-IR')}</td><td>${purchaseFa[r.status] || esc(r.status)}</td><td class="muted">${esc(r.token_tail)}</td><td class="muted" style="word-break:break-all;font-size:11px;">${esc(r.token || r.zibal_track_id || '')}</td><td class="muted">${esc(faDate(r.created_at))}</td><td><button class="small" onclick="loadPurchaseDetail(${r.id})">جزئیات</button></td></tr>`).join('') + '</table>' : '<p class="muted">پرداختی نیست.</p>';
   $('pu-pager').innerHTML = pagerHTML('pu', res); }
+async function purchasesDeleteSelected(){ const ids = [...document.querySelectorAll('.pu-check:checked')].map(c => parseInt(c.value)); if(!ids.length){ setMsg('چیزی تیک نخورده است.'); return; } if(!confirm(ids.length + ' پرداخت در انتظار/ناموفق حذف شود؟ مصرف‌شده‌ها پاک نمی‌شوند.')) return; try { const r = await api('/admin/purchases/bulk', 'DELETE', {ids}); let m = r.deleted + ' پرداخت حذف شد.'; if((r.skipped || []).length) m += ' ' + r.skipped.length + ' تا رد شد (مصرف‌شده/تأییدشده).'; setMsg(m, true); loadPurchases(); } catch(err){ setMsg(err.message); } }
+async function purchasesDeletePending(){ if(!confirm('همه‌ی پرداخت‌های در انتظار و ناموفق حذف شوند؟ مصرف‌شده‌ها پاک نمی‌شوند.')) return; try { const r = await api('/admin/purchases/bulk', 'DELETE', {statuses: ['pending', 'failed']}); setMsg(r.deleted + ' پرداخت حذف شد.', true); loadPurchases(); } catch(err){ setMsg(err.message); } }
 async function loadPurchaseDetail(id){ const r = await api('/admin/purchases/' + id);
   $('pu-detail').innerHTML = `<h3>پرداخت ${r.id}</h3><p>کاربر: ${r.user_id} | موبایل: ${esc(r.mobile)} | پک: ${esc(r.pack_name)} (${r.pack_coins} سکه) | مبلغ: ${r.amount_irr.toLocaleString('fa-IR')} ریال | وضعیت: ${purchaseFa[r.status] || esc(r.status)} | درگاه: ${esc(r.gateway || 'bazaar')} | توکن بازار: <span class="muted" style="word-break:break-all;">${esc(r.token || r.zibal_track_id || r.token_tail || '')}</span> | تأیید: ${esc(faDate(r.verified_at))} | ثبت: ${esc(faDate(r.created_at))}</p>`; }
 
