@@ -1,5 +1,7 @@
 package ir.inourai.newapp.ui.screens
 
+import ir.inourai.newapp.billing.StoreConfig
+import ir.inourai.newapp.data.PublicSettings
 import ir.inourai.newapp.data.friendlyGenerationError
 import android.app.NotificationManager
 import android.content.Context
@@ -171,10 +173,22 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
     // v13: رایگان (هدیه) بودن این generation — از API؛ برای صفحه‌ی
     // تازه‌ساخته‌شده، ResultGiftContext هم جایگزین است.
     var isFree by remember { mutableStateOf(false) }
+    // v17 (S1): این generation در نگارخانه هست یا نه — از API.
+    var inGallery by remember { mutableStateOf(false) }
     var showPacks by remember { mutableStateOf(false) }
     LaunchedEffect(genId) {
         if (fresh && ResultGiftContext.take() == genId) {
             showGiftNudge = true
+        }
+    }
+    // v17 (S2): تنظیمات عمومی برای لینک استور در شیت امتیاز.
+    var pubSettings by remember { mutableStateOf(PublicSettings()) }
+    LaunchedEffect(fresh, status, outputUrl) {
+        if (fresh && status == "done" && outputUrl != null) {
+            try {
+                pubSettings = Api.service.publicSettings()
+            } catch (_: Exception) {
+            }
         }
     }
     val likedIds by ImageLikes.ids
@@ -190,6 +204,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
         worldName = null
         error = null
         isFree = false
+        inGallery = false
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel(currentId.toInt())
         ImageLikes.refresh()
@@ -207,6 +222,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                 outputUrl = st.output_url
                 worldName = st.world_name
                 isFree = st.is_free
+                inGallery = st.in_gallery
                 if (st.status == "done" && st.output_url != null) {
                     photoCache = photoCache + (currentId to st.output_url)
                 }
@@ -467,7 +483,9 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
         // v13: اعلان ۲۴ ساعته — فقط برای تصویرهای رایگان (هدیه)؛
         // تصویر پولی هیچ اعلانی نمی‌گیرد. اگر API هنوز is_free
         // نفرستد، پیام هدیه‌ی نسخه‌ی ۱۲ جایگزین است.
-        if (outputUrl != null && (isFree || showGiftNudge)) {
+        // v17 (S1): مثل «تصاویر من» (v14) — تصویرِ در نگارخانه هیچ
+        // اعلانی نمی‌گیرد.
+        if (outputUrl != null && (isFree || showGiftNudge) && !inGallery) {
             Text(
                 "هدیه را دانلود کن؛ فقط ۲۴ ساعت می‌ماند",
                 color = Color(0xFFFFC107),
@@ -624,7 +642,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    "اگه خوشت اومد، امتیاز و نظرت توی کافه‌بازار کلی بهمون کمک می‌کنه.",
+                    "اگه خوشت اومد، امتیاز و نظرت توی " + if (StoreConfig.STORE_ID == "myket") "مایکت" else "کافه‌بازار" + " کلی بهمون کمک می‌کنه.",
                     color = Color.Gray,
                     fontSize = 14.sp,
                 )
@@ -632,7 +650,12 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                 Button(
                     onClick = {
                         ratingDismissed = true
-                        val url = "https://cafebazaar.ir/app/" + context.packageName
+                        // v17 (S2): مایکت → لینک مایکت از تنظیمات (یا خودکار).
+                        val url = if (StoreConfig.STORE_ID == "myket") {
+                            pubSettings.myket_url.ifBlank { "https://myket.ir/app/" + context.packageName }
+                        } else {
+                            "https://cafebazaar.ir/app/" + context.packageName
+                        }
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue),

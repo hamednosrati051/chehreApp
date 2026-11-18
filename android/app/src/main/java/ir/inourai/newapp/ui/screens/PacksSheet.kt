@@ -1,6 +1,8 @@
 package ir.inourai.newapp.ui.screens
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,9 +20,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,14 +35,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import ir.inourai.newapp.billing.Billing
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Pack
 import ir.inourai.newapp.data.Session
+import ir.inourai.newapp.data.ZibalPurchaseRequest
 import ir.inourai.newapp.data.billingErrorMessage
 import kotlinx.coroutines.launch
 
@@ -81,6 +89,35 @@ fun PacksSheet(
         }
     }
 
+    // v17 زیبال: موقع برگشت به اپ، خریدهای زیبالِ در انتظار را از سرور
+    // بپرس (G1)؛ اگر تسویه شده باشند، onPurchased صدا زده می‌شود و
+    // موجودی به‌روز می‌شود. ردیفِ هنوز pending دوباره recheck می‌شود —
+    // اگر کاربر پرداخت نکرده باشد، failed می‌شود (مثل recheck نورا).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                scope.launch {
+                    try {
+                        val pendings = Api.service.pendingPurchases()
+                        for (pp in pendings) {
+                            if (pp.gateway == "zibal") {
+                                val res = Api.service.recheckZibalPurchase(pp.id)
+                                if (res.status == "consumed") {
+                                    onPurchased()
+                                    if (res.gift_coins > 0) onGift(res.gift_coins)
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     // نتیجه‌ی Intent خرید بازار: وریفای سروری ← consume ← onPurchased.
     val buyLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult(),
@@ -117,15 +154,53 @@ fun PacksSheet(
         scope.launch {
             buyingSku = p.bazaar_sku
             try {
-                // v16: پیش از بازشدن پرداخت استور، ردیف pending روی
-                // سرور ساخته می‌شود تا خریدِ پرداخت‌شده هیچ‌وقت بی‌رد
-                // نماند. اگر این تماس شکست بخورد (مثلاً قطعی شبکه)،
-                // null برمی‌گردد و خرید با جریان قدیمی ادامه پیدا می‌کند.
-                pendingPurchaseId = Billing.createPendingPurchase(p.id)
-                val sender = Billing.getBuyIntentSender(context, p.bazaar_sku)
-                buyLauncher.launch(IntentSenderRequest.Builder(sender).build())
+                if (Billing.isPoolakey) {
+                    // v17 بازار با Poolakey: ردیف pending فقط وقتی ساخته
+                    // می‌شود که صفحه‌ی پرداخت دارد باز می‌شود
+                    // (purchaseFlowBegan) — B2؛ شکستِ بازشدن هیچ ردیفی
+                    // جا نمی‌گذارد.
+                    val purchase = Billing.purchaseProduct(context, p.bazaar_sku) {
+                        scope.launch { pendingPurchaseId = Billing.createPendingPurchase(p.id) }
+                    } ?: run {
+                        onError("خرید لغو شد")
+                        return@launch
+                    }
+                    val gift = Billing.verifyAndConsume(context, purchase, pendingPurchaseId)
+                    pendingPurchaseId = null
+                    onPurchased()
+                    if (gift > 0) onGift(gift)
+                    onDismiss()
+                } else {
+                    pendingPurchaseId = Billing.createPendingPurchase(p.id)
+                    val sender = Billing.getBuyIntentSender(context, p.bazaar_sku)
+                    buyLauncher.launch(IntentSenderRequest.Builder(sender).build())
+                }
             } catch (e: Exception) {
                 onError(billingErrorMessage(e))
+            } finally {
+                buyingSku = null
+            }
+        }
+    }
+
+    // v17 زیبال: ساخت پرداخت در سرور + بازکردن صفحه‌ی پرداخت در مرورگر
+    // خارجی (G1)؛ نتیجه موقع برگشت به اپ، با recheck از سرور خوانده
+    // می‌شود (اثر ON_RESUME همین فایل). دکمه‌ی زیبال فقط وقتی هست که
+    // پک zibal_enabled باشد؛ سرور هم نبودنش را با ۴۰۳ رد می‌کند.
+    fun buyZibal(p: Pack) {
+        if (!loggedIn) {
+            onDismiss()
+            onError("برای خرید اول وارد شوید")
+            onLogin()
+            return
+        }
+        scope.launch {
+            buyingSku = p.bazaar_sku
+            try {
+                val created = Api.service.createZibalPurchase(ZibalPurchaseRequest(pack_id = p.id))
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(created.payment_url)))
+            } catch (e: Exception) {
+                onError("خرید ناموفق بود؛ دوباره تلاش کن")
             } finally {
                 buyingSku = null
             }
@@ -191,11 +266,26 @@ fun PacksSheet(
                                 )
                             }
                         }
-                        Button(
-                            onClick = { buy(p) },
-                            enabled = buyingSku == null,
-                        ) {
-                            Text(if (buyingSku == p.bazaar_sku) "در حال اتصال…" else "خرید")
+                        // v17: هر پک دو دکمه دارد — بازار بالا، زیبال زیر آن؛
+                        // هر کدام فقط وقتی هست که پرچم همان پک روشن باشد.
+                        Column(horizontalAlignment = Alignment.End) {
+                            if (p.bazaar_enabled) {
+                                Button(
+                                    onClick = { buy(p) },
+                                    enabled = buyingSku == null,
+                                ) {
+                                    Text(if (buyingSku == p.bazaar_sku) "در حال اتصال…" else "خرید")
+                                }
+                            }
+                            if (p.zibal_enabled) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = { buyZibal(p) },
+                                    enabled = buyingSku == null,
+                                ) {
+                                    Text(if (buyingSku == p.bazaar_sku) "در حال انتقال…" else "پرداخت با زیبال")
+                                }
+                            }
                         }
                     }
                     HorizontalDivider()

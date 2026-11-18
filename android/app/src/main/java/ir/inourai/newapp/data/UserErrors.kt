@@ -1,5 +1,7 @@
 package ir.inourai.newapp.data
 
+import ir.inourai.newapp.billing.BillingLaunchException
+import ir.inourai.newapp.billing.BillingLaunchStage
 import java.io.IOException
 import retrofit2.HttpException
 
@@ -50,9 +52,42 @@ fun userError(e: Exception): UserError {
     return genericError()
 }
 
-/** خطاهای خرید بازار: لغو و نتیجه‌ی ناخوانا جدا هندل می‌شوند؛
- *  بقیه‌ی خطاها (سرویس بازار، وریفای سروری، شبکه) یک پیام کوتاه دارند. */
+/** خطاهای خرید استور: لغو و نتیجه‌ی ناخوانا جدا هندل می‌شوند؛
+ *  شکستِ بازشدن پرداخت (BillingLaunchException) به‌جای پیام کلی،
+ *  علت دقیق را می‌گوید تا کاربر بداند چه کند (نصب از فروشگاه،
+ *  به‌روزرسانی بازار، ...) — نه فقط «دوباره تلاش کن». */
 fun billingErrorMessage(e: Exception): String {
     if (e is IOException) return "خرید ناموفق بود؛ دوباره تلاش کن"
-    return "خرید ناموفق بود؛ دوباره تلاش کن"
+    val launch = e as? BillingLaunchException
+        ?: return "خرید ناموفق بود؛ دوباره تلاش کن"
+    val store = launch.storeName
+    val d = launch.diagnostics
+    return when (launch.stage) {
+        BillingLaunchStage.BIND_FAILED -> when {
+            !d.storeAppInstalled ->
+                "اپ $store روی این گوشی نصب نیست؛ $store را نصب کن و دوباره تلاش کن"
+            d.installerPackage != d.marketPackage ->
+                "این نسخه از اپ از فروشگاه $store نصب نشده؛ اپ را حذف و از فروشگاه $store نصب کن تا پرداخت کار کند"
+            else ->
+                "پرداخت $store روی این گوشی در دسترس نیست؛ مطمئن شو $store نصب و به‌روز است"
+        }
+        BillingLaunchStage.BIND_TIMEOUT ->
+            "اتصال به $store طول کشید؛ دوباره تلاش کن"
+        BillingLaunchStage.BILLING_UNSUPPORTED -> when (launch.code) {
+            3 -> "پرداخت درون‌برنامه‌ای $store روی این گوشی فعال نیست؛ $store را به‌روز کن"
+            else -> "پرداخت $store روی این گوشی در دسترس نیست؛ $store را به‌روز کن"
+        }
+        BillingLaunchStage.BUY_INTENT_FAILED -> when (launch.code) {
+            3 -> "پرداخت درون‌برنامه‌ای $store روی این گوشی فعال نیست؛ $store را به‌روز کن"
+            4 -> "این بسته در $store فعال نیست؛ بعداً دوباره تلاش کن"
+            5 -> "نسخه‌ی اپ برای پرداخت $store شناخته نشد؛ اپ را از فروشگاه $store به‌روز کن"
+            else -> "پرداخت $store باز نشد؛ دوباره تلاش کن"
+        }
+        BillingLaunchStage.NO_BUY_INTENT ->
+            "پرداخت $store باز نشد؛ دوباره تلاش کن"
+        BillingLaunchStage.NO_BINDER ->
+            "پرداخت $store روی این گوشی در دسترس نیست؛ $store را به‌روز کن"
+        BillingLaunchStage.DISCONNECTED ->
+            "اتصال به $store قطع شد؛ دوباره تلاش کن"
+    }
 }

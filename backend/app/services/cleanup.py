@@ -255,12 +255,15 @@ STALE_PENDING_MINUTES = 30
 
 
 def expire_stale_pending_purchases():
-    """حذف خریدهای pendingِ قدیمیِ بدون توکن (نسخه‌ی ۱۶).
+    """حذف خریدهای pendingِ قدیمیِ بدون توکن (نسخه‌ی ۱۶؛ نسخه‌ی ۱۷: gateway-aware).
 
-    فقط ردیف‌هایی که status=pending و bazaar_purchase_token IS NULL و
-    قدیمی‌تر از ۳۰ دقیقه‌اند حذف می‌شوند — یعنی پرداخت‌هایی که کاربر
-    لغو کرد و اپ هیچ‌وقت وریفای نکرد. ردیفی که توکن دارد هرگز لمس
-    نمی‌شود (وریفای در جریان یا قابل بازیابی است).
+    بازار/مایکت: فقط ردیف‌های pending با bazaar_purchase_token IS NULL و
+    قدیمی‌تر از ۳۰ دقیقه — یعنی پرداخت‌هایی که کاربر لغو کرد و اپ
+    هیچ‌وقت وریفای نکرد. ردیفی که توکن دارد هرگز لمس نمی‌شود.
+    زیبال (v17 — G3): ردیف زیبال توکن بازار ندارد ولی trackId دارد؛
+    کرونِ ۳۰ دقیقه‌ای نباید آن را بگیرد. ردیف زیبال فقط وقتی حذف
+    می‌شود که قدیمی‌تر از ۷ روز باشد (پرداختِ رهاشده؛ پرداختِ
+    انجام‌شده تا آن موقع با کالبک یا recheck تسویه شده است).
     برمی‌گرداند: تعداد ردیف‌های حذف‌شده.
     """
     cutoff = datetime.datetime.utcnow() - datetime.timedelta(
@@ -271,10 +274,23 @@ def expire_stale_pending_purchases():
             AppPurchase.status == "pending",
             AppPurchase.bazaar_purchase_token.is_(None),
             AppPurchase.created_at < cutoff,
+            AppPurchase.gateway.in_(("bazaar", "myket")),
         ).all()
     )
     count = len(stale)
     for row in stale:
+        db.session.delete(row)
+    # زیبالِ رهاشده: فقط قدیمی‌تر از ۷ روز.
+    zibal_cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+    zibal_stale = (
+        AppPurchase.query.filter(
+            AppPurchase.status == "pending",
+            AppPurchase.gateway == "zibal",
+            AppPurchase.created_at < zibal_cutoff,
+        ).all()
+    )
+    count += len(zibal_stale)
+    for row in zibal_stale:
         db.session.delete(row)
     db.session.commit()
     return count

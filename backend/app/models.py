@@ -219,6 +219,10 @@ class AppCoinPack(db.Model):
     # ('every' = هر خرید، 'first' = فقط اولین خرید این پک برای کاربر).
     gift_coins = db.Column(db.Integer, default=0, nullable=False)
     gift_scope = db.Column(db.String(10), default="every", nullable=False)
+    # v17 پرداخت زیبال: هر پک دو دکمه دارد (بازار + زیبال) که هر کدام
+    # جداگانه از ادمین روشن/خاموش می‌شوند؛ پیش‌فرض زیبال خاموش است.
+    bazaar_enabled = db.Column(db.Boolean, default=True, nullable=False)
+    zibal_enabled = db.Column(db.Boolean, default=False, nullable=False)
 
 
 class AppPurchase(db.Model):
@@ -227,9 +231,13 @@ class AppPurchase(db.Model):
     user_id = db.Column(db.BigInteger, db.ForeignKey("app_users.id"), nullable=False)
     pack_id = db.Column(db.BigInteger, db.ForeignKey("app_coin_packs.id"), nullable=False)
     bazaar_purchase_token = db.Column(db.String(500), unique=True)
+    # v17 درگاه این خرید: بازار/مایکت/زیبال (پیش‌فرض بازار) + شناسه‌ی
+    # پیگیری زیبال (trackId؛ یکتا، مثل توکن بازار برای idempotency).
+    gateway = db.Column(db.String(20), default="bazaar", nullable=False)
+    zibal_track_id = db.Column(db.String(50), unique=True)
     amount_irr = db.Column(db.BigInteger, nullable=False)
     status = db.Column(
-        db.Enum("pending", "verified", "consumed", name="purchase_status"),
+        db.Enum("pending", "verified", "consumed", "failed", name="purchase_status"),
         default="pending",
         nullable=False,
     )

@@ -261,6 +261,8 @@ def main():
         ("com.google.firebase", "firebase-messaging", "24.0.1"),
         # v13: Bazaar native login (CafeBazaarAuth, JitPack).
         ("com.github.cafebazaar.CafeBazaarAuth", "auth", "1.1.0"),
+        # v17: Poolakey (Bazaar's official billing library, JitPack).
+        ("com.github.cafebazaar.Poolakey", "poolakey", "2.3.0"),
     ]
     queue = deque(seeds)
     seen = set(seeds)

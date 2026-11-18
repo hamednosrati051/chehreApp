@@ -87,6 +87,7 @@ import ir.inourai.newapp.billing.StoreConfig
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.BazaarLinkRequest
 import ir.inourai.newapp.data.DeviceTokenRequest
+import ir.inourai.newapp.data.PublicSettings
 import ir.inourai.newapp.data.Session
 import ir.inourai.newapp.ui.screens.CreateImageScreen
 import ir.inourai.newapp.ui.screens.GalleryReset
@@ -161,6 +162,11 @@ class MainActivity : ComponentActivity() {
         } else {
             setContent { App(initialGenId = genId) }
         }
+    }
+
+    override fun onDestroy() {
+        Billing.disconnect()
+        super.onDestroy()
     }
 }
 
@@ -269,6 +275,8 @@ fun App(initialGenId: Long = -1L) {
     // به‌روزرسانی. هر دو بی‌صدا و fail-open هستند؛ هیچ‌کدام کاربر را
     // مسدود نمی‌کند و هیچ پیامکی فرستاده نمی‌شود.
     var showUpdateDialog by remember { mutableStateOf(false) }
+    // v17 (S2): تنظیمات عمومی برای لینک مایکت در دیالوگ به‌روزرسانی.
+    var pubSettings by remember { mutableStateOf(PublicSettings()) }
     LaunchedEffect(Unit) {
         if (Session.token != null) {
             try {
@@ -299,6 +307,10 @@ fun App(initialGenId: Long = -1L) {
                 }
             } catch (_: Exception) {
             }
+        }
+        try {
+            pubSettings = Api.service.publicSettings()
+        } catch (_: Exception) {
         }
         try {
             val cfg = Api.service.appConfig()
@@ -556,26 +568,41 @@ fun App(initialGenId: Long = -1L) {
                 AlertDialog(
                     onDismissRequest = { showUpdateDialog = false },
                     title = { Text("نسخه‌ی جدید موجود است", fontWeight = FontWeight.Bold) },
-                    text = { Text("نسخه‌ی جدید چهره‌ساز در کافه‌بازار منتشر شده است؛ برای تجربه‌ی بهتر، اپ را به‌روز کن.") },
+                    // v17 (S2): نام استور همین فلِیور.
+                    text = { Text("نسخه‌ی جدید چهره‌ساز در " + if (StoreConfig.STORE_ID == "myket") "مایکت" else "کافه‌بازار" + " منتشر شده است؛ برای تجربه‌ی بهتر، اپ را به‌روز کن.") },
                     confirmButton = {
                         Button(onClick = {
                             showUpdateDialog = false
-                            try {
-                                context.startActivity(
-                                    Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse("bazaar://details?id=${context.packageName}"),
-                                    ),
-                                )
-                            } catch (_: Exception) {
+                            if (StoreConfig.STORE_ID == "myket") {
+                                // v17 (S2): مایکت → لینک مایکت از تنظیمات (یا خودکار).
+                                val url = pubSettings.myket_url.ifBlank { "https://myket.ir/app/${context.packageName}" }
                                 try {
                                     context.startActivity(
                                         Intent(
                                             Intent.ACTION_VIEW,
-                                            Uri.parse("https://cafebazaar.ir/app/${context.packageName}"),
+                                            Uri.parse(url),
                                         ),
                                     )
                                 } catch (_: Exception) {
+                                }
+                            } else {
+                                try {
+                                    context.startActivity(
+                                        Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse("bazaar://details?id=${context.packageName}"),
+                                        ),
+                                    )
+                                } catch (_: Exception) {
+                                    try {
+                                        context.startActivity(
+                                            Intent(
+                                                Intent.ACTION_VIEW,
+                                                Uri.parse("https://cafebazaar.ir/app/${context.packageName}"),
+                                            ),
+                                        )
+                                    } catch (_: Exception) {
+                                    }
                                 }
                             }
                         }) {

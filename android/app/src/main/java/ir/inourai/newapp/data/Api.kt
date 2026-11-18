@@ -107,6 +107,9 @@ data class Pack(
     // v11 هدیه‌ی خرید (پیش‌فرض ۰ یعنی پاسخ قدیمی بدون این فیلدها هم پارس می‌شود).
     val gift_coins: Int = 0,
     val gift_scope: String? = null,
+    // v17 زیبال: هر پک دو دکمه دارد (بازار + زیبال)؛ پیش‌فرض زیبال خاموش است.
+    val bazaar_enabled: Boolean = true,
+    val zibal_enabled: Boolean = false,
 )
 data class PurchaseVerifyRequest(
     val pack_id: Long,
@@ -120,6 +123,16 @@ data class PurchaseVerifyRequest(
 // purchase_token هنوز نیست و موقع وریفای وصل می‌شود.
 data class CreatePendingPurchaseRequest(val pack_id: Long)
 data class PendingPurchaseCreated(val id: Long, val status: String)
+// v17 زیبال: ساخت پرداخت + بررسی دوباره (recheck).
+data class ZibalPurchaseRequest(val pack_id: Long)
+data class ZibalPurchaseCreated(val purchase_id: Long, val payment_url: String, val status: String)
+data class ZibalRecheckResponse(
+    val id: Long,
+    val status: String,
+    val gift_coins: Int = 0,
+    val already_credited: Boolean = false,
+    val balance: Int? = null,
+)
 // v16: گزارش کاربر روی یک تصویر تولیدشده (UGC، قانون مایکت)؛
 // reason اختیاری است و خالی هم قبول است.
 data class GalleryReportRequest(val generation_id: Long, val reason: String? = null)
@@ -138,6 +151,9 @@ data class PendingPurchase(
     val pack_id: Long,
     val amount_irr: Long,
     val purchase_token: String?,
+    // v17 زیبال: درگاه + trackId (برای recheck موقع برگشت از مرورگر).
+    val gateway: String? = null,
+    val zibal_track_id: String? = null,
 )
 
 data class PaymentItem(
@@ -172,6 +188,8 @@ data class PublicSettings(
     val support_info: String = "",
     val bug_report_info: String = "",
     val bazaar_url: String = "",
+    // v17 (S2): لینک مایکت برای فلِیور مایکت؛ خالی یعنی لینک خودکار.
+    val myket_url: String = "",
     val rules_privacy: String = "",
     val entry_gift_enabled: String = "1",
 )
@@ -247,6 +265,13 @@ interface ApiService {
     // v16: ردیف pending موقع tap-buy، پیش از پرداخت استور.
     @POST("coins/purchases")
     suspend fun createPendingPurchase(@Body b: CreatePendingPurchaseRequest): PendingPurchaseCreated
+
+    // v17 زیبال: ساخت پرداخت + بررسی دوباره (recheck).
+    @POST("coins/purchases/zibal")
+    suspend fun createZibalPurchase(@Body b: ZibalPurchaseRequest): ZibalPurchaseCreated
+
+    @POST("coins/purchases/{id}/zibal/recheck")
+    suspend fun recheckZibalPurchase(@Path("id") id: Long): ZibalRecheckResponse
 
     // v16: گزارش UGC روی یک تصویر تولیدشده.
     @POST("gallery/reports")

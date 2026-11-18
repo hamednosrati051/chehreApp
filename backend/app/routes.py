@@ -43,6 +43,7 @@ from .services import coins as coins_svc
 from .services import fcm as fcm_svc
 from .services import myket as myket_svc
 from .services import sms as sms_svc
+from .services import zibal as zibal_svc
 
 auth_bp = Blueprint("auth", __name__)
 content_bp = Blueprint("content", __name__)
@@ -885,6 +886,8 @@ def coin_packs():
                 "sort_order": p.sort_order,
                 "gift_coins": p.gift_coins or 0,
                 "gift_scope": p.gift_scope or "every",
+                "bazaar_enabled": bool(getattr(p, "bazaar_enabled", True)),
+                "zibal_enabled": bool(getattr(p, "zibal_enabled", False)),
             }
             for p in packs
         ]
@@ -1012,7 +1015,7 @@ def public_gallery():
 # ---------------- world detail ----------------
 
 
-PUBLIC_SETTINGS = ("about_us", "support_info", "bug_report_info", "bazaar_url", "rules_privacy", "entry_gift_enabled")
+PUBLIC_SETTINGS = ("about_us", "support_info", "bug_report_info", "bazaar_url", "myket_url", "rules_privacy", "entry_gift_enabled")
 
 
 @content_bp.get("/app-config")
@@ -1130,6 +1133,286 @@ def report_generation():
     db.session.add(row)
     db.session.commit()
     return jsonify({"id": row.id, "status": row.status}), 201
+
+
+# ---------------- purchases: zibal (نسخه‌ی ۱۷) ----------------
+
+
+def _zibal_go_url(track_id):
+    """آدرس صفحه‌ی واسط Referer (G2)؛ اپ هرگز آدرس خام درگاه را باز نمی‌کند."""
+    base = (request.host_url or "").rstrip("/")
+    return "{}/api/v1/coins/purchases/zibal/go/{}".format(base, track_id)
+
+
+def _zibal_result_page(title, message, ok, footer):
+    """صفحه‌ی نتیجه‌ی پرداخت زیبال (G1): کاربر در مرورگر خارجی پرداخت
+    می‌کند و اینجا نتیجه را می‌بیند؛ برگشت به اپ دستی است و اپ موقع
+    برگشت، وضعیت را از سرور می‌خواند (recheck)."""
+    color = "#1a7f37" if ok else "#b42318"
+    return (
+        '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        "<title>{t}</title></head>"
+        '<body style="font-family:Tahoma,sans-serif;text-align:center;padding:48px 16px;color:#222">'
+        '<h1 style="color:{c};font-size:22px">{t}</h1>'
+        '<p style="font-size:16px;line-height:2">{m}</p>'
+        '<p style="font-size:14px;color:#666;line-height:2">{f}</p>'
+        "</body></html>"
+    ).format(t=title, m=message, c=color, f=footer)
+
+
+@coins_bp.post("/coins/purchases/zibal")
+@require_auth
+def zibal_create_purchase():
+    """ساخت پرداخت زیبال برای یک پک (نسخه‌ی ۱۷).
+
+    ورودی: pack_id. پک باید فعال و zibal_enabled باشد (وگرنه ۴۰۳ —
+    مخفی‌کردن دکمه در اپ کافی نیست). اگر برای همین کاربر و همین پک
+    یک خرید زیبال pending با trackId زنده هست، همان ردیف + آدرس
+    برگردد (idempotency؛ درخواست دوم، درخواست دوم به زیبال نمی‌سازد).
+    اگر ساخت درخواست در زیبال شکست بخورد، ردیف pendingِ ساخته‌شده
+    حذف می‌شود (trackId ندارد و پولی هم نمی‌تواند جابه‌جا شده باشد —
+    کاربر صفحه‌ی پرداخت را ندیده است).
+    """
+    if not (current_app.config.get("ZIBAL_MERCHANT") or ""):
+        return jsonify({"error": "zibal is not configured"}), 503
+    body = request.json or {}
+    pack = AppCoinPack.query.get(body.get("pack_id"))
+    if not pack or not pack.is_active:
+        return jsonify({"error": "pack not found"}), 404
+    if not getattr(pack, "zibal_enabled", False):
+        return jsonify({"error": "zibal is not enabled for this pack"}), 403
+    existing = (
+        AppPurchase.query.filter_by(
+            user_id=g.user.id, pack_id=pack.id, gateway="zibal", status="pending",
+        )
+        .filter(AppPurchase.zibal_track_id.isnot(None))
+        .order_by(AppPurchase.id.desc())
+        .first()
+    )
+    if existing is not None:
+        return jsonify(
+            {
+                "purchase_id": existing.id,
+                "payment_url": _zibal_go_url(existing.zibal_track_id),
+                "status": "pending",
+            }
+        ), 200
+    purchase = AppPurchase(
+        user_id=g.user.id,
+        pack_id=pack.id,
+        amount_irr=pack.price_toman * 10,
+        status="pending",
+        gateway="zibal",
+    )
+    db.session.add(purchase)
+    db.session.commit()
+    try:
+        track_id, _ = zibal_svc.create_payment(
+            purchase.amount_irr,
+            current_app.config.get("ZIBAL_CALLBACK_URL") or "",
+            {
+                "purchase_id": purchase.id,
+                "pack_name": pack.name,
+                "mobile": getattr(g.user, "mobile", None),
+            },
+        )
+    except zibal_svc.ZibalNotConfigured:
+        db.session.delete(purchase)
+        db.session.commit()
+        return jsonify({"error": "zibal is not configured"}), 503
+    except Exception as exc:
+        db.session.delete(purchase)
+        db.session.commit()
+        current_app.logger.warning("zibal create failed: %s", exc)
+        return jsonify({"error": "zibal request failed"}), 502
+    purchase.zibal_track_id = track_id
+    db.session.commit()
+    return jsonify(
+        {
+            "purchase_id": purchase.id,
+            "payment_url": _zibal_go_url(track_id),
+            "status": "pending",
+        }
+    ), 201
+
+
+@coins_bp.route("/coins/purchases/zibal/callback", methods=["GET", "POST"])
+def zibal_callback():
+    """کالبک زیبال (عمومی؛ GET/POST): فقط شروع وریفای است؛ موفقیت
+    فقط بعد از وریفای سروری با trackId + مبلغ یکسان ثبت می‌شود.
+    تکرار کالبک (idempotent): ردیفِ تسویه‌شده دوباره شارژ نمی‌شود.
+    وریفای ناموفق قطعی → وضعیت failed؛ خطای ارتباط → pending می‌ماند
+    (نتیجه نامشخص) و کاربر با recheck دوباره چک می‌کند."""
+    data = request.args.to_dict()
+    if request.form:
+        data.update(request.form.to_dict())
+    if request.is_json:
+        try:
+            data.update(request.json or {})
+        except Exception:
+            pass
+    track_id = data.get("trackId") or data.get("track_id") or data.get("TrackId")
+    if not track_id:
+        return _zibal_result_page(
+            "پرداخت ناموفق",
+            "شناسه‌ی پرداخت پیدا نشد.",
+            False,
+            "پولی از حساب شما کم نشده است.",
+        )
+    purchase = AppPurchase.query.filter_by(zibal_track_id=str(track_id)).first()
+    if purchase is None:
+        return _zibal_result_page(
+            "پرداخت ناموفق",
+            "پرداختی با این شناسه پیدا نشد.",
+            False,
+            "پولی از حساب شما کم نشده است.",
+        )
+    if purchase.status in ("verified", "consumed"):
+        return _zibal_result_page(
+            "پرداخت موفق شد",
+            "سکه‌های شما شارژ شد.",
+            True,
+            "به اپ چهره‌ساز برگردید؛ سکه‌ها همان‌جا به حساب شما اضافه شده است.",
+        )
+    if purchase.status == "failed":
+        return _zibal_result_page(
+            "پرداخت ناموفق",
+            "این پرداخت ناموفق ثبت شده است.",
+            False,
+            "پولی از حساب شما کم نشده است.",
+        )
+    try:
+        result = zibal_svc.verify_payment(purchase.zibal_track_id, purchase.amount_irr)
+    except zibal_svc.ZibalNotConfigured:
+        _log_verify_attempt(
+            purchase.user_id, purchase.pack_id, purchase.zibal_track_id,
+            "zibal", False, "zibal is not configured", purchase.id,
+        )
+        return _zibal_result_page(
+            "وضعیت پرداخت نامشخص",
+            "درگاه پرداخت در دسترس نیست؛ وضعیت را در اپ بررسی کنید.",
+            False,
+            "وضعیت پرداخت را در اپ بررسی کنید.",
+        )
+    except zibal_svc.ZibalError as exc:
+        _log_verify_attempt(
+            purchase.user_id, purchase.pack_id, purchase.zibal_track_id,
+            "zibal", False, str(exc), purchase.id,
+        )
+        return _zibal_result_page(
+            "وضعیت پرداخت نامشخص",
+            "نتیجه‌ی پرداخت مشخص نشد؛ وضعیت را در اپ بررسی کنید.",
+            False,
+            "وضعیت پرداخت را در اپ بررسی کنید.",
+        )
+    if result["paid"]:
+        user = AppUser.query.get(purchase.user_id)
+        pack = AppCoinPack.query.get(purchase.pack_id)
+        zibal_svc.settle_purchase(user, pack, purchase)
+        _log_verify_attempt(
+            purchase.user_id, purchase.pack_id, purchase.zibal_track_id,
+            "zibal", True, None, purchase.id,
+        )
+        return _zibal_result_page(
+            "پرداخت موفق شد",
+            "سکه‌های شما شارژ شد.",
+            True,
+            "به اپ چهره‌ساز برگردید؛ سکه‌ها همان‌جا به حساب شما اضافه شده است.",
+        )
+    purchase.status = "failed"
+    db.session.commit()
+    _log_verify_attempt(
+        purchase.user_id, purchase.pack_id, purchase.zibal_track_id,
+        "zibal", False, "zibal verify: not paid", purchase.id,
+    )
+    return _zibal_result_page(
+        "پرداخت ناموفق",
+        "پرداخت کامل نشد.",
+        False,
+        "پولی از حساب شما کم نشده است.",
+    )
+
+
+@coins_bp.post("/coins/purchases/<int:purchase_id>/zibal/recheck")
+@require_auth
+def zibal_recheck(purchase_id):
+    """بررسی دوباره‌ی پرداخت زیبال (مسیر بازیابی اپ — G1): وقتی کالبک
+    کاربر را به اپ برنگرداند، اپ با همین endpoint وضعیت را می‌پرسد."""
+    purchase = AppPurchase.query.get(purchase_id)
+    if not purchase or purchase.user_id != g.user.id:
+        return jsonify({"error": "purchase not found"}), 404
+    if getattr(purchase, "gateway", "bazaar") != "zibal" or not purchase.zibal_track_id:
+        return jsonify({"error": "not a zibal purchase"}), 400
+    if purchase.status in ("verified", "consumed"):
+        return jsonify(
+            {
+                "id": purchase.id,
+                "status": purchase.status,
+                "balance": coins_svc.get_balance(g.user),
+            }
+        )
+    if purchase.status == "failed":
+        return jsonify(
+            {
+                "id": purchase.id,
+                "status": "failed",
+                "balance": coins_svc.get_balance(g.user),
+            }
+        )
+    try:
+        result = zibal_svc.verify_payment(purchase.zibal_track_id, purchase.amount_irr)
+    except zibal_svc.ZibalNotConfigured:
+        return jsonify({"error": "zibal is not configured"}), 503
+    except zibal_svc.ZibalError:
+        return jsonify({"error": "zibal unreachable", "status": "pending"}), 502
+    if result["paid"]:
+        user = AppUser.query.get(purchase.user_id)
+        pack = AppCoinPack.query.get(purchase.pack_id)
+        _, already, gift = zibal_svc.settle_purchase(user, pack, purchase)
+        _log_verify_attempt(
+            g.user.id, purchase.pack_id, purchase.zibal_track_id,
+            "zibal", True, None, purchase.id,
+        )
+        return jsonify(
+            {
+                "id": purchase.id,
+                "status": purchase.status,
+                "gift_coins": gift,
+                "already_credited": already,
+                "balance": coins_svc.get_balance(g.user),
+            }
+        )
+    purchase.status = "failed"
+    db.session.commit()
+    _log_verify_attempt(
+        g.user.id, purchase.pack_id, purchase.zibal_track_id,
+        "zibal", False, "zibal verify: not paid", purchase.id,
+    )
+    return jsonify(
+        {
+            "id": purchase.id,
+            "status": "failed",
+            "balance": coins_svc.get_balance(g.user),
+        }
+    )
+
+
+@coins_bp.get("/coins/purchases/zibal/go/<track_id>")
+def zibal_go(track_id):
+    """صفحه‌ی واسط Referer (G2): زیبال موقع فرود روی درگاه، Referer
+    غیرخالی می‌خواهد؛ اپ این آدرس را باز می‌کند، نه آدرس خام درگاه را."""
+    url = "https://gateway.zibal.ir/start/{}".format(track_id)
+    return (
+        '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<meta http-equiv="refresh" content="0; url=' + url + '">'
+        "<title>در حال انتقال به درگاه پرداخت…</title></head>"
+        '<body style="font-family:Tahoma,sans-serif;text-align:center;padding:48px 16px">'
+        "<p>در حال انتقال به درگاه پرداخت…</p>"
+        '<p><a href="' + url + '">اگر منتقل نشدید، اینجا را بزنید.</a></p>'
+        "</body></html>"
+    )
 
 
 # ---------------- purchases: verify + pending + ledger ----------------
@@ -1276,6 +1559,8 @@ def pending_purchases():
                 "pack_id": r.pack_id,
                 "amount_irr": r.amount_irr,
                 "purchase_token": r.bazaar_purchase_token,
+                "gateway": getattr(r, "gateway", "bazaar"),
+                "zibal_track_id": getattr(r, "zibal_track_id", None),
             }
             for r in rows
         ]
@@ -1945,6 +2230,8 @@ def _pack_admin(p):
         "is_active": bool(p.is_active),
         "gift_coins": p.gift_coins or 0,
         "gift_scope": p.gift_scope or "every",
+        "bazaar_enabled": bool(getattr(p, "bazaar_enabled", True)),
+        "zibal_enabled": bool(getattr(p, "zibal_enabled", False)),
     }
 
 
@@ -1988,6 +2275,8 @@ def admin_create_pack():
         is_active=bool(body.get("is_active", True)),
         gift_coins=_gift_coins_value(body.get("gift_coins", 0)),
         gift_scope=_gift_scope_value(body.get("gift_scope", "every")),
+        bazaar_enabled=bool(body.get("bazaar_enabled", True)),
+        zibal_enabled=bool(body.get("zibal_enabled", False)),
     )
     db.session.add(p)
     db.session.commit()
@@ -2014,6 +2303,10 @@ def admin_update_pack(pack_id):
         p.gift_coins = _gift_coins_value(body["gift_coins"])
     if "gift_scope" in body:
         p.gift_scope = _gift_scope_value(body["gift_scope"])
+    if "bazaar_enabled" in body:
+        p.bazaar_enabled = bool(body["bazaar_enabled"])
+    if "zibal_enabled" in body:
+        p.zibal_enabled = bool(body["zibal_enabled"])
     db.session.commit()
     return jsonify(_pack_admin(p))
 
@@ -2850,6 +3143,9 @@ def _purchase_admin(r, mobile, pack_name, pack_coins):
         # توکن کامل خرید بازار در ادمین نمایش داده می‌شود (دستور ۲۰۲۶-۱۱-۱۷).
         "token": tok,
         "token_tail": ("…" + tok[-6:]) if len(tok) > 6 else tok,
+        # v17 زیبال: درگاه + trackId (ردیف زیبال توکن بازار ندارد).
+        "gateway": getattr(r, "gateway", "bazaar"),
+        "zibal_track_id": getattr(r, "zibal_track_id", None),
         "verified_at": r.verified_at.isoformat() if r.verified_at else None,
         "created_at": r.created_at.isoformat() if r.created_at else None,
     }

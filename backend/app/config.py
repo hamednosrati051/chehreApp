@@ -47,6 +47,20 @@ class Config:
     # مثل بازار: تا وقتی ست نشده، تایید خرید مایکت fail می‌شود.
     MYKET_RSA_PUBLIC_KEY = os.environ.get("APP_MYKET_RSA_PUBLIC_KEY", "")
 
+    # درگاه زیبال خود اپ (نسخه‌ی ۱۷؛ همان مرچنت نورا، ولی با کلیدهای
+    # جدا در env خود اپ). تا وقتی APP_ZIBAL_MERCHANT ست نشده، ساخت
+    # پرداخت زیبال با ۵۰۳ رد می‌شود — هرگز بدون مرچنت پرداختی ساخته
+    # نمی‌شود. مقدار مرچنت فقط روی سرور در .env می‌نشیند؛ هرگز در
+    # چت، گیت یا فضای کاری نمی‌آید.
+    ZIBAL_MERCHANT = os.environ.get("APP_ZIBAL_MERCHANT", "")
+    ZIBAL_API_BASE_URL = os.environ.get(
+        "APP_ZIBAL_API_BASE_URL", "https://gateway.zibal.ir/v1"
+    )
+    ZIBAL_CALLBACK_URL = os.environ.get(
+        "APP_ZIBAL_CALLBACK_URL",
+        "https://chehre.inourai.ir/api/v1/coins/purchases/zibal/callback",
+    )
+
     # توکن ربات بله برای انتشار گالری در کانال @iNourAi (ربات خود چهره‌ساز).
     # تا وقتی ست نشده، انتشار در کانال با خطای روشن رد می‌شود — هرگز
     # توکنی در کد ساخته/کپی نمی‌شود.

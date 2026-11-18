@@ -13,9 +13,9 @@ android {
         applicationId = "ir.inourai.newapp"
         minSdk = 26
         targetSdk = 34
-        // v16: پاپ‌آپ هدیه برای هر ثبت‌نام جدید (حذف محدودیت یک بار در هر گوشی).
-        versionCode = 16
-        versionName = "1.6"
+        // v17: اصلاح پرداخت بازار — isBillingSupported قبل از getBuyIntent + پیام خطای مشخص.
+        versionCode = 17
+        versionName = "1.7"
     }
 
     // دو خروجی از یک کد (v15 برای مایکت): بازار و مایکت — همان versionCode/versionName.
@@ -136,6 +136,11 @@ dependencies {
 
     // v13: Bazaar native login (CafeBazaarAuth via JitPack).
     implementation("com.github.cafebazaar.CafeBazaarAuth:auth:1.1.0")
+
+    // v17: Poolakey — Bazaar's official billing library (JitPack).
+    // در هر دو فلِیور کامپایل می‌شود ولی فقط فلِیور بازار صدایش می‌زند؛
+    // مایکت همان AIDL دستی را دارد (dispatch در Billing).
+    implementation("com.github.cafebazaar.Poolakey:poolakey:2.3.0")
 
     // پین lifecycle روی 2.8.3 — فیکس کرش لانچ:
     // navigation-compose 2.8.0 در NavHost از viewModel()‎ با CreationExtras

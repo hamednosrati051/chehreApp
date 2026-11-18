@@ -75,6 +75,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ir.inourai.newapp.billing.StoreConfig
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Balance
 import ir.inourai.newapp.data.PaymentItem
@@ -305,11 +306,17 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     LinkRow(
                         icon = Icons.Rounded.Star,
-                        title = "امتیاز به چهره‌ساز در بازار",
+                        // v17 (S2): نام استور همین فلِیور.
+                        title = if (StoreConfig.STORE_ID == "myket") "امتیاز به چهره‌ساز در مایکت" else "امتیاز به چهره‌ساز در بازار",
                         iconBg = Color(0xFFFFF3D6), iconTint = Color(0xFFB77900),
                         external = true,
                         onClick = {
-                            val url = pubSettings.bazaar_url.ifBlank { "https://cafebazaar.ir/app/" + context.packageName }
+                            // v17 (S2): مایکت → لینک مایکت از تنظیمات (یا خودکار).
+                            val url = if (StoreConfig.STORE_ID == "myket") {
+                                pubSettings.myket_url.ifBlank { "https://myket.ir/app/" + context.packageName }
+                            } else {
+                                pubSettings.bazaar_url.ifBlank { "https://cafebazaar.ir/app/" + context.packageName }
+                            }
                             context.startActivity(
                                 Intent(Intent.ACTION_VIEW, Uri.parse(url)),
                             )

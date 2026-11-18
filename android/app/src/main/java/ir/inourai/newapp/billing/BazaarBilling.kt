@@ -5,15 +5,34 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.Parcel
 import android.util.Log
+import androidx.activity.ComponentActivity
+import ir.cafebazaar.poolakey.Connection
+import ir.cafebazaar.poolakey.Payment
+import ir.cafebazaar.poolakey.config.PaymentConfiguration
+import ir.cafebazaar.poolakey.config.SecurityCheck
+import ir.cafebazaar.poolakey.exception.AbortedException
+import ir.cafebazaar.poolakey.exception.BazaarNotFoundException
+import ir.cafebazaar.poolakey.exception.BazaarNotSupportedException
+import ir.cafebazaar.poolakey.exception.DisconnectException
+import ir.cafebazaar.poolakey.exception.DynamicPriceNotSupportedException
+import ir.cafebazaar.poolakey.exception.IAPNotSupportedException
+import ir.cafebazaar.poolakey.exception.PurchaseHijackedException
+import ir.cafebazaar.poolakey.exception.ResultNotOkayException
+import ir.cafebazaar.poolakey.exception.SubsNotSupportedException
+import ir.cafebazaar.poolakey.request.PurchaseRequest
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.CreatePendingPurchaseRequest
 import ir.inourai.newapp.data.PurchaseVerifyRequest
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import kotlin.coroutines.resume
@@ -30,15 +49,57 @@ import kotlin.coroutines.resumeWithException
  *  ← رفرش موجودی. خرید ناتمام (وریفای‌شده ولی consumeنشده، یا برعکس)
  *  موقع شروع اپ با recoverPurchases بازیابی می‌شود.
  *
- *  توجه: وریفای سروری فعلاً فقط امضای بازار را می‌شناسد؛ خرید مایکت تا وقتی
- *  وریفای مایکت در سرور اضافه نشده، در verifyAndConsume رد می‌شود (کار بعدی،
- *  بعد از دادن کلید مایکت). خود bind و شروع خرید مایکت از همین حالا درست است.
+ *  توجه: وریفای سروری امضای بازار و مایکت هر دو را می‌شناسد (مایکت فقط
+ *  وقتی امضای بازار نامعتبر بود، امتحان می‌شود). خود bind و شروع خرید
+ *  مایکت از همین حالا درست است.
  */
 data class OwnedPurchase(
     val purchaseToken: String,
     val sku: String,
     val purchaseData: String,
     val signature: String,
+)
+
+/** مرحله‌ی شکستِ بازشدن پرداخت استور — برای پیام دقیق به کاربر و
+ *  تشخیص علت (به‌جای پیام کلی «دوباره تلاش کن»). */
+enum class BillingLaunchStage {
+    BIND_FAILED, // bindService همان اول false داد (سرویس استور در دسترس نیست)
+    BIND_TIMEOUT, // اتصال به سرویس استور بیش از ۱۵ ثانیه طول کشید
+    BILLING_UNSUPPORTED, // isBillingSupported کد غیرصفر برگرداند
+    BUY_INTENT_FAILED, // getBuyIntent کد غیرصفر برگرداند
+    NO_BUY_INTENT, // getBuyIntent باندل یا BUY_INTENT نداشت
+    NO_BINDER, // سرویس وصل شد ولی binder نداشت
+    DISCONNECTED, // اتصال برقرار به استور وسط کار قطع شد (فقط Poolakey)
+}
+
+/** تشخیص‌های دستگاه/نصب که علت شکستِ بازشدن پرداخت را مشخص می‌کنند.
+ *  مهم‌ترین‌شان installerPackage است: اگر نصب‌کننده‌ی همین اپ پکیج
+ *  استور نباشد (مثلاً سایدلود از لینک مستقیم)، استور به آن پرداخت
+ *  نمی‌دهد — حتی اگر اپ استور نصب باشد و ورود با آن کار کند. */
+data class BillingDiagnostics(
+    val storeId: String, // bazaar / myket (فلِیور همین بیلد)
+    val marketPackage: String, // پکیج استور همین فلِیور
+    val storeAppInstalled: Boolean, // اپ استور روی گوشی نصب است؟
+    val storeAppVersion: String?, // نسخه‌ی اپ استور (اگر نصب است)
+    val installerPackage: String?, // نصب‌کننده‌ی همین اپ؛ برابر marketPackage یعنی از استور نصب شده، null یا غیر آن یعنی سایدلود/نامشخص
+    val isBillingSupportedCode: Int?,
+    val buyIntentCode: Int?,
+)
+
+/** خطای typed بازشدن پرداخت: مرحله + کد استور + تشخیص‌ها. پیام
+ *  exception خودش همه‌ی تشخیص‌ها را دارد تا در Logcat خوانا باشد. */
+class BillingLaunchException(
+    val stage: BillingLaunchStage,
+    val code: Int? = null,
+    val diagnostics: BillingDiagnostics,
+    val storeName: String,
+) : RuntimeException(
+    "billing launch failed stage=$stage code=$code store=${diagnostics.storeId} " +
+        "storeAppInstalled=${diagnostics.storeAppInstalled} " +
+        "storeAppVersion=${diagnostics.storeAppVersion} " +
+        "installer=${diagnostics.installerPackage} " +
+        "isBillingSupported=${diagnostics.isBillingSupportedCode} " +
+        "buyIntent=${diagnostics.buyIntentCode}",
 )
 
 private const val DESCRIPTOR = "com.android.vending.billing.IInAppBillingService"
@@ -236,6 +297,72 @@ open class StoreBilling(
     private val marketPackage: String,
     private val bindAction: String,
 ) {
+    /** نام فارسی استور همین فلِیور برای پیام کاربر. */
+    private val storeDisplayName: String
+        get() = if (StoreConfig.STORE_ID == "myket") "مایکت" else "بازار"
+
+    /** نصب‌کننده‌ی همین اپ: برابر پکیج استور یعنی از استور نصب شده؛
+     *  null یا پکیج دیگر یعنی سایدلود/نامشخص. هرگز خطا نمی‌دهد. */
+    private fun installerPackage(context: Context): String? {
+        return try {
+            val pm = context.packageManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                pm.getInstallSourceInfo(context.packageName).installingPackageName
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getInstallerPackageName(context.packageName)
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** تشخیص‌های دستگاه/نصب را جمع می‌کند؛ هرگز خطا نمی‌دهد (هر
+     *  فیلد ناموفق null/false می‌شود تا خطای اصلی گم نشود). */
+    private fun collectDiagnostics(
+        context: Context,
+        isBillingSupportedCode: Int? = null,
+        buyIntentCode: Int? = null,
+    ): BillingDiagnostics {
+        var storeInstalled = false
+        var storeVersion: String? = null
+        try {
+            val info = context.packageManager.getPackageInfo(marketPackage, 0)
+            storeInstalled = true
+            storeVersion = info.versionName
+        } catch (_: Exception) {
+            // اپ استور نصب نیست (یا دیده نمی‌شود) — همان هم یک تشخیص است.
+        }
+        return BillingDiagnostics(
+            storeId = StoreConfig.STORE_ID,
+            marketPackage = marketPackage,
+            storeAppInstalled = storeInstalled,
+            storeAppVersion = storeVersion,
+            installerPackage = installerPackage(context),
+            isBillingSupportedCode = isBillingSupportedCode,
+            buyIntentCode = buyIntentCode,
+        )
+    }
+
+    /** خطای typed بازشدن پرداخت را می‌سازد و کامل در Logcat می‌نویسد
+     *  (تگ ChehreSazBilling) تا علت دقیق از روی گوشی خوانا باشد. */
+    protected fun billingFailure(
+        context: Context,
+        stage: BillingLaunchStage,
+        code: Int? = null,
+        isBillingSupportedCode: Int? = null,
+        buyIntentCode: Int? = null,
+    ): BillingLaunchException {
+        val ex = BillingLaunchException(
+            stage = stage,
+            code = code,
+            diagnostics = collectDiagnostics(context, isBillingSupportedCode, buyIntentCode),
+            storeName = storeDisplayName,
+        )
+        Log.e("ChehreSazBilling", "billing launch failed: $ex", ex)
+        return ex
+    }
+
     private suspend fun <T> withService(
         context: Context,
         block: (InAppBillingProxy) -> T,
@@ -247,7 +374,7 @@ open class StoreBilling(
                         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
                             try {
                                 val service = binder?.let { InAppBillingProxy(it) }
-                                    ?: throw IllegalStateException("no binder from $marketPackage")
+                                    ?: throw billingFailure(context, BillingLaunchStage.NO_BINDER)
                                 val result = block(service)
                                 if (cont.isActive) cont.resume(result)
                             } catch (e: Exception) {
@@ -270,7 +397,7 @@ open class StoreBilling(
                     if (!bound) {
                         if (cont.isActive) {
                             cont.resumeWithException(
-                                IllegalStateException("billing service not available ($marketPackage)"),
+                                billingFailure(context, BillingLaunchStage.BIND_FAILED),
                             )
                         }
                     }
@@ -283,29 +410,55 @@ open class StoreBilling(
                 }
             }
         } catch (e: TimeoutCancellationException) {
-            throw IllegalStateException("billing service timeout ($marketPackage)")
+            throw billingFailure(context, BillingLaunchStage.BIND_TIMEOUT)
         }
     }
 
-    /** ساخت Intent خرید برای یک SKU؛ لانچ آن با StartIntentSenderForResult است. */
+    /** ساخت Intent خرید برای یک SKU؛ لانچ آن با StartIntentSenderForResult است.
+     *  پیش از getBuyIntent، isBillingSupported صدا زده می‌شود (جریان
+     *  استاندارد IABv3؛ همان کاری که Poolakey موقع اتصال می‌کند) تا
+     *  پشتیبانی‌نشدنِ پرداخت پیش از ساخت Intent مشخص شود و کد واقعی‌اش
+     *  در خطا بیاید. هر شکست یک BillingLaunchException typed است. */
     suspend fun getBuyIntentSender(context: Context, sku: String): IntentSender {
         return withService(context) { service ->
+            val supported = try {
+                service.isBillingSupported(API_VERSION, context.packageName, TYPE_INAPP)
+            } catch (e: Exception) {
+                throw billingFailure(context, BillingLaunchStage.BILLING_UNSUPPORTED)
+            }
+            if (supported != 0) {
+                throw billingFailure(
+                    context,
+                    BillingLaunchStage.BILLING_UNSUPPORTED,
+                    supported,
+                    isBillingSupportedCode = supported,
+                )
+            }
             val result = service.getBuyIntent(
                 API_VERSION,
                 context.packageName,
                 sku,
                 TYPE_INAPP,
                 "",
-            ) ?: throw RuntimeException("no buy intent from $marketPackage")
-            if (result.getInt("RESPONSE_CODE") != 0) {
-                throw RuntimeException(
-                    "buy intent failed: ${result.getInt("RESPONSE_CODE")} ($marketPackage)",
+            ) ?: throw billingFailure(context, BillingLaunchStage.NO_BUY_INTENT)
+            val code = result.getInt("RESPONSE_CODE")
+            if (code != 0) {
+                throw billingFailure(
+                    context,
+                    BillingLaunchStage.BUY_INTENT_FAILED,
+                    code,
+                    isBillingSupportedCode = supported,
+                    buyIntentCode = code,
                 )
             }
             @Suppress("DEPRECATION")
             val pendingIntent = result.getParcelable<android.app.PendingIntent>("BUY_INTENT")
             pendingIntent?.intentSender
-                ?: throw RuntimeException("no buy intent from $marketPackage")
+                ?: throw billingFailure(
+                    context,
+                    BillingLaunchStage.NO_BUY_INTENT,
+                    buyIntentCode = code,
+                )
         }
     }
 
@@ -325,7 +478,7 @@ open class StoreBilling(
     }
 
     /** خریدهای مصرف‌نشده‌ی استور (برای بازیابی خریدهای ناتمام). */
-    suspend fun getOwnedPurchases(context: Context): List<OwnedPurchase> {
+    open suspend fun getOwnedPurchases(context: Context): List<OwnedPurchase> {
         return withService(context) { service ->
             val out = mutableListOf<OwnedPurchase>()
             var continuation: String? = null
@@ -359,7 +512,7 @@ open class StoreBilling(
     }
 
     /** مصرف خرید در استور بعد از وریفای موفق سرور. */
-    suspend fun consume(context: Context, purchaseToken: String) {
+    open suspend fun consume(context: Context, purchaseToken: String) {
         withService(context) { service ->
             val code = service.consumePurchase(
                 API_VERSION,
@@ -369,6 +522,9 @@ open class StoreBilling(
             if (code != 0) throw RuntimeException("consume failed: $code")
         }
     }
+
+    /** قطع اتصال استور (موقع destroy شدن اپ)؛ پیاده‌سازی پایه هیچ‌کاری نمی‌کند. */
+    open fun disconnect() {}
 
     /** وریفای سروری + consume؛ سرور idempotency را تضمین می‌کند
      *  (توکن تکراری دوباره شارژ نمی‌شود). برمی‌گرداند سکه‌ی هدیه‌ی
@@ -437,7 +593,240 @@ open class StoreBilling(
     }
 }
 
+/** v17: پیاده‌سازی Poolakey برای فلِیور بازار — جایگزین AIDL دستی.
+ *  فقط وقتی STORE_ID == "bazaar" استفاده می‌شود؛ مایکت همان StoreBilling
+ *  (AIDL دستی) را دارد. اتصال Poolakey یک‌بار برقرار و نگه داشته می‌شود؛
+ *  همه‌ی متدهای suspend پیش از کار، اتصال را تضمین می‌کنند.
+ *
+ *  بررسی امضای محلی (SecurityCheck) خاموش است — هیچ کلید RSA در اپ نیست؛
+ *  وریفای خرید فقط سروری است (کلید RSA در env بک‌اند) و همان مرجع نهایی است.
+ *  verifyAndConsume / createPendingPurchase / recoverPurchases از کلاس
+ *  پایه به ارث می‌رسند و بدون تغییر همان‌اند؛ فقط ترابری (اتصال، خرید،
+ *  query، consume) عوض شده است. */
+class PoolakeyStoreBilling(
+    marketPackage: String,
+    bindAction: String,
+) : StoreBilling(marketPackage, bindAction) {
+    @Volatile
+    private var payment: Payment? = null
+
+    @Volatile
+    private var connection: Connection? = null
+    private val connectMutex = Mutex()
+
+    /** خطای Poolakey را به مرحله‌ی دقیق نگاشت می‌کند (برای پیام کاربر). */
+    private fun mapPoolakeyError(context: Context, t: Throwable): BillingLaunchException {
+        val stage = when (t) {
+            is BazaarNotFoundException -> BillingLaunchStage.BIND_FAILED
+            is BazaarNotSupportedException -> BillingLaunchStage.BILLING_UNSUPPORTED
+            is IAPNotSupportedException -> BillingLaunchStage.BILLING_UNSUPPORTED
+            is SubsNotSupportedException -> BillingLaunchStage.BILLING_UNSUPPORTED
+            is DisconnectException -> BillingLaunchStage.DISCONNECTED
+            is ResultNotOkayException -> BillingLaunchStage.BUY_INTENT_FAILED
+            is PurchaseHijackedException -> BillingLaunchStage.BUY_INTENT_FAILED
+            is DynamicPriceNotSupportedException -> BillingLaunchStage.BUY_INTENT_FAILED
+            is AbortedException -> BillingLaunchStage.BUY_INTENT_FAILED
+            else -> BillingLaunchStage.BUY_INTENT_FAILED
+        }
+        val code = if (t is IAPNotSupportedException) 3 else null
+        return billingFailure(context, stage, code)
+    }
+
+    /** اتصال Poolakey را برقرار می‌کند (اگر برقرار نیست) و Payment را
+     *  برمی‌گرداند؛ هر شکست BillingLaunchException است. */
+    private suspend fun ensureConnected(context: Context): Payment {
+        payment?.let { return it }
+        return connectMutex.withLock {
+            payment?.let { return@withLock it }
+            val pay = Payment(
+                context.applicationContext,
+                PaymentConfiguration(SecurityCheck.Disable, false),
+            )
+            val conn = try {
+                withTimeout(BIND_TIMEOUT_MS) {
+                    // نوع را صریح می‌دهیم تا استنتاج T از resume گیر نکند.
+                    suspendCancellableCoroutine<Connection> { cont ->
+                        val c = pay.connect {
+                            connectionSucceed {
+                                if (cont.isActive) cont.resume(this)
+                            }
+                            connectionFailed { t ->
+                                if (cont.isActive) {
+                                    cont.resumeWithException(mapPoolakeyError(context, t))
+                                }
+                            }
+                            disconnected {
+                                payment = null
+                                connection = null
+                            }
+                        }
+                        cont.invokeOnCancellation {
+                            try {
+                                c.disconnect()
+                            } catch (_: Exception) {
+                            }
+                        }
+                    }
+                }
+            } catch (e: TimeoutCancellationException) {
+                throw billingFailure(context, BillingLaunchStage.BIND_TIMEOUT)
+            }
+            connection = conn
+            payment = pay
+            pay
+        }
+    }
+
+    /** خرید یک SKU از راه Poolakey؛ برمی‌گرداند OwnedPurchase، یا null اگر
+     *  کاربر پرداخت را لغو کرد. onFlowBegan وقتی صدا زده می‌شود که صفحه‌ی
+     *  پرداخت بازار دارد باز می‌شود (همان‌جا ردیف pending ساخته می‌شود — B2).
+     *  هر شکست دیگر BillingLaunchException است. */
+    suspend fun purchaseProduct(
+        context: Context,
+        sku: String,
+        onFlowBegan: (() -> Unit)? = null,
+    ): OwnedPurchase? {
+        val pay = ensureConnected(context)
+        val registry = (context as? ComponentActivity)?.activityResultRegistry
+            ?: throw billingFailure(context, BillingLaunchStage.BIND_FAILED)
+        return suspendCancellableCoroutine { cont ->
+            // توجه: کالبک‌های Poolakey همه به‌صورت receiver می‌آیند
+            // (نه پارامتر)؛ `this` همان PurchaseCallback است.
+            pay.purchaseProduct(registry, PurchaseRequest(sku, "", "")) {
+                purchaseFlowBegan { onFlowBegan?.invoke() }
+                purchaseSucceed { info ->
+                    if (cont.isActive) {
+                        cont.resume(
+                            OwnedPurchase(
+                                purchaseToken = info.purchaseToken,
+                                sku = info.productId,
+                                purchaseData = info.originalJson,
+                                signature = info.dataSignature,
+                            ),
+                        )
+                    }
+                }
+                purchaseCanceled {
+                    if (cont.isActive) cont.resume(null)
+                }
+                purchaseFailed { t ->
+                    if (cont.isActive) cont.resumeWithException(mapPoolakeyError(context, t))
+                }
+                failedToBeginFlow { t ->
+                    if (cont.isActive) cont.resumeWithException(mapPoolakeyError(context, t))
+                }
+            }
+        }
+    }
+
+    /** خریدهای مصرف‌نشده‌ی استور (برای بازیابی خریدهای ناتمام). */
+    override suspend fun getOwnedPurchases(context: Context): List<OwnedPurchase> {
+        val pay = ensureConnected(context)
+        return suspendCancellableCoroutine { cont ->
+            pay.getPurchasedProducts {
+                querySucceed { list ->
+                    if (cont.isActive) {
+                        cont.resume(
+                            list.map {
+                                OwnedPurchase(
+                                    purchaseToken = it.purchaseToken,
+                                    sku = it.productId,
+                                    purchaseData = it.originalJson,
+                                    signature = it.dataSignature,
+                                )
+                            },
+                        )
+                    }
+                }
+                queryFailed { t ->
+                    if (cont.isActive) cont.resumeWithException(mapPoolakeyError(context, t))
+                }
+            }
+        }
+    }
+
+    /** مصرف خرید در استور بعد از وریفای موفق سرور. */
+    override suspend fun consume(context: Context, purchaseToken: String) {
+        val pay = ensureConnected(context)
+        return suspendCancellableCoroutine { cont ->
+            // توجه: consumeProduct برخلاف بقیه‌ی متدهای Poolakey، کالبک را
+            // به‌صورت receiver می‌گیرد (نه پارامتر)؛ پس `this` همان
+            // ConsumeCallback است و پارامتر صریح نمی‌گیرد.
+            pay.consumeProduct(purchaseToken) {
+                consumeSucceed {
+                    if (cont.isActive) cont.resume(Unit)
+                }
+                consumeFailed { t ->
+                    if (cont.isActive) {
+                        cont.resumeWithException(RuntimeException("consume failed: ${t.message}"))
+                    }
+                }
+            }
+        }
+    }
+
+    /** قطع اتصال Poolakey (موقع destroy شدن اپ). */
+    override fun disconnect() {
+        try {
+            connection?.disconnect()
+        } catch (_: Exception) {
+        }
+        connection = null
+        payment = null
+    }
+}
+
 /** نقطه‌ی ورود پرداخت برای همین بیلد: پکیج استور و اکشن bind از
  *  StoreConfig فلِیور می‌آیند (src/bazaar و src/myket) — فلِیور بازار → بازار،
- *  فلِیور مایکت → مایکت. رفتار فلِیور بازار دقیقاً مثل قبل است. */
-object Billing : StoreBilling(StoreConfig.MARKET_PACKAGE, StoreConfig.BILLING_BIND_ACTION)
+ *  فلِیور مایکت → مایکت. فلِیور بازار با Poolakey می‌خرد، مایکت با همان
+ *  AIDL دستی؛ بقیه‌ی جریان (وریفای سروری، pending، بازیابی) یکی است. */
+object Billing {
+    private val delegate: StoreBilling =
+        if (StoreConfig.STORE_ID == "bazaar") {
+            PoolakeyStoreBilling(StoreConfig.MARKET_PACKAGE, StoreConfig.BILLING_BIND_ACTION)
+        } else {
+            StoreBilling(StoreConfig.MARKET_PACKAGE, StoreConfig.BILLING_BIND_ACTION)
+        }
+
+    /** true یعنی همین فلِیور با Poolakey می‌خرد (بازار)؛ مایکت همان AIDL دستی است. */
+    val isPoolakey: Boolean get() = delegate is PoolakeyStoreBilling
+
+    suspend fun getBuyIntentSender(context: Context, sku: String): IntentSender =
+        delegate.getBuyIntentSender(context, sku)
+
+    fun parsePurchaseResult(data: Intent?): OwnedPurchase? =
+        delegate.parsePurchaseResult(data)
+
+    suspend fun getOwnedPurchases(context: Context): List<OwnedPurchase> =
+        delegate.getOwnedPurchases(context)
+
+    suspend fun consume(context: Context, purchaseToken: String) =
+        delegate.consume(context, purchaseToken)
+
+    suspend fun verifyAndConsume(
+        context: Context,
+        purchase: OwnedPurchase,
+        pendingId: Long? = null,
+    ): Int = delegate.verifyAndConsume(context, purchase, pendingId)
+
+    suspend fun createPendingPurchase(packId: Long): Long? =
+        delegate.createPendingPurchase(packId)
+
+    suspend fun recoverPurchases(context: Context): Int =
+        delegate.recoverPurchases(context)
+
+    /** خرید با Poolakey (فقط فلِیور بازار)؛ null یعنی کاربر لغو کرد.
+     *  onFlowBegan وقتی صدا زده می‌شود که صفحه‌ی پرداخت دارد باز می‌شود. */
+    suspend fun purchaseProduct(
+        context: Context,
+        sku: String,
+        onFlowBegan: (() -> Unit)? = null,
+    ): OwnedPurchase? {
+        val poolakey = delegate as? PoolakeyStoreBilling
+            ?: throw IllegalStateException("purchaseProduct is Bazaar-only")
+        return poolakey.purchaseProduct(context, sku, onFlowBegan)
+    }
+
+    /** قطع اتصال استور (موقع destroy شدن اپ)؛ برای مایکت هیچ‌کاری نمی‌کند. */
+    fun disconnect() = delegate.disconnect()
+}

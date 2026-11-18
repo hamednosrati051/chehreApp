@@ -178,6 +178,8 @@
       <label>ترتیب <input id="p-sort" type="number" value="0"></label>
       <label>سکه هدیه <input id="p-gift" type="number" value="0" min="0" placeholder="۰ = بدون هدیه"></label>
       <label>دامنه هدیه <select id="p-gift-scope"><option value="every">هدیه: همه خریدها</option><option value="first">هدیه: فقط خرید اول</option></select></label>
+      <label><input id="p-bazaar" type="checkbox" checked> پرداخت بازار</label>
+      <label><input id="p-zibal" type="checkbox"> پرداخت زیبال</label>
       <span><button>ذخیره پک</button> <button type="button" class="gold" onclick="resetPackForm()">فرم جدید</button></span>
     </form>
     <input id="p-search" class="search" placeholder="جستجو در پک‌ها…">
@@ -332,6 +334,7 @@
       <textarea id="ps-bug" rows="3" placeholder="گزارش خطا (متن نمایشی در پروفایل)"></textarea>
       <textarea id="ps-rules" rows="8" placeholder="قوانین و حریم خصوصی (متن نمایشی در پروفایل)"></textarea>
       <input id="ps-bazaar" placeholder="لینک بازار (خالی = لینک خودکار با نام پکیج)">
+      <input id="ps-myket" placeholder="لینک مایکت (خالی = لینک خودکار با نام پکیج)">
       <button>ذخیره متن‌ها و لینک‌های عمومی</button>
     </form>
     <p class="muted">این پنج مورد در پروفایل اپ نمایش داده می‌شوند؛ هر کدام خالی باشد، اپ جای آن «به‌زودی» نشان می‌دهد (بازار: لینک خودکار).</p>
@@ -540,12 +543,12 @@ async function saveCat(e){ e.preventDefault(); const body = {name: $('c-name').v
 async function delCat(id){ if(!confirm('دسته حذف شود؟ (اگر دنیا داشته باشد رد می‌شود)')) return; try { await api('/admin/categories/' + id, 'DELETE'); loadCats(); } catch(err){ setMsg(err.message); } }
 
 async function loadPacks(){ const ps = await api('/admin/packs');
-  $('p-list').innerHTML = ps.length ? `<table><tr><th>نام</th><th>سکه</th><th>تومان</th><th>SKU</th><th>بج</th><th>نوع</th><th>هدیه</th><th>فعال</th><th></th></tr>` +
-    ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${esc(p.pack_type)}</td><td>${p.gift_coins ? `+${p.gift_coins}${p.gift_scope === 'first' ? ' (اول)' : ''}` : '—'}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>';
+  $('p-list').innerHTML = ps.length ? `<table><tr><th>نام</th><th>سکه</th><th>تومان</th><th>SKU</th><th>بج</th><th>نوع</th><th>هدیه</th><th>بازار</th><th>زیبال</th><th>فعال</th><th></th></tr>` +
+    ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${esc(p.pack_type)}</td><td>${p.gift_coins ? `+${p.gift_coins}${p.gift_scope === 'first' ? ' (اول)' : ''}` : '—'}</td><td>${p.bazaar_enabled === false ? '—' : '✓'}</td><td>${p.zibal_enabled ? '✓' : '—'}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>';
   applyFilter('p-list'); }
-function editPack(p){ editingPack = p.id; $('p-name').value = p.name; $('p-coins').value = p.coins; $('p-price').value = p.price_toman; $('p-sku').value = p.bazaar_sku; $('p-badge').value = p.badge || ''; $('p-type').value = p.pack_type || ''; $('p-sort').value = p.sort_order; $('p-gift').value = p.gift_coins || 0; $('p-gift-scope').value = p.gift_scope || 'every'; }
-function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-sku','p-badge','p-type'].forEach(i => $(i).value = ''); $('p-sort').value = 0; $('p-gift').value = 0; $('p-gift-scope').value = 'every'; }
-async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').value.trim(), coins: +$('p-coins').value, price_toman: +$('p-price').value, bazaar_sku: $('p-sku').value.trim(), badge: $('p-badge').value.trim() || null, pack_type: $('p-type').value.trim() || null, sort_order: +$('p-sort').value, gift_coins: +$('p-gift').value || 0, gift_scope: $('p-gift-scope').value};
+function editPack(p){ editingPack = p.id; $('p-name').value = p.name; $('p-coins').value = p.coins; $('p-price').value = p.price_toman; $('p-sku').value = p.bazaar_sku; $('p-badge').value = p.badge || ''; $('p-type').value = p.pack_type || ''; $('p-sort').value = p.sort_order; $('p-gift').value = p.gift_coins || 0; $('p-gift-scope').value = p.gift_scope || 'every'; $('p-bazaar').checked = p.bazaar_enabled !== false; $('p-zibal').checked = !!p.zibal_enabled; }
+function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-sku','p-badge','p-type'].forEach(i => $(i).value = ''); $('p-sort').value = 0; $('p-gift').value = 0; $('p-gift-scope').value = 'every'; $('p-bazaar').checked = true; $('p-zibal').checked = false; }
+async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').value.trim(), coins: +$('p-coins').value, price_toman: +$('p-price').value, bazaar_sku: $('p-sku').value.trim(), badge: $('p-badge').value.trim() || null, pack_type: $('p-type').value.trim() || null, sort_order: +$('p-sort').value, gift_coins: +$('p-gift').value || 0, gift_scope: $('p-gift-scope').value, bazaar_enabled: $('p-bazaar').checked, zibal_enabled: $('p-zibal').checked};
   try { editingPack ? await api('/admin/packs/' + editingPack, 'PATCH', body) : await api('/admin/packs', 'POST', body); setMsg('پک ذخیره شد.', true); resetPackForm(); loadPacks(); } catch(err){ setMsg(err.message); } }
 async function delPack(id){ if(!confirm('پک حذف شود؟')) return; try { await api('/admin/packs/' + id, 'DELETE'); loadPacks(); } catch(err){ setMsg(err.message); } }
 
@@ -581,14 +584,14 @@ async function saveModel(e){ e.preventDefault(); const body = {name: $('m-name')
 let puPageNo = 1;
 function puPage(n){ if(n < 1) return; puPageNo = n; loadPurchases(); }
 function applyPuFilter(e){ e.preventDefault(); puPageNo = 1; loadPurchases(); }
-const purchaseFa = {pending: 'در انتظار', verified: 'تأییدشده', consumed: 'مصرف‌شده'};
+const purchaseFa = {pending: 'در انتظار', verified: 'تأییدشده', consumed: 'مصرف‌شده', failed: 'ناموفق'};
 async function loadPurchases(){ const q = new URLSearchParams({status: $('pu-status').value, mobile: $('pu-mobile').value.trim(), date_from: $('pu-from').value, date_to: $('pu-to').value, page: puPageNo});
   const res = await api('/admin/purchases?' + q);
   $('pu-list').innerHTML = res.items.length ? `<table><tr><th>id</th><th>کاربر</th><th>موبایل</th><th>پک</th><th>سکه</th><th>مبلغ (ریال)</th><th>وضعیت</th><th>توکن</th><th>توکن بازار</th><th>تاریخ</th><th></th></tr>` +
-    res.items.map(r => `<tr><td>${r.id}</td><td>${r.user_id}</td><td>${esc(r.mobile)}</td><td>${esc(r.pack_name)}</td><td>${r.pack_coins}</td><td>${r.amount_irr.toLocaleString('fa-IR')}</td><td>${purchaseFa[r.status] || esc(r.status)}</td><td class="muted">${esc(r.token_tail)}</td><td class="muted" style="word-break:break-all;font-size:11px;">${esc(r.token || '')}</td><td class="muted">${esc(faDate(r.created_at))}</td><td><button class="small" onclick="loadPurchaseDetail(${r.id})">جزئیات</button></td></tr>`).join('') + '</table>' : '<p class="muted">پرداختی نیست.</p>';
+    res.items.map(r => `<tr><td>${r.id}</td><td>${r.user_id}</td><td>${esc(r.mobile)}</td><td>${esc(r.pack_name)}</td><td>${r.pack_coins}</td><td>${r.amount_irr.toLocaleString('fa-IR')}</td><td>${purchaseFa[r.status] || esc(r.status)}</td><td class="muted">${esc(r.token_tail)}</td><td class="muted" style="word-break:break-all;font-size:11px;">${esc(r.token || r.zibal_track_id || '')}</td><td class="muted">${esc(faDate(r.created_at))}</td><td><button class="small" onclick="loadPurchaseDetail(${r.id})">جزئیات</button></td></tr>`).join('') + '</table>' : '<p class="muted">پرداختی نیست.</p>';
   $('pu-pager').innerHTML = pagerHTML('pu', res); }
 async function loadPurchaseDetail(id){ const r = await api('/admin/purchases/' + id);
-  $('pu-detail').innerHTML = `<h3>پرداخت ${r.id}</h3><p>کاربر: ${r.user_id} | موبایل: ${esc(r.mobile)} | پک: ${esc(r.pack_name)} (${r.pack_coins} سکه) | مبلغ: ${r.amount_irr.toLocaleString('fa-IR')} ریال | وضعیت: ${purchaseFa[r.status] || esc(r.status)} | توکن بازار: <span class="muted" style="word-break:break-all;">${esc(r.token || r.token_tail || '')}</span> | تأیید: ${esc(faDate(r.verified_at))} | ثبت: ${esc(faDate(r.created_at))}</p>`; }
+  $('pu-detail').innerHTML = `<h3>پرداخت ${r.id}</h3><p>کاربر: ${r.user_id} | موبایل: ${esc(r.mobile)} | پک: ${esc(r.pack_name)} (${r.pack_coins} سکه) | مبلغ: ${r.amount_irr.toLocaleString('fa-IR')} ریال | وضعیت: ${purchaseFa[r.status] || esc(r.status)} | درگاه: ${esc(r.gateway || 'bazaar')} | توکن بازار: <span class="muted" style="word-break:break-all;">${esc(r.token || r.zibal_track_id || r.token_tail || '')}</span> | تأیید: ${esc(faDate(r.verified_at))} | ثبت: ${esc(faDate(r.created_at))}</p>`; }
 
 let vaPageNo = 1;
 function vaPage(n){ if(n < 1) return; vaPageNo = n; loadVerifyAttempts(); }
@@ -687,14 +690,14 @@ async function saveGiftToggle(e){ e.preventDefault(); try { await api('/admin/se
 async function saveSmsToggle(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'sms_login_disabled', value: $('s-sms').checked ? '1' : '0'}); setMsg('تنظیم ورود با پیامک ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function saveMinVersion(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'min_app_version_code', value: $('s-minver').value.trim()}); setMsg('حداقل نسخه ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function savePublicSettings(e){ e.preventDefault(); try {
-  for (const [k, id] of [['about_us','ps-about'],['support_info','ps-support'],['bug_report_info','ps-bug'],['rules_privacy','ps-rules'],['bazaar_url','ps-bazaar']]) {
+  for (const [k, id] of [['about_us','ps-about'],['support_info','ps-support'],['bug_report_info','ps-bug'],['rules_privacy','ps-rules'],['bazaar_url','ps-bazaar'],['myket_url','ps-myket']]) {
     await api('/admin/settings', 'PATCH', {key: k, value: $(id).value.trim()});
   }
   setMsg('متن‌ها و لینک‌های عمومی ذخیره شد.', true); loadSettings();
 } catch(err){ setMsg(err.message); } }
 async function loadPublicSettings(){ try { const ss = await api('/admin/settings');
   const m = {}; ss.forEach(s => m[s.key] = s.value);
-  $('ps-about').value = m.about_us || ''; $('ps-support').value = m.support_info || ''; $('ps-bug').value = m.bug_report_info || ''; $('ps-rules').value = m.rules_privacy || ''; $('ps-bazaar').value = m.bazaar_url || '';
+  $('ps-about').value = m.about_us || ''; $('ps-support').value = m.support_info || ''; $('ps-bug').value = m.bug_report_info || ''; $('ps-rules').value = m.rules_privacy || ''; $('ps-bazaar').value = m.bazaar_url || ''; $('ps-myket').value = m.myket_url || '';
 } catch(_){} }
 
 async function loadNotifs(){ const rows = await api('/admin/announcements');
