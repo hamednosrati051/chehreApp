@@ -748,7 +748,11 @@ def main():
         # --- (j) جاروکننده‌ی نسل‌های گیرکرده (۲ دقیقه، هر عکس جدا) ---
         past = datetime.datetime.utcnow() - datetime.timedelta(minutes=5)
         user.free_image_credits = 0
-        db.session.add(AppCoinBalance(user_id=user.id, balance=50))
+        bal = AppCoinBalance.query.get(user.id)
+        if bal is None:
+            db.session.add(AppCoinBalance(user_id=user.id, balance=50))
+        else:
+            bal.balance = 50
         db.session.commit()
         stale_coins = AppGeneration(
             id=next_id(), user_id=user.id, kind="image",
