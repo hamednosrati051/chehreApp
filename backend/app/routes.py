@@ -1717,11 +1717,97 @@ def _paginate(query, default_size=50):
     return items, {"total": total, "page": page, "page_size": page_size}
 
 
+# سهمیه روزانه مدل‌های رایگان کلادفلر (تخمین؛ سقف دقیق نورون سمت کلادفلر
+# است و از داده‌ی ما معلوم نیست). بیشترین عکس موفق یک روز ۹۳ بود.
+_CLOUDFLARE_DAILY_CAP_ESTIMATE = 93
+# ریست سهمیه روزانه، به وقت تهران.
+_CLOUDFLARE_RESET_TEHRAN = "03:30"
+
+
+def _cloudflare_quotas():
+    """باقی‌مانده امروز + وضعیت هر مدل رایگان کلادفلر.
+
+    429 یعنی سهمیه روزانه تمام شده. خطای مدل اصلی هدیه در ردیف ثبت
+    نمی‌شود (تلاش دوباره روی جایگزین می‌رود و خطای آن می‌ماند)؛ پس مدلی
+    که از آخرین 429 امروز موفق نداشته، تمام‌شده حساب می‌شود.
+    """
+    day_start = datetime.datetime.utcnow().replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    cf_ids = [
+        m.id
+        for m in AppModel.query.filter(
+            AppModel.provider_type == "cloudflare_workers_ai"
+        ).all()
+    ]
+    if not cf_ids:
+        return {}
+    done = {
+        mid: c
+        for mid, c in db.session.query(
+            AppGeneration.model_id, func.count(AppGeneration.id)
+        )
+        .filter(
+            AppGeneration.model_id.in_(cf_ids),
+            AppGeneration.status == "done",
+            AppGeneration.created_at >= day_start,
+        )
+        .group_by(AppGeneration.model_id)
+        .all()
+    }
+    last_429 = (
+        db.session.query(func.max(AppGeneration.created_at))
+        .filter(
+            AppGeneration.model_id.in_(cf_ids),
+            AppGeneration.status == "failed",
+            AppGeneration.created_at >= day_start,
+            AppGeneration.error_message.like("%daily free allocation%"),
+        )
+        .scalar()
+    )
+    last_done = {
+        mid: ts
+        for mid, ts in db.session.query(
+            AppGeneration.model_id, func.max(AppGeneration.created_at)
+        )
+        .filter(
+            AppGeneration.model_id.in_(cf_ids),
+            AppGeneration.status == "done",
+            AppGeneration.created_at >= day_start,
+        )
+        .group_by(AppGeneration.model_id)
+        .all()
+    }
+    out = {}
+    for mid in cf_ids:
+        d = done.get(mid, 0)
+        exhausted = bool(
+            last_429
+            and (last_done.get(mid) is None or last_done[mid] <= last_429)
+        )
+        out[mid] = {
+            "done_today": d,
+            "remaining_today": (
+                0 if exhausted else max(0, _CLOUDFLARE_DAILY_CAP_ESTIMATE - d)
+            ),
+            "exhausted": exhausted,
+            "reset_tehran": _CLOUDFLARE_RESET_TEHRAN,
+        }
+    return out
+
+
 @admin_bp.get("/admin/models")
 @require_admin
 def admin_list_models():
     models = AppModel.query.order_by(AppModel.id).all()
-    return jsonify([_model_public(m) for m in models])
+    quotas = _cloudflare_quotas()
+    out = []
+    for m in models:
+        d = _model_public(m)
+        if m.id in quotas:
+            d["quota"] = quotas[m.id]
+        out.append(d)
+    return jsonify(out)
 
 
 @admin_bp.patch("/admin/models/<int:model_id>")

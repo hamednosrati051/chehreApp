@@ -216,6 +216,7 @@
       <label><input id="m-act" type="checkbox" checked> فعال</label>
       <span><button>ذخیره مدل</button> <button type="button" class="gold" onclick="resetModelForm()">فرم جدید</button></span>
     </form>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;align-items:center;"><button type="button" class="small" onclick="loadModels()">بررسی سهمیه</button><span class="muted">باقی‌مانده امروز تخمینی است؛ ریست ۰۳:۳۰ بامداد به وقت تهران.</span></div>
     <div id="m-list"></div>
   </section>
 
@@ -567,8 +568,8 @@ async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').
 async function delPack(id){ if(!confirm('پک حذف شود؟')) return; try { await api('/admin/packs/' + id, 'DELETE'); loadPacks(); } catch(err){ setMsg(err.message); } }
 
 async function loadModels(){ models = await api('/admin/models');
-  $('m-list').innerHTML = models.length ? `<table><tr><th>نام</th><th>اسلاگ</th><th>مدل provider</th><th>قابلیت</th><th>نوع تعرفه</th><th>کلید</th><th>فعال</th><th></th></tr>` +
-    models.map(m => `<tr><td>${esc(m.name)}</td><td class="muted">${esc(m.slug)}</td><td class="muted">${esc(m.provider_model_name)}</td><td>${esc(m.capability)}</td><td>${esc(m.pricing_type)}</td><td>${m.has_credentials ? '✓ دارد' : '✗ ندارد'}</td><td>${m.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editModel(${JSON.stringify(m).replace(/'/g, "&#39;")})'>ویرایش</button></td></tr>`).join('') + '</table>' : '<p class="muted">مدلی نیست.</p>';
+  $('m-list').innerHTML = models.length ? `<table><tr><th>نام</th><th>اسلاگ</th><th>مدل provider</th><th>قابلیت</th><th>نوع تعرفه</th><th>کلید</th><th>فعال</th><th>باقی‌مانده</th><th>ریست</th><th></th></tr>` +
+    models.map(m => `<tr><td>${esc(m.name)}</td><td class="muted">${esc(m.slug)}</td><td class="muted">${esc(m.provider_model_name)}</td><td>${esc(m.capability)}</td><td>${esc(m.pricing_type)}</td><td>${m.has_credentials ? '✓ دارد' : '✗ ندارد'}</td><td>${m.is_active ? '✓' : '—'}</td><td>${m.quota ? (m.quota.exhausted ? '۰ — تمام‌شده' : m.quota.remaining_today) : '—'}</td><td>${m.quota ? m.quota.reset_tehran + ' بامداد' : '—'}</td><td><button class="small" onclick='editModel(${JSON.stringify(m).replace(/'/g, "&#39;")})'>ویرایش</button></td></tr>`).join('') + '</table>' : '<p class="muted">مدلی نیست.</p>';
   loadModelRoles(); }
 async function loadModelRoles(){ const opts = models.filter(m => m.kind === 'image' && m.capability === 'edit_image' && m.is_active).map(m => `<option value="${m.id}">${esc(m.name)} (${esc(m.provider_model_name || '')})</option>`).join('');
   $('m-main').innerHTML = '<option value="">— پیش‌فرض —</option>' + opts;
