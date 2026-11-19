@@ -373,7 +373,7 @@ def main():
               r.status_code == 200 and "پیدا نشد".encode() in r.data,
               f"got {r.status_code} {r.data[:120]!r}")
 
-        # پرداخت‌نشده → failed (پک دوم).
+        # پرداخت‌نشده → failed (پک دوم؛ خرید قدیمی‌تر از مهلت).
         r = _auth(client, auth, "/coins/purchases/zibal", "POST",
                   {"pack_id": pack2.id})
         pid2 = (r.get_json() or {}).get("purchase_id")
@@ -382,16 +382,55 @@ def main():
         verify_results[tid2] = {
             "result": 102, "trackId": int(tid2), "amount": 899000,
         }
+        row2.created_at = datetime.datetime.utcnow() - datetime.timedelta(minutes=40)
+        db.session.commit()
         r = client.get(
             "/api/v1/coins/purchases/zibal/callback"
             f"?trackId={tid2}&success=0"
         )
         db.session.expire_all()
         row2 = AppPurchase.query.get(pid2)
-        check("callback not paid: failure page + status failed",
+        check("callback not paid (old): failure page + status failed",
               r.status_code == 200
               and "پرداخت ناموفق".encode() in r.data
               and row2.status == "failed",
+              f"got {r.status_code} status={row2.status}")
+
+        # پرداخت‌نشده برای خرید تازه → pending می‌ماند (فیکس باگ ۷۵۴).
+        r = _auth(client, auth, "/coins/purchases/zibal", "POST",
+                  {"pack_id": pack2.id})
+        pid2b = (r.get_json() or {}).get("purchase_id")
+        row2b = AppPurchase.query.get(pid2b)
+        tid2b = row2b.zibal_track_id
+        verify_results[tid2b] = {
+            "result": 102, "trackId": int(tid2b), "amount": 899000,
+        }
+        r = client.get(
+            "/api/v1/coins/purchases/zibal/callback"
+            f"?trackId={tid2b}&success=0"
+        )
+        db.session.expire_all()
+        row2b = AppPurchase.query.get(pid2b)
+        check("callback not paid (fresh): unknown page, still pending",
+              r.status_code == 200
+              and "نامشخص".encode() in r.data
+              and row2b.status == "pending",
+              f"got {r.status_code} status={row2b.status}")
+
+        # خرید failed با وریفای موفق → کالبک آن را تسویه می‌کند (فیکس باگ ۷۵۴).
+        verify_results[tid2] = {
+            "result": 100, "trackId": int(tid2), "amount": 899000,
+        }
+        r = client.get(
+            "/api/v1/coins/purchases/zibal/callback"
+            f"?trackId={tid2}&success=1"
+        )
+        db.session.expire_all()
+        row2 = AppPurchase.query.get(pid2)
+        check("callback rescues failed: consumed",
+              r.status_code == 200
+              and "پرداخت موفق شد".encode() in r.data
+              and row2.status == "consumed",
               f"got {r.status_code} status={row2.status}")
 
         # خطای ارتباط → نامشخص، pending می‌ماند.
