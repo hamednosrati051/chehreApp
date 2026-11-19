@@ -416,7 +416,7 @@ function openFailModal(){ $('fail-list').innerHTML = currentFailed.length ? `<ta
 function closeFailModal(){ $('failModal').classList.remove('on'); }
 function setMsg(m, ok){ const el = $('msg'); el.textContent = m || ''; el.className = ok ? 'ok' : ''; }
 async function api(path, method, body){
-  const r = await fetch('/api/v1' + path, { method: method || 'GET',
+  const r = await fetch('/api/v1' + path, { method: method || 'GET', cache: 'no-store',
     headers: {'Content-Type':'application/json', 'X-Admin-Token': token()},
     body: body ? JSON.stringify(body) : undefined });
   const t = await r.text();
