@@ -1221,6 +1221,7 @@ def zibal_create_purchase():
             {
                 "purchase_id": purchase.id,
                 "pack_name": pack.name,
+                "user_id": g.user.id,
                 "mobile": getattr(g.user, "mobile", None),
             },
         )
@@ -1244,12 +1245,31 @@ def zibal_create_purchase():
     ), 201
 
 
+# زیبال — مهلت وریفای مجدد (فیکس باگ ۷۵۴، ۲۰۲۶-۱۱-۱۹): خرید تازه‌تر از این
+# با «پرداخت نشده» failed نمی‌شود؛ پرداخت ممکن است هنوز در حال تسویه باشد.
+ZIBAL_RECHECK_GRACE_MINUTES = 30
+# خرید زیبال با trackId تا این مدت قابل وریفای مجدد است (کالبک/ریچک/جارو).
+ZIBAL_STALE_DAYS = 7
+
+
+def _zibal_purchase_is_fresh(purchase):
+    """خرید تازه است؟ (کمتر از مهلت ریچک از ساختش گذشته باشد)."""
+    if not purchase.created_at:
+        return False
+    return (datetime.datetime.utcnow() - purchase.created_at) < datetime.timedelta(
+        minutes=ZIBAL_RECHECK_GRACE_MINUTES
+    )
+
+
 @coins_bp.route("/coins/purchases/zibal/callback", methods=["GET", "POST"])
 def zibal_callback():
     """کالبک زیبال (عمومی؛ GET/POST): فقط شروع وریفای است؛ موفقیت
     فقط بعد از وریفای سروری با trackId + مبلغ یکسان ثبت می‌شود.
     تکرار کالبک (idempotent): ردیفِ تسویه‌شده دوباره شارژ نمی‌شود.
-    وریفای ناموفق قطعی → وضعیت failed؛ خطای ارتباط → pending می‌ماند
+    خرید failed هم دوباره وریفای می‌شود (فیکس باگ ۷۵۴: ریچکِ زودهنگام
+    نباید تسویه را برای همیشه ببندد). وریفای ناموفق قطعی برای خرید
+    قدیمی → وضعیت failed؛ برای خرید تازه → pending می‌ماند تا
+    recheck/جارو بعداً وریفای کند. خطای ارتباط → pending می‌ماند
     (نتیجه نامشخص) و کاربر با recheck دوباره چک می‌کند."""
     data = request.args.to_dict()
     if request.form:
@@ -1282,13 +1302,8 @@ def zibal_callback():
             True,
             "به اپ چهره‌ساز برگردید؛ سکه‌ها همان‌جا به حساب شما اضافه شده است.",
         )
-    if purchase.status == "failed":
-        return _zibal_result_page(
-            "پرداخت ناموفق",
-            "این پرداخت ناموفق ثبت شده است.",
-            False,
-            "پولی از حساب شما کم نشده است.",
-        )
+    # خرید failed هم وریفای می‌شود (فیکس باگ ۷۵۴): اگر پرداخت واقعاً
+    # انجام شده باشد، همین کالبک آن را تسویه می‌کند.
     try:
         result = zibal_svc.verify_payment(purchase.zibal_track_id, purchase.amount_irr)
     except zibal_svc.ZibalNotConfigured:
@@ -1327,6 +1342,19 @@ def zibal_callback():
             True,
             "به اپ چهره‌ساز برگردید؛ سکه‌ها همان‌جا به حساب شما اضافه شده است.",
         )
+    if _zibal_purchase_is_fresh(purchase):
+        # خرید تازه است و پرداخت ممکن است هنوز در حال تسویه باشد؛
+        # failed نمی‌کنیم تا recheck/جارو بعداً وریفای کند.
+        _log_verify_attempt(
+            purchase.user_id, purchase.pack_id, purchase.zibal_track_id,
+            "zibal", False, "zibal verify: not paid (fresh, left pending)", purchase.id,
+        )
+        return _zibal_result_page(
+            "وضعیت پرداخت نامشخص",
+            "نتیجه‌ی پرداخت مشخص نشد؛ وضعیت را در اپ بررسی کنید.",
+            False,
+            "وضعیت پرداخت را در اپ بررسی کنید.",
+        )
     purchase.status = "failed"
     db.session.commit()
     _log_verify_attempt(
@@ -1345,7 +1373,9 @@ def zibal_callback():
 @require_auth
 def zibal_recheck(purchase_id):
     """بررسی دوباره‌ی پرداخت زیبال (مسیر بازیابی اپ — G1): وقتی کالبک
-    کاربر را به اپ برنگرداند، اپ با همین endpoint وضعیت را می‌پرسد."""
+    کاربر را به اپ برنگرداند، اپ با همین endpoint وضعیت را می‌پرسد.
+    خرید failed هم دوباره وریفای می‌شود (فیکس باگ ۷۵۴). خرید تازه
+    با «پرداخت نشده» failed نمی‌شود — pending می‌ماند."""
     purchase = AppPurchase.query.get(purchase_id)
     if not purchase or purchase.user_id != g.user.id:
         return jsonify({"error": "purchase not found"}), 404
@@ -1359,14 +1389,7 @@ def zibal_recheck(purchase_id):
                 "balance": coins_svc.get_balance(g.user),
             }
         )
-    if purchase.status == "failed":
-        return jsonify(
-            {
-                "id": purchase.id,
-                "status": "failed",
-                "balance": coins_svc.get_balance(g.user),
-            }
-        )
+    # خرید failed هم دوباره وریفای می‌شود (فیکس باگ ۷۵۴).
     try:
         result = zibal_svc.verify_payment(purchase.zibal_track_id, purchase.amount_irr)
     except zibal_svc.ZibalNotConfigured:
@@ -1387,6 +1410,20 @@ def zibal_recheck(purchase_id):
                 "status": purchase.status,
                 "gift_coins": gift,
                 "already_credited": already,
+                "balance": coins_svc.get_balance(g.user),
+            }
+        )
+    if _zibal_purchase_is_fresh(purchase):
+        # خرید تازه است و پرداخت ممکن است هنوز در حال تسویه باشد؛
+        # failed نمی‌کنیم تا کالبک/جارو بعداً وریفای کند.
+        _log_verify_attempt(
+            g.user.id, purchase.pack_id, purchase.zibal_track_id,
+            "zibal", False, "zibal verify: not paid (fresh, left pending)", purchase.id,
+        )
+        return jsonify(
+            {
+                "id": purchase.id,
+                "status": "pending",
                 "balance": coins_svc.get_balance(g.user),
             }
         )
@@ -3692,6 +3729,10 @@ def admin_bulk_delete_purchases():
     نمی‌خورند (ref_id فقط نوشته می‌شود، هیچ joinای روی آن نیست).
     در حذف با ids، ردیف‌های consumed/verified رد می‌شوند و در
     skipped برمی‌گردند.
+    محافظت (فیکس باگ ۷۵۴، ۲۰۲۶-۱۱-۱۹): ردیف زیبال با trackId تا
+    ۷ روز قابل وریفای مجدد است و پاک نمی‌شود؛ ردیف pendingِ دارای
+    توکن بازار/مایکت هم هرگز پاک نمی‌شود (کرون انقضا هم آن را
+    لمس نمی‌کند) — این‌ها در skipped برمی‌گردند.
     """
     body = request.get_json(silent=True) or {}
     ids = body.get("ids") or []
@@ -3716,6 +3757,26 @@ def admin_bulk_delete_purchases():
     for row in rows:
         if row.status not in allowed:
             skipped.append({"id": row.id, "reason": "not pending/failed"})
+            continue
+        if getattr(row, "gateway", "bazaar") == "zibal" and row.zibal_track_id:
+            # خرید زیبال با trackId هنوز قابل وریفای مجدد است
+            # (کالبک/ریچک/جارو می‌تواند آن را تسویه کند)؛ تا ۷ روز پاک نمی‌شود.
+            age = (
+                (datetime.datetime.utcnow() - row.created_at)
+                if row.created_at
+                else datetime.timedelta(days=999)
+            )
+            if age < datetime.timedelta(days=ZIBAL_STALE_DAYS):
+                skipped.append(
+                    {"id": row.id, "reason": "zibal purchase with track_id, too recent"}
+                )
+                continue
+        if row.status == "pending" and row.bazaar_purchase_token:
+            # ردیف دارای توکن بازار/مایکت: لنگر idempotency و لینک
+            # pending_id اپ؛ کرون انقضا هم هرگز آن را لمس نمی‌کند.
+            skipped.append(
+                {"id": row.id, "reason": "pending purchase has a store token"}
+            )
             continue
         db.session.delete(row)
         deleted += 1

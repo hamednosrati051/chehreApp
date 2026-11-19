@@ -29,6 +29,7 @@ refund_reservation و لیست تولیدهای ادمین استفاده می�
 """
 
 import datetime
+import logging
 import os
 from urllib.parse import urlparse
 
@@ -38,12 +39,16 @@ from sqlalchemy import and_, or_
 from ..extensions import db
 from ..models import (
     AppCoinLedger,
+    AppCoinPack,
     AppGallery,
     AppGeneration,
     AppPurchase,
     AppSetting,
     AppUser,
 )
+from . import zibal as zibal_svc
+
+log = logging.getLogger(__name__)
 
 CUTOFF_SETTING_KEY = "cleanup_free_images_cutoff"
 FREE_TTL = datetime.timedelta(hours=24)
@@ -301,6 +306,60 @@ def expire_stale_pending_purchases():
         db.session.delete(row)
     db.session.commit()
     return count
+
+
+RECONCILE_MIN_AGE_MINUTES = 10
+RECONCILE_MAX_AGE_DAYS = 7
+RECONCILE_BATCH = 50
+
+
+def reconcile_zibal_purchases():
+    """وریفای مجدد خریدهای زیبالِ pending/failed با trackId (جاروی ایمنی).
+
+    کالبک گمشده یا ریچکِ زودهنگام نباید پولِ پرداخت‌شده را بی‌سکه
+    بگذارد: هر ۳۰ دقیقه (کرون) خریدهای زیبالِ قدیمی‌تر از ۱۰ دقیقه
+    و تازه‌تر از ۷ روز دوباره وریفای می‌شوند؛ اگر پرداخت شده بود
+    تسویه می‌شوند (settle idempotent است؛ دوبار شارژ نمی‌شود).
+    خطای ارتباط ردیف را دست نمی‌زند. مرچنت موقع هر وریفای از
+    کانفیگ خوانده می‌شود، پس عوض‌کردن مرچنت جارو را خراب نمی‌کند
+    (فقط خریدهای مرچنت قبلی دیگر وریفای نمی‌شوند).
+    برمی‌گرداند (checked, settled).
+    """
+    now = datetime.datetime.utcnow()
+    rows = (
+        AppPurchase.query.filter(
+            AppPurchase.gateway == "zibal",
+            AppPurchase.status.in_(("pending", "failed")),
+            AppPurchase.zibal_track_id.isnot(None),
+            AppPurchase.created_at
+            < now - datetime.timedelta(minutes=RECONCILE_MIN_AGE_MINUTES),
+            AppPurchase.created_at
+            > now - datetime.timedelta(days=RECONCILE_MAX_AGE_DAYS),
+        )
+        .order_by(AppPurchase.id)
+        .limit(RECONCILE_BATCH)
+        .all()
+    )
+    checked = 0
+    settled = 0
+    for row in rows:
+        checked += 1
+        try:
+            result = zibal_svc.verify_payment(row.zibal_track_id, row.amount_irr)
+        except Exception as exc:  # noqa: BLE001 - خطای ارتباط؛ ردیف می‌ماند
+            log.warning("reconcile zibal %s: verify error: %s", row.id, exc)
+            continue
+        if not result.get("paid"):
+            continue
+        user = AppUser.query.get(row.user_id)
+        pack = AppCoinPack.query.get(row.pack_id)
+        if user is None or pack is None:
+            log.warning("reconcile zibal %s: user/pack missing", row.id)
+            continue
+        zibal_svc.settle_purchase(user, pack, row)
+        settled += 1
+        log.info("reconcile zibal %s: settled", row.id)
+    return checked, settled
 
 
 STALE_GENERATION_SECONDS = 120

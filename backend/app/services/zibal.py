@@ -84,8 +84,10 @@ def create_payment(amount_irr, callback_url, metadata):
         "merchant": merchant,
         "amount": amount_irr,
         "callbackUrl": callback_url,
-        "description": "ChehreSaz pack {} ({})".format(
-            metadata.get("pack_name", ""), metadata.get("purchase_id", "")
+        "description": "ChehreSaz pack {} (purchase {}, user {})".format(
+            metadata.get("pack_name", ""),
+            metadata.get("purchase_id", ""),
+            metadata.get("user_id", ""),
         ),
         "orderId": str(metadata.get("purchase_id") or ""),
     }
