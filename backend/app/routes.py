@@ -1248,8 +1248,9 @@ def zibal_create_purchase():
 # زیبال — مهلت وریفای مجدد (فیکس باگ ۷۵۴، ۲۰۲۶-۱۱-۱۹): خرید تازه‌تر از این
 # با «پرداخت نشده» failed نمی‌شود؛ پرداخت ممکن است هنوز در حال تسویه باشد.
 ZIBAL_RECHECK_GRACE_MINUTES = 30
-# خرید زیبال با trackId تا این مدت قابل وریفای مجدد است (کالبک/ریچک/جارو).
-ZIBAL_STALE_DAYS = 7
+# خرید زیبال با trackId تا این مدت قابل وریفای مجدد است (کالبک/ریچک/جارو)؛
+# بعد از آن اگر پرداخت نشده بود حذف می‌شود (قانون ۱ ساعته، ۲۰۲۶-۱۱-۱۹).
+ZIBAL_STALE_MINUTES = 60
 
 
 def _zibal_purchase_is_fresh(purchase):
@@ -3730,7 +3731,7 @@ def admin_bulk_delete_purchases():
     در حذف با ids، ردیف‌های consumed/verified رد می‌شوند و در
     skipped برمی‌گردند.
     محافظت (فیکس باگ ۷۵۴، ۲۰۲۶-۱۱-۱۹): ردیف زیبال با trackId تا
-    ۷ روز قابل وریفای مجدد است و پاک نمی‌شود؛ ردیف pendingِ دارای
+    ۱ ساعت قابل وریفای مجدد است و پاک نمی‌شود؛ ردیف pendingِ دارای
     توکن بازار/مایکت هم هرگز پاک نمی‌شود (کرون انقضا هم آن را
     لمس نمی‌کند) — این‌ها در skipped برمی‌گردند.
     """
@@ -3760,13 +3761,13 @@ def admin_bulk_delete_purchases():
             continue
         if getattr(row, "gateway", "bazaar") == "zibal" and row.zibal_track_id:
             # خرید زیبال با trackId هنوز قابل وریفای مجدد است
-            # (کالبک/ریچک/جارو می‌تواند آن را تسویه کند)؛ تا ۷ روز پاک نمی‌شود.
+            # (کالبک/ریچک/جارو می‌تواند آن را تسویه کند)؛ تا ۱ ساعت پاک نمی‌شود.
             age = (
                 (datetime.datetime.utcnow() - row.created_at)
                 if row.created_at
                 else datetime.timedelta(days=999)
             )
-            if age < datetime.timedelta(days=ZIBAL_STALE_DAYS):
+            if age < datetime.timedelta(minutes=ZIBAL_STALE_MINUTES):
                 skipped.append(
                     {"id": row.id, "reason": "zibal purchase with track_id, too recent"}
                 )

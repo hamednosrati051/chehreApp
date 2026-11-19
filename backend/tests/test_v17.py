@@ -17,8 +17,8 @@
   بدون شارژ دوباره؛ پرداخت‌نشده → failed؛ خطای ارتباط → pending می‌ماند.
 - (d) recheck: pending → تسویه؛ مصرف‌شده → همان؛ کاربر دیگر → ۴۰۴؛
   خرید بازار → ۴۰۰؛ هدیه‌ی 'first' فقط بار اول.
-- (e) انقضا (G3): بازارِ بدون توکنِ قدیمی حذف می‌شود؛ زیبالِ ۴۰ دقیقه‌ای
-  نه؛ زیبالِ ۸ روزه حذف می‌شود؛ بازارِ دارای توکن می‌ماند.
+- (e) انقضا (G3؛ قانون ۱ ساعته): بازارِ بدون توکنِ قدیمی حذف می‌شود؛ زیبالِ ۴۰ دقیقه‌ای
+  نه؛ زیبالِ قدیمی‌تر از ۱ ساعت (pending یا failed) حذف می‌شود؛ بازارِ دارای توکن می‌ماند.
 - (f) myket_url در تنظیمات عمومی (S2) + صفحه‌ی bounce (G2).
 - (g) فالبک یک‌باره: show_fallback_button در پک‌ها + PATCH ادمین؛
   زیبال با fallback=true و تنظیم روشن → ۲۰۱ با وجود پرچم خاموش؛
@@ -548,6 +548,7 @@ def main():
         now = datetime.datetime.utcnow()
         old = now - datetime.timedelta(minutes=40)
         old8d = now - datetime.timedelta(days=8)
+        old2h = now - datetime.timedelta(hours=2)
         p_old_baz = AppPurchase(
             id=next_id(), user_id=user.id, pack_id=pack.id,
             bazaar_purchase_token=None, amount_irr=1499000,
@@ -564,6 +565,18 @@ def main():
             status="pending", gateway="zibal", zibal_track_id="777001",
             created_at=old,
         )
+        p_2h_zib = AppPurchase(
+            id=next_id(), user_id=user.id, pack_id=pack.id,
+            amount_irr=59900,
+            status="pending", gateway="zibal", zibal_track_id="777004",
+            created_at=old2h,
+        )
+        p_2h_zib_failed = AppPurchase(
+            id=next_id(), user_id=user.id, pack_id=pack.id,
+            amount_irr=59900,
+            status="failed", gateway="zibal", zibal_track_id="777005",
+            created_at=old2h,
+        )
         p_old_zib_8d = AppPurchase(
             id=next_id(), user_id=user.id, pack_id=pack.id,
             bazaar_purchase_token=None, amount_irr=1499000,
@@ -577,18 +590,23 @@ def main():
             created_at=now,
         )
         db.session.add_all([
-            p_old_baz, p_old_baz_tok, p_old_zib, p_old_zib_8d, p_fresh_zib,
+            p_old_baz, p_old_baz_tok, p_old_zib, p_2h_zib,
+            p_2h_zib_failed, p_old_zib_8d, p_fresh_zib,
         ])
         db.session.commit()
         deleted = expire_stale_pending_purchases()
-        check("expiry: deletes exactly 2 rows (old bazaar + 8-day zibal)",
-              deleted == 2, f"got {deleted}")
+        check("expiry: deletes exactly 4 rows (old bazaar + 2h zibal x2 + 8-day zibal)",
+              deleted == 4, f"got {deleted}")
         check("expiry: old bazaar token-less deleted",
               AppPurchase.query.get(p_old_baz.id) is None)
         check("expiry: old bazaar WITH token kept",
               AppPurchase.query.get(p_old_baz_tok.id) is not None)
         check("expiry: 40-min zibal kept (G3)",
               AppPurchase.query.get(p_old_zib.id) is not None)
+        check("expiry: 2-hour zibal pending deleted (1-hour rule)",
+              AppPurchase.query.get(p_2h_zib.id) is None)
+        check("expiry: 2-hour zibal failed deleted (1-hour rule)",
+              AppPurchase.query.get(p_2h_zib_failed.id) is None)
         check("expiry: 8-day zibal deleted",
               AppPurchase.query.get(p_old_zib_8d.id) is None)
         check("expiry: fresh zibal kept",

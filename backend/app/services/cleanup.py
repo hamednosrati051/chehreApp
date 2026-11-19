@@ -272,10 +272,11 @@ def expire_stale_pending_purchases():
     بازار/مایکت: فقط ردیف‌های pending با bazaar_purchase_token IS NULL و
     قدیمی‌تر از ۳۰ دقیقه — یعنی پرداخت‌هایی که کاربر لغو کرد و اپ
     هیچ‌وقت وریفای نکرد. ردیفی که توکن دارد هرگز لمس نمی‌شود.
-    زیبال (v17 — G3): ردیف زیبال توکن بازار ندارد ولی trackId دارد؛
-    کرونِ ۳۰ دقیقه‌ای نباید آن را بگیرد. ردیف زیبال فقط وقتی حذف
-    می‌شود که قدیمی‌تر از ۷ روز باشد (پرداختِ رهاشده؛ پرداختِ
-    انجام‌شده تا آن موقع با کالبک یا recheck تسویه شده است).
+    زیبال (v17 — G3؛ قانون ۱ ساعته ۲۰۲۶-۱۱-۱۹): ردیف زیبال توکن بازار
+    ندارد ولی trackId دارد؛ کرونِ ۳۰ دقیقه‌ای نباید آن را بگیرد. ردیف
+    زیبال (pending یا failed) فقط وقتی حذف می‌شود که قدیمی‌تر از
+    ۱ ساعت باشد — جارو تا آن موقع دست‌کم دوبار وریفایش کرده؛ پرداختِ
+    انجام‌شده تا آن موقع با کالبک یا recheck تسویه شده است.
     برمی‌گرداند: تعداد ردیف‌های حذف‌شده.
     """
     cutoff = datetime.datetime.utcnow() - datetime.timedelta(
@@ -292,11 +293,13 @@ def expire_stale_pending_purchases():
     count = len(stale)
     for row in stale:
         db.session.delete(row)
-    # زیبالِ رهاشده: فقط قدیمی‌تر از ۷ روز.
-    zibal_cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+    # زیبالِ رهاشده: فقط قدیمی‌تر از ۱ ساعت (قانون ۱ ساعته، ۲۰۲۶-۱۱-۱۹).
+    # جارو تا آن موقع دست‌کم دوبار وریفایش کرده؛ اگر هنوز پرداخت نشده
+    # بود (pending یا failed)، حذف می‌شود.
+    zibal_cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=1)
     zibal_stale = (
         AppPurchase.query.filter(
-            AppPurchase.status == "pending",
+            AppPurchase.status.in_(("pending", "failed")),
             AppPurchase.gateway == "zibal",
             AppPurchase.created_at < zibal_cutoff,
         ).all()
@@ -309,7 +312,7 @@ def expire_stale_pending_purchases():
 
 
 RECONCILE_MIN_AGE_MINUTES = 10
-RECONCILE_MAX_AGE_DAYS = 7
+RECONCILE_MAX_AGE_MINUTES = 60
 RECONCILE_BATCH = 50
 
 
@@ -317,8 +320,9 @@ def reconcile_zibal_purchases():
     """وریفای مجدد خریدهای زیبالِ pending/failed با trackId (جاروی ایمنی).
 
     کالبک گمشده یا ریچکِ زودهنگام نباید پولِ پرداخت‌شده را بی‌سکه
-    بگذارد: هر ۳۰ دقیقه (کرون) خریدهای زیبالِ قدیمی‌تر از ۱۰ دقیقه
-    و تازه‌تر از ۷ روز دوباره وریفای می‌شوند؛ اگر پرداخت شده بود
+    بگذارد: هر ۲۰ دقیقه (کرون) خریدهای زیبالِ قدیمی‌تر از ۱۰ دقیقه
+    و تازه‌تر از ۱ ساعت دوباره وریفای می‌شوند — یعنی هر خرید درانتظار
+    تو اون ۱ ساعت دست‌کم دوبار چک می‌شه؛ اگر پرداخت شده بود
     تسویه می‌شوند (settle idempotent است؛ دوبار شارژ نمی‌شود).
     خطای ارتباط ردیف را دست نمی‌زند. مرچنت موقع هر وریفای از
     کانفیگ خوانده می‌شود، پس عوض‌کردن مرچنت جارو را خراب نمی‌کند
@@ -334,7 +338,7 @@ def reconcile_zibal_purchases():
             AppPurchase.created_at
             < now - datetime.timedelta(minutes=RECONCILE_MIN_AGE_MINUTES),
             AppPurchase.created_at
-            > now - datetime.timedelta(days=RECONCILE_MAX_AGE_DAYS),
+            > now - datetime.timedelta(minutes=RECONCILE_MAX_AGE_MINUTES),
         )
         .order_by(AppPurchase.id)
         .limit(RECONCILE_BATCH)
