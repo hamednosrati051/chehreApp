@@ -1729,7 +1729,9 @@ def _cloudflare_quotas():
 
     429 یعنی سهمیه روزانه تمام شده. خطای مدل اصلی هدیه در ردیف ثبت
     نمی‌شود (تلاش دوباره روی جایگزین می‌رود و خطای آن می‌ماند)؛ پس مدلی
-    که از آخرین 429 امروز موفق نداشته، تمام‌شده حساب می‌شود.
+    که امروز استفاده شده و از آخرین 429 موفق نداشته، تمام‌شده حساب
+    می‌شود. مدلی که امروز اصلا استفاده نشده، تمام‌شده حساب نمی‌شود
+    (مدل تازه‌ساخته سهمیه کامل دارد).
     """
     day_start = datetime.datetime.utcnow().replace(
         hour=0, minute=0, second=0, microsecond=0
@@ -1778,11 +1780,24 @@ def _cloudflare_quotas():
         .group_by(AppGeneration.model_id)
         .all()
     }
+    attempts = {
+        mid: c
+        for mid, c in db.session.query(
+            AppGeneration.model_id, func.count(AppGeneration.id)
+        )
+        .filter(
+            AppGeneration.model_id.in_(cf_ids),
+            AppGeneration.created_at >= day_start,
+        )
+        .group_by(AppGeneration.model_id)
+        .all()
+    }
     out = {}
     for mid in cf_ids:
         d = done.get(mid, 0)
         exhausted = bool(
             last_429
+            and attempts.get(mid, 0) > 0
             and (last_done.get(mid) is None or last_done[mid] <= last_429)
         )
         out[mid] = {
