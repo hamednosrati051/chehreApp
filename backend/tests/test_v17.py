@@ -418,20 +418,41 @@ def main():
               f"got {r.status_code} status={row2b.status}")
 
         # خرید failed با وریفای موفق → کالبک آن را تسویه می‌کند (فیکس باگ ۷۵۴).
-        verify_results[tid2] = {
-            "result": 100, "trackId": int(tid2), "amount": 899000,
+        # با کاربر دوم انجام می‌شود تا موجودی کاربر اول (و هدیه‌ی first پک)
+        # برای بخش‌های بعدی تست دست نخورد.
+        r = _auth(client, auth2, "/coins/purchases/zibal", "POST",
+                  {"pack_id": pack2.id})
+        pid_r = (r.get_json() or {}).get("purchase_id")
+        row_r = AppPurchase.query.get(pid_r)
+        tid_r = row_r.zibal_track_id
+        verify_results[tid_r] = {
+            "result": 102, "trackId": int(tid_r), "amount": 899000,
+        }
+        row_r.created_at = datetime.datetime.utcnow() - datetime.timedelta(minutes=40)
+        db.session.commit()
+        r = client.get(
+            "/api/v1/coins/purchases/zibal/callback"
+            f"?trackId={tid_r}&success=0"
+        )
+        db.session.expire_all()
+        row_r = AppPurchase.query.get(pid_r)
+        check("callback rescues failed: failed first",
+              r.status_code == 200 and row_r.status == "failed",
+              f"got {r.status_code} status={row_r.status}")
+        verify_results[tid_r] = {
+            "result": 100, "trackId": int(tid_r), "amount": 899000,
         }
         r = client.get(
             "/api/v1/coins/purchases/zibal/callback"
-            f"?trackId={tid2}&success=1"
+            f"?trackId={tid_r}&success=1"
         )
         db.session.expire_all()
-        row2 = AppPurchase.query.get(pid2)
+        row_r = AppPurchase.query.get(pid_r)
         check("callback rescues failed: consumed",
               r.status_code == 200
               and "پرداخت موفق شد".encode() in r.data
-              and row2.status == "consumed",
-              f"got {r.status_code} status={row2.status}")
+              and row_r.status == "consumed",
+              f"got {r.status_code} status={row_r.status}")
 
         # خطای ارتباط → نامشخص، pending می‌ماند.
         r = _auth(client, auth, "/coins/purchases/zibal", "POST",
