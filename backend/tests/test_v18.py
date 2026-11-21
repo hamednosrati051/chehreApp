@@ -27,7 +27,9 @@ static/uploadsِ همین کپیِ تست انجام می‌شود (بعد از 
 import datetime
 import io
 import os
+import shutil
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -512,6 +514,17 @@ def main():
             ),
         ])
         db.session.commit()
+        # فایل‌های نمونه‌ی گالری باید واقعاً روی دیسک باشند، وگرنه فیلتر
+        # ردیف‌های مرده آن‌ها را پنهان می‌کند. پوشه‌ی موقت جدا از
+        # static/uploads واقعی است (هرگز به پوشه‌ی عکس‌های کاربر دست نمی‌زنیم).
+        tmp_static = tempfile.mkdtemp(prefix="v18-gallery-")
+        tmp_uploads = os.path.join(tmp_static, "uploads")
+        os.makedirs(tmp_uploads, exist_ok=True)
+        for _name in ("paid.jpg", "free.jpg"):
+            with open(os.path.join(tmp_uploads, _name), "wb") as _fh:
+                _fh.write(b"v18-gallery-bytes")
+        _orig_static_folder = app.static_folder
+        app.static_folder = tmp_static
         r = client.get("/api/v1/gallery/public")
         rows = r.get_json() or []
         by_gen = {row["generation_id"]: row for row in rows}
@@ -528,6 +541,8 @@ def main():
               and by_gen.get(free_gen.id, {}).get("world_name") == "دنیای تست"
               and by_gen.get(free_gen.id, {}).get("world_id") == world.id,
               f"got {by_gen.get(free_gen.id)}")
+        app.static_folder = _orig_static_folder
+        shutil.rmtree(tmp_static, ignore_errors=True)
 
         # ============ (f) packs original_price_toman ============
         r = client.get("/api/v1/coins/packs")
