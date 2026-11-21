@@ -1795,16 +1795,23 @@ def _cloudflare_quotas():
         .group_by(AppGeneration.model_id)
         .all()
     }
-    last_429 = (
-        db.session.query(func.max(AppGeneration.created_at))
+    # آخرین 429 هر مدل جدا: 429 یک مدل نباید مدل دیگر را تمام‌شده
+    # نشان بدهد (مدل 9 در 2026-11-21 با وجود 2 موفقیت، فقط چون بعد از
+    # 429 مدل 8 موفقی نداشت، 0 نشان داده می‌شد).
+    last_429 = {
+        mid: ts
+        for mid, ts in db.session.query(
+            AppGeneration.model_id, func.max(AppGeneration.created_at)
+        )
         .filter(
             AppGeneration.model_id.in_(cf_ids),
             AppGeneration.status == "failed",
             AppGeneration.created_at >= day_start,
             AppGeneration.error_message.like("%daily free allocation%"),
         )
-        .scalar()
-    )
+        .group_by(AppGeneration.model_id)
+        .all()
+    }
     last_done = {
         mid: ts
         for mid, ts in db.session.query(
@@ -1833,10 +1840,11 @@ def _cloudflare_quotas():
     out = {}
     for mid in cf_ids:
         d = done.get(mid, 0)
+        m429 = last_429.get(mid)
         exhausted = bool(
-            last_429
+            m429
             and attempts.get(mid, 0) > 0
-            and (last_done.get(mid) is None or last_done[mid] <= last_429)
+            and (last_done.get(mid) is None or last_done[mid] <= m429)
         )
         out[mid] = {
             "done_today": d,
