@@ -48,8 +48,17 @@ _ERR_429 = (
 )
 
 
+_NEXT_ID = [0]
+
+
+def next_id():
+    _NEXT_ID[0] += 1
+    return _NEXT_ID[0]
+
+
 def _model(name):
     m = AppModel(
+        id=next_id(),
         kind="image",
         name=name,
         slug=name,
@@ -64,8 +73,9 @@ def _model(name):
     return m
 
 
-def _gen(user_id, model_id, status, created_at, error=None):
+def _gen(gen_id, user_id, model_id, status, created_at, error=None):
     g = AppGeneration(
+        id=gen_id,
         user_id=user_id,
         kind="image",
         model_id=model_id,
@@ -82,7 +92,9 @@ def main():
     app = create_app(TestConfig)
     with app.app_context():
         db.create_all()
-        u = AppUser()
+        # SQLite does not autoincrement BigInteger PKs: explicit ids, like
+        # the other backend tests (next_id()).
+        u = AppUser(id=next_id())
         db.session.add(u)
         db.session.flush()
 
@@ -97,14 +109,14 @@ def main():
         t = lambda h, m=0: day + datetime.timedelta(hours=h, minutes=m)
 
         # A: two 429s today, no success since.
-        _gen(u.id, a.id, "failed", t(2, 13), _ERR_429)
-        _gen(u.id, a.id, "failed", t(2, 15), _ERR_429)
+        _gen(next_id(), u.id, a.id, "failed", t(2, 13), _ERR_429)
+        _gen(next_id(), u.id, a.id, "failed", t(2, 15), _ERR_429)
         # B: two successes before A's 429 + one 429 YESTERDAY (must not count).
-        _gen(u.id, b.id, "done", t(0, 35))
-        _gen(u.id, b.id, "done", t(0, 56))
-        _gen(u.id, b.id, "failed", day - datetime.timedelta(hours=1), _ERR_429)
+        _gen(next_id(), u.id, b.id, "done", t(0, 35))
+        _gen(next_id(), u.id, b.id, "done", t(0, 56))
+        _gen(next_id(), u.id, b.id, "failed", day - datetime.timedelta(hours=1), _ERR_429)
         # C: one success after A's 429.
-        _gen(u.id, c.id, "done", t(6, 4))
+        _gen(next_id(), u.id, c.id, "done", t(6, 4))
         db.session.commit()
 
         q = _cloudflare_quotas()
@@ -122,7 +134,7 @@ def main():
               and q[d.id]["done_today"] == 0, f"got {q[d.id]}")
 
         # A recovers: a success after its own 429 clears the flag.
-        _gen(u.id, a.id, "done", t(7, 0))
+        _gen(next_id(), u.id, a.id, "done", t(7, 0))
         db.session.commit()
         q = _cloudflare_quotas()
         check("A recovers after a success past its own 429",
