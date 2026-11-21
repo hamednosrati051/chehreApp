@@ -9,7 +9,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import retrofit2.Response
 import retrofit2.Retrofit
@@ -17,7 +19,9 @@ import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 
 // TODO: با آدرس واقعی بک‌اند خود اپ عوض شود.
@@ -113,6 +117,9 @@ data class Pack(
     // v17 فالبک یک‌باره: اگر روشن باشد، بعد از خطای واقعی یک درگاه،
     // دکمه‌ی درگاه دیگر یک بار نشان داده می‌شود (حتی با پرچم خاموش).
     val show_fallback_button: Boolean = false,
+    // v18 (10): قیمت اصلی (نمایشی)؛ null یعنی تخفیفی نیست و فقط
+    // قیمت پرداختی نشان داده می‌شود.
+    val original_price_toman: Int? = null,
 )
 data class PurchaseVerifyRequest(
     val pack_id: Long,
@@ -186,7 +193,45 @@ data class LikedGeneration(
 )
 data class GallerySubmitRequest(val generation_id: Long)
 data class GallerySubmitResponse(val id: Long, val status: String)
-data class GalleryItem(val id: Long, val image_url: String, val generation_id: Long? = null)
+data class GalleryItem(
+    val id: Long,
+    val image_url: String,
+    val generation_id: Long? = null,
+    // v18 (6+7): /gallery/public این‌ها را می‌فرستد؛ نبودن‌شان یعنی
+    // پاسخ قدیمی (پولی فرض می‌شود و نامی نشان داده نمی‌شود).
+    val is_free: Boolean = false,
+    val world_name: String? = null,
+    val world_id: Long? = null,
+)
+// v18 (2): تیکت‌ها — قرارداد WORKLIST.md؛ وضعیت‌ها "open"/"closed".
+data class TicketCreateRequest(val subject: String, val message: String)
+data class TicketCreated(val id: Long, val status: String? = null)
+data class TicketSummary(
+    val id: Long,
+    val subject: String,
+    val status: String,
+    val created_at: String? = null,
+)
+data class TicketMessage(
+    val id: Long,
+    val sender: String,
+    val body: String,
+    val created_at: String? = null,
+)
+data class TicketDetail(
+    val id: Long,
+    val subject: String,
+    val status: String,
+    val messages: List<TicketMessage> = emptyList(),
+)
+data class TicketMessageRequest(val body: String)
+// v18 (4): بازسازی با کیفیت بالا — قیمتِ روز دنیا برمی‌گردد.
+data class RegenerateResponse(
+    val generation_id: Long = 0,
+    val world_id: Long = 0,
+    val input_url: String? = null,
+    val coin_price: Int = 0,
+)
 data class DeviceTokenRequest(val token: String, val platform: String = "android")
 data class Announcement(val id: Long, val title: String, val body: String, val created_at: String? = null)
 data class PublicSettings(
@@ -198,6 +243,14 @@ data class PublicSettings(
     val myket_url: String = "",
     val rules_privacy: String = "",
     val entry_gift_enabled: String = "1",
+    // v18 (9): پرومو مودال — عنوان/متن/شماره‌ی نمایش/روشن‌بودن از
+    // تنظیمات عمومی. رشته‌ای گرفته شده‌اند تا «1»/عدد/true هر سه پارس
+    // شوند (Gson مقدار رشته‌ای را به Int/Boolean تبدیل نمی‌کند)؛
+    // null یعنی کلید هنوز در پاسخ نیست.
+    val promo_modal_title: String? = null,
+    val promo_modal_body: String? = null,
+    val promo_modal_show_number: String? = null,
+    val promo_modal_enabled: String? = null,
 )
 
 interface ApiService {
@@ -253,8 +306,21 @@ interface ApiService {
     @POST("generations")
     suspend fun createGeneration(@Body b: GenerationRequest): GenerationCreated
 
+    // v18 (1): ساخت تک‌مرحله‌ای — آپلود + ساخت در یک تماس؛
+    // world_id فیلد فرم است، file فایل عکس.
+    @Multipart
+    @POST("generations/with_image")
+    suspend fun createGenerationWithImage(
+        @Part file: MultipartBody.Part,
+        @Part("world_id") worldId: RequestBody,
+    ): GenerationCreated
+
     @GET("generations/{id}")
     suspend fun generation(@Path("id") id: Long): GenerationStatus
+
+    // v18 (4): بازسازی — ورودی اصلی + قیمتِ روز دنیا.
+    @GET("generations/{id}/regenerate")
+    suspend fun regenerate(@Path("id") id: Long): RegenerateResponse
 
     @GET("generations/mine")
     suspend fun myGenerations(): List<GenerationStatus>
@@ -300,6 +366,22 @@ interface ApiService {
 
     @GET("app/settings")
     suspend fun publicSettings(): PublicSettings
+
+    // v18 (2): تیکت‌ها.
+    @POST("tickets")
+    suspend fun createTicket(@Body b: TicketCreateRequest): TicketCreated
+
+    @GET("tickets")
+    suspend fun tickets(): List<TicketSummary>
+
+    @GET("tickets/{id}")
+    suspend fun ticket(@Path("id") id: Long): TicketDetail
+
+    @POST("tickets/{id}/messages")
+    suspend fun sendTicketMessage(
+        @Path("id") id: Long,
+        @Body b: TicketMessageRequest,
+    ): Response<Unit>
 
     @POST("device-tokens/register")
     suspend fun registerDeviceToken(@Body b: DeviceTokenRequest): Response<Unit>
@@ -360,6 +442,26 @@ object Api {
             }
             JSONObject(resp.body?.string() ?: "").getString("url")
         }
+    }
+
+    /** v18 (1): ساخت تک‌مرحله‌ای — همان فایل ورودی + world_id در یک
+     *  تماس به ‎/generations/with_image؛ جایگزین uploadFile +
+     *  createGeneration در صفحه‌ی ساخت (ادغام ورودی یتیم را می‌بندد).
+     *  سقف حجم سمت کاربر مثل قبل چک می‌شود؛ ۴۰۲/۴۰۱ را فراخواننده
+     *  مثل قبل مدیریت می‌کند. uploadFile می‌ماند (برای نسخه‌های
+     *  قدیمیِ کد و مسیر /uploads سرور دست نخورده است). */
+    suspend fun createGenerationWithImage(
+        file: java.io.File,
+        worldId: Long,
+    ): GenerationCreated {
+        if (file.length() > UPLOAD_MAX_BYTES) throw RuntimeException("upload_too_big")
+        val part = MultipartBody.Part.createFormData(
+            "file",
+            file.name,
+            file.asRequestBody("application/octet-stream".toMediaType()),
+        )
+        val wid = worldId.toString().toRequestBody("text/plain".toMediaType())
+        return service.createGenerationWithImage(part, wid)
     }
 }
 

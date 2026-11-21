@@ -1,4 +1,5 @@
 package ir.inourai.newapp.ui.screens
+import ir.inourai.newapp.ui.theme.themed
 
 import android.content.Intent
 import android.net.Uri
@@ -29,6 +30,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyboardArrowLeft
@@ -49,6 +52,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -90,7 +94,12 @@ private val GoldText = Color(0xFF8A5A00)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
+fun ProfileScreen(
+    onLogin: () -> Unit,
+    onGoHome: () -> Unit,
+    // v18 (2): تیکت‌ها.
+    onTickets: () -> Unit = {},
+) {
     val context = LocalContext.current
     var balance by remember { mutableStateOf<Balance?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -186,7 +195,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
 
     PullRefreshLayout(onRefresh = { RefreshBus.refresh(); refreshProfile() }) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(ScreenBg).padding(16.dp),
+        modifier = Modifier.fillMaxSize().background(themed(ScreenBg, Color(0xFF0F172A))).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // کارت آبی سکه — مثل طرح مرجع.
@@ -228,7 +237,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                         onClick = { showPacks = true },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White,
+                            containerColor = themed(Color.White, Color(0xFF1E293B)),
                             contentColor = RoyalBlue,
                         ),
                         shape = RoundedCornerShape(50),
@@ -244,7 +253,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
         item { SectionLabel("حساب کاربری") }
         item {
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = themed(Color.White, Color(0xFF1E293B))),
                 shape = RoundedCornerShape(28.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             ) {
@@ -268,7 +277,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
         if (loggedIn) {
             item {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = themed(Color.White, Color(0xFF1E293B))),
                     shape = RoundedCornerShape(28.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 ) {
@@ -280,12 +289,68 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                     )
                 }
             }
+            // v18 (2): تیکت‌ها.
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = themed(Color.White, Color(0xFF1E293B))),
+                    shape = RoundedCornerShape(28.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                ) {
+                    LinkRow(
+                        icon = Icons.Rounded.Email,
+                        title = "تیکت‌ها",
+                        subtitle = "پیام به پشتیبانی و پیگیری تیکت‌ها",
+                        iconBg = Color(0xFFE8EEFF), iconTint = RoyalBlue,
+                        onClick = onTickets,
+                    )
+                }
+            }
+        }
+
+        // v18 (8): تم تاریک دستی — سوییچ همین‌جا ذخیره می‌شود
+        // (Session.darkTheme، کلید "dark_theme"؛ پیش‌فرض روشن) و کل
+        // اپ بی‌درنگ بازترکیب می‌شود.
+        item { SectionLabel("ظاهر") }
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = themed(Color.White, Color(0xFF1E293B))),
+                shape = RoundedCornerShape(28.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(IconBg),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Rounded.DarkMode, contentDescription = null, tint = RoyalBlue)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "تم تاریک",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                        )
+                        Text("پس‌زمینه‌ی تیره برای شب", color = themed(Color.Gray, Color(0xFFAAB4C4)), fontSize = 14.sp)
+                    }
+                    Switch(
+                        checked = Session.darkThemeState.value,
+                        onCheckedChange = { Session.darkTheme = it },
+                    )
+                }
+            }
         }
 
         item { SectionLabel("پشتیبانی و لینک‌ها") }
         item {
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = themed(Color.White, Color(0xFF1E293B))),
                 shape = RoundedCornerShape(28.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             ) {
@@ -360,13 +425,13 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("حساب کاربری", fontWeight = FontWeight.Bold, fontSize = 19.sp)
-                Text("جزئیات حسابت", color = Color.Gray, fontSize = 15.sp)
+                Text("جزئیات حسابت", color = themed(Color.Gray, Color(0xFFAAB4C4)), fontSize = 15.sp)
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("شماره موبایل", color = Color.Gray)
+                    Text("شماره موبایل", color = themed(Color.Gray, Color(0xFFAAB4C4)))
                     Text(
                         maskedMobile ?: "—",
                         fontWeight = FontWeight.Bold,
@@ -379,7 +444,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("سکه", color = Color.Gray)
+                    Text("سکه", color = themed(Color.Gray, Color(0xFFAAB4C4)))
                     Text("${balance?.coins ?: 0}", fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -414,7 +479,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
             sheetState = paymentsSheetState,
         ) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = themed(Color.White, Color(0xFF1E293B))),
                 shape = RoundedCornerShape(28.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -423,7 +488,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                     Text("سابقه پرداخت", fontWeight = FontWeight.Bold, fontSize = 19.sp)
                     Spacer(modifier = Modifier.height(12.dp))
                     if (payments.isEmpty()) {
-                        Text("هنوز پرداختی ثبت نشده است.", color = Color.Gray)
+                        Text("هنوز پرداختی ثبت نشده است.", color = themed(Color.Gray, Color(0xFFAAB4C4)))
                     } else {
                         // سقف ارتفاع تا وقتی پرداخت‌ها زیاد شدند، فهرست اسکرول بخورد
                         // (ستون اسکرولیِ بدون سقف، در باتم‌شیت تا تهِ صفحه کش می‌آمد و نمی‌چرخید).
@@ -437,14 +502,14 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
                                 ) {
                                     Column {
                                         Text(pay.pack_name, fontWeight = FontWeight.Bold)
-                                        Text("${pay.coins} سکه", color = Color.Gray, fontSize = 14.sp)
-                                        Text(pay.created_at_fa ?: pay.created_at?.take(10) ?: "", color = Color.Gray, fontSize = 13.sp)
+                                        Text("${pay.coins} سکه", color = themed(Color.Gray, Color(0xFFAAB4C4)), fontSize = 14.sp)
+                                        Text(pay.created_at_fa ?: pay.created_at?.take(10) ?: "", color = themed(Color.Gray, Color(0xFFAAB4C4)), fontSize = 13.sp)
                                     }
                                     Column(horizontalAlignment = Alignment.End) {
                                         Text("${pay.amount_irr / 10} تومان", fontWeight = FontWeight.Bold)
                                         Text(
                                             if (pay.status == "pending") "در انتظار" else "پرداخت شد",
-                                            color = if (pay.status == "pending") Color(0xFFB7791F) else Color(0xFF1B7A3D),
+                                            color = if (pay.status == "pending") themed(Color(0xFFB7791F), Color(0xFFE8B84B)) else themed(Color(0xFF1B7A3D), Color(0xFF6FCE8F)),
                                             fontSize = 14.sp,
                                         )
                                     }
@@ -527,7 +592,7 @@ fun ProfileScreen(onLogin: () -> Unit, onGoHome: () -> Unit) {
 private fun SectionLabel(text: String) {
     Text(
         text,
-        color = Color.Gray,
+        color = themed(Color.Gray, Color(0xFFAAB4C4)),
         fontSize = 15.sp,
         modifier = Modifier.padding(top = 8.dp),
     )
@@ -569,13 +634,13 @@ private fun LinkRow(
                 style = TextStyle(textDirection = titleDirection ?: TextDirection.Unspecified),
             )
             if (subtitle != null) {
-                Text(subtitle, color = Color.Gray, fontSize = 14.sp)
+                Text(subtitle, color = themed(Color.Gray, Color(0xFFAAB4C4)), fontSize = 14.sp)
             }
         }
         Icon(
             if (external) Icons.Rounded.OpenInNew else Icons.Rounded.KeyboardArrowLeft,
             contentDescription = null,
-            tint = Color.Gray,
+            tint = themed(Color.Gray, Color(0xFFAAB4C4)),
         )
     }
 }

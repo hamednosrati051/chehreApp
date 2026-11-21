@@ -1,4 +1,5 @@
 package ir.inourai.newapp
+import ir.inourai.newapp.ui.theme.themed
 
 import android.Manifest
 import android.app.NotificationManager
@@ -96,11 +97,14 @@ import ir.inourai.newapp.ui.screens.HomeScreen
 import ir.inourai.newapp.ui.screens.LoginScreen
 import ir.inourai.newapp.ui.screens.MyMediaReset
 import ir.inourai.newapp.ui.screens.MyMediaScreen
+import ir.inourai.newapp.ui.screens.NewTicketScreen
 import ir.inourai.newapp.ui.screens.ProfileScreen
 import ir.inourai.newapp.ui.screens.ResultScreen
 import ir.inourai.newapp.ui.screens.ResultSwipeContext
 import ir.inourai.newapp.ui.screens.SearchScreen
 import ir.inourai.newapp.ui.screens.SplashScreen
+import ir.inourai.newapp.ui.screens.TicketDetailScreen
+import ir.inourai.newapp.ui.screens.TicketsListScreen
 import ir.inourai.newapp.ui.screens.WorldsScreen
 import ir.inourai.newapp.ui.theme.AppTheme
 import kotlinx.coroutines.delay
@@ -117,6 +121,10 @@ object Dest {
     const val CREATE_IMAGE = "create_image/{worldId}"
     const val LOGIN = "login"
     const val RESULT = "result/{genId}?fresh={fresh}"
+    // v18 (2): تیکت‌ها.
+    const val TICKETS = "tickets"
+    const val TICKET_DETAIL = "ticket/{ticketId}"
+    const val TICKET_NEW = "ticket_new"
 }
 
 class MainActivity : ComponentActivity() {
@@ -367,7 +375,7 @@ fun App(initialGenId: Long = -1L) {
                     ) {
                         Card(
                             shape = RoundedCornerShape(28.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            colors = CardDefaults.cardColors(containerColor = themed(Color.White, Color(0xFF1E293B))),
                             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
@@ -414,7 +422,12 @@ fun App(initialGenId: Long = -1L) {
                     )
                 }
                 composable(Dest.GALLERY) {
-                    GalleryScreen(onGoHome = { navToTab(Dest.HOME) })
+                    GalleryScreen(
+                        onGoHome = { navToTab(Dest.HOME) },
+                        onWorld = { worldId ->
+                            nav.navigate("create_image/$worldId")
+                        },
+                    )
                 }
                 composable(Dest.MY_MEDIA) {
                     MyMediaScreen(
@@ -433,6 +446,39 @@ fun App(initialGenId: Long = -1L) {
                     ProfileScreen(
                         onLogin = { nav.navigate(Dest.LOGIN) },
                         onGoHome = { navToTab(Dest.HOME) },
+                        onTickets = { nav.navigate(Dest.TICKETS) },
+                    )
+                }
+                // v18 (2): تیکت‌ها.
+                composable(Dest.TICKETS) {
+                    TicketsListScreen(
+                        onBack = { if (!nav.popBackStack()) nav.navigate(Dest.HOME) },
+                        onTicket = { ticketId ->
+                            nav.navigate("ticket/$ticketId")
+                        },
+                        onNew = { nav.navigate(Dest.TICKET_NEW) },
+                    )
+                }
+                composable(
+                    Dest.TICKET_DETAIL,
+                    arguments = listOf(
+                        navArgument("ticketId") { type = NavType.LongType },
+                    ),
+                ) { entry ->
+                    val ticketId = entry.arguments?.getLong("ticketId") ?: 0L
+                    TicketDetailScreen(
+                        ticketId = ticketId,
+                        onBack = { if (!nav.popBackStack()) nav.navigate(Dest.TICKETS) },
+                    )
+                }
+                composable(Dest.TICKET_NEW) {
+                    NewTicketScreen(
+                        onBack = { if (!nav.popBackStack()) nav.navigate(Dest.TICKETS) },
+                        onCreated = { ticketId ->
+                            nav.navigate("ticket/$ticketId") {
+                                popUpTo(Dest.TICKETS) { inclusive = false }
+                            }
+                        },
                     )
                 }
                 composable(Dest.WORLDS) {
@@ -475,6 +521,10 @@ fun App(initialGenId: Long = -1L) {
                             if (!nav.popBackStack()) nav.navigate(Dest.HOME)
                         },
                         onLogin = { nav.navigate(Dest.LOGIN) },
+                        // v18 (4): بازسازی → صفحه‌ی ساخت همان دنیا.
+                        onRegenerate = { worldId ->
+                            nav.navigate("create_image/$worldId")
+                        },
                     )
                 }
                 composable(Dest.LOGIN) {
@@ -636,13 +686,13 @@ private fun NavTab(icon: ImageVector, label: String, selected: Boolean, onClick:
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = if (selected) Color(0xFF2E5BFF) else Color.Gray, modifier = Modifier.size(24.dp))
+            Icon(icon, contentDescription = null, tint = if (selected) Color(0xFF2E5BFF) else themed(Color.Gray, Color(0xFFAAB4C4)), modifier = Modifier.size(24.dp))
         }
         Text(
             label,
             fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) Color(0xFF2E5BFF) else Color.Gray,
+            color = if (selected) Color(0xFF2E5BFF) else themed(Color.Gray, Color(0xFFAAB4C4)),
         )
     }
 }

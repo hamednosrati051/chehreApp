@@ -1,4 +1,5 @@
 package ir.inourai.newapp.ui.screens
+import ir.inourai.newapp.ui.theme.themed
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -146,7 +147,7 @@ fun LoginScreen(onDone: () -> Unit) {
             Text("ورود", fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Text(
                 "با حساب کافه‌بازارت وارد شو؛ سریع و امن.",
-                color = Color.Gray,
+                color = themed(Color.Gray, Color(0xFFAAB4C4)),
                 fontSize = 14.sp,
             )
             Spacer(modifier = Modifier.height(4.dp))
@@ -182,7 +183,7 @@ fun LoginScreen(onDone: () -> Unit) {
         Text(
             if (giftOn) "شماره موبایلت را وارد کن؛ با اولین ورود ۱ تصویر هدیه می‌گیری."
             else "شماره موبایلت را وارد کن.",
-            color = Color.Gray,
+            color = themed(Color.Gray, Color(0xFFAAB4C4)),
             fontSize = 14.sp,
         )
         Spacer(modifier = Modifier.height(4.dp))
@@ -194,10 +195,10 @@ fun LoginScreen(onDone: () -> Unit) {
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
+                focusedContainerColor = themed(Color.White, Color(0xFF1E293B)),
+                unfocusedContainerColor = themed(Color.White, Color(0xFF1E293B)),
                 focusedBorderColor = Color(0xFF1D6FE0),
-                unfocusedBorderColor = Color(0xFFD4DCE8),
+                unfocusedBorderColor = themed(Color(0xFFD4DCE8), Color(0xFF3A465C)),
             ),
         )
         if (!sent) {
@@ -250,7 +251,7 @@ fun LoginScreen(onDone: () -> Unit) {
             // ثابت همین‌جا می‌ماند و دکمه‌ی «ورود با بازار» زیر آن،
             // همان جریان ورود با بازار را باز می‌کند.
             otpInlineError?.let {
-                Text(it, color = Color(0xFFB00020), fontSize = 14.sp)
+                Text(it, color = themed(Color(0xFFB00020), Color(0xFFFF8A80)), fontSize = 14.sp)
             }
             if (showBazaarFallback) {
                 Button(
@@ -274,16 +275,16 @@ fun LoginScreen(onDone: () -> Unit) {
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = themed(Color.White, Color(0xFF1E293B)),
+                    unfocusedContainerColor = themed(Color.White, Color(0xFF1E293B)),
                     focusedBorderColor = Color(0xFF1D6FE0),
-                    unfocusedBorderColor = Color(0xFFD4DCE8),
+                    unfocusedBorderColor = themed(Color(0xFFD4DCE8), Color(0xFF3A465C)),
                 ),
             )
-            Text("کد ۶ رقمی پیامک‌شده را وارد کن.", color = Color.Gray, fontSize = 13.sp)
+            Text("کد ۶ رقمی پیامک‌شده را وارد کن.", color = themed(Color.Gray, Color(0xFFAAB4C4)), fontSize = 13.sp)
             Text(
                 "کد تأیید ارسال شد.",
-                color = Color(0xFF1B7A3D),
+                color = themed(Color(0xFF1B7A3D), Color(0xFF6FCE8F)),
                 fontSize = 13.sp,
                 modifier = Modifier.align(Alignment.Start),
             )

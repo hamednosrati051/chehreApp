@@ -95,6 +95,7 @@
     <button data-tab="verify" onclick="showTab('verify')">تلاش‌های وریفای</button>
     <button data-tab="stale" onclick="showTab('stale')">خریدهای معلق قدیمی</button>
     <button data-tab="reports" onclick="showTab('reports')">گزارش‌های عکس</button>
+    <button data-tab="tickets" onclick="showTab('tickets')">تیکت‌ها</button>
     <button data-tab="gallery" onclick="showTab('gallery')">گالری در انتظار</button>
     <button data-tab="ghist" onclick="showTab('ghist')">تاریخچه گالری</button>
     <button data-tab="gens" onclick="showTab('gens')">همه‌ی تولیدها</button>
@@ -172,6 +173,7 @@
       <input id="p-name" placeholder="نام (مثلا شروع)" required>
       <input id="p-coins" type="number" placeholder="سکه" required>
       <input id="p-price" type="number" placeholder="قیمت (تومان)" required>
+      <input id="p-orig" type="number" placeholder="قیمت اصلی (تومان؛ خالی = بدون تخفیف نمایشی)">
       <input id="p-sku" placeholder="SKU بازار (مثلا pack_starter)" required>
       <input id="p-badge" placeholder="بج (مثلا محبوب‌ترین)">
       <input id="p-type" placeholder="نوع پک (مثلا اقتصادی)">
@@ -261,6 +263,12 @@
     <div id="rp-pager"></div>
   </section>
 
+  <section id="tickets">
+    <h2>تیکت‌های پشتیبانی</h2>
+    <div id="tk-list"></div>
+    <div id="tk-detail"></div>
+  </section>
+
   <section id="gallery">
     <h2>عکس‌های در انتظار تأیید</h2>
     <div id="g-list"></div>
@@ -342,6 +350,15 @@
       <input id="s-minver" type="number" min="0" step="1" placeholder="مثلا 13">
       <button>ذخیره حداقل نسخه</button>
     </form>
+    <form class="grid" onsubmit="savePromoSettings(event)">
+      <h3 style="margin:0;">مودال تبلیغاتی (بلک‌فرایدی)</h3>
+      <input id="ps-promo-title" placeholder="عنوان مودال (مثلا بلک‌فرایدی)">
+      <textarea id="ps-promo-body" rows="3" placeholder="متن مودال"></textarea>
+      <label>شماره‌ی نمایش <input id="ps-promo-show" type="number" min="0" step="1" placeholder="مثلا 1"></label>
+      <label><input type="checkbox" id="ps-promo-enabled"> مودال فعال باشد</label>
+      <span><button>ذخیره مودال تبلیغاتی</button> <button type="button" class="gold" onclick="promoReshow()">نمایش مجدد</button></span>
+    </form>
+    <p class="muted">ویرایش متن به‌تنهایی مودال را دوباره نشان نمی‌دهد؛ «نمایش مجدد» شماره‌ی نمایش را یک واحد زیاد می‌کند و اپ آن را برای همه دوباره نشان می‌دهد.</p>
     <form class="grid" onsubmit="savePublicSettings(event)">
       <textarea id="ps-about" rows="3" placeholder="درباره ما (متن نمایشی در پروفایل)"></textarea>
       <textarea id="ps-support" rows="3" placeholder="پشتیبانی (متن نمایشی در پروفایل)"></textarea>
@@ -439,7 +456,7 @@ function showTab(tab){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === tab));
   ({worlds: loadWorlds, trends: loadTrends, fresh: loadFresh, cats: loadCats, packs: loadPacks, models: loadModels,
-    purchases: loadPurchases, verify: loadVerifyAttempts, stale: loadStale, reports: loadReports, gallery: loadGallery, ghist: loadGhist, gens: loadGens, inputs: loadInputs, users: loadUsers, admins: loadAdmins,
+    purchases: loadPurchases, verify: loadVerifyAttempts, stale: loadStale, reports: loadReports, tickets: loadTickets, gallery: loadGallery, ghist: loadGhist, gens: loadGens, inputs: loadInputs, users: loadUsers, admins: loadAdmins,
     settings: loadSettings, notifs: loadNotifs})[tab]?.().catch(e => setMsg(e.message));
 }
 
@@ -558,12 +575,12 @@ async function saveCat(e){ e.preventDefault(); const body = {name: $('c-name').v
 async function delCat(id){ if(!confirm('دسته حذف شود؟ (اگر دنیا داشته باشد رد می‌شود)')) return; try { await api('/admin/categories/' + id, 'DELETE'); loadCats(); } catch(err){ setMsg(err.message); } }
 
 async function loadPacks(){ const ps = await api('/admin/packs');
-  $('p-list').innerHTML = ps.length ? `<table><tr><th>نام</th><th>سکه</th><th>تومان</th><th>SKU</th><th>بج</th><th>نوع</th><th>هدیه</th><th>بازار</th><th>زیبال</th><th>جایگزین</th><th>فعال</th><th></th></tr>` +
-    ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${esc(p.pack_type)}</td><td>${p.gift_coins ? `+${p.gift_coins}${p.gift_scope === 'first' ? ' (اول)' : ''}` : '—'}</td><td>${p.bazaar_enabled === false ? '—' : '✓'}</td><td>${p.zibal_enabled ? '✓' : '—'}</td><td>${p.show_fallback_button ? '✓' : '—'}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>';
+  $('p-list').innerHTML = ps.length ? `<table><tr><th>نام</th><th>سکه</th><th>تومان</th><th>قیمت اصلی</th><th>SKU</th><th>بج</th><th>نوع</th><th>هدیه</th><th>بازار</th><th>زیبال</th><th>جایگزین</th><th>فعال</th><th></th></tr>` +
+    ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${p.original_price_toman ? p.original_price_toman.toLocaleString('fa-IR') : '—'}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${esc(p.pack_type)}</td><td>${p.gift_coins ? `+${p.gift_coins}${p.gift_scope === 'first' ? ' (اول)' : ''}` : '—'}</td><td>${p.bazaar_enabled === false ? '—' : '✓'}</td><td>${p.zibal_enabled ? '✓' : '—'}</td><td>${p.show_fallback_button ? '✓' : '—'}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>';
   applyFilter('p-list'); }
-function editPack(p){ editingPack = p.id; $('p-name').value = p.name; $('p-coins').value = p.coins; $('p-price').value = p.price_toman; $('p-sku').value = p.bazaar_sku; $('p-badge').value = p.badge || ''; $('p-type').value = p.pack_type || ''; $('p-sort').value = p.sort_order; $('p-gift').value = p.gift_coins || 0; $('p-gift-scope').value = p.gift_scope || 'every'; $('p-bazaar').checked = p.bazaar_enabled !== false; $('p-zibal').checked = !!p.zibal_enabled; $('p-fallback').checked = !!p.show_fallback_button; }
-function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-sku','p-badge','p-type'].forEach(i => $(i).value = ''); $('p-sort').value = 0; $('p-gift').value = 0; $('p-gift-scope').value = 'every'; $('p-bazaar').checked = true; $('p-zibal').checked = false; }
-async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').value.trim(), coins: +$('p-coins').value, price_toman: +$('p-price').value, bazaar_sku: $('p-sku').value.trim(), badge: $('p-badge').value.trim() || null, pack_type: $('p-type').value.trim() || null, sort_order: +$('p-sort').value, gift_coins: +$('p-gift').value || 0, gift_scope: $('p-gift-scope').value, bazaar_enabled: $('p-bazaar').checked, zibal_enabled: $('p-zibal').checked, show_fallback_button: $('p-fallback').checked};
+function editPack(p){ editingPack = p.id; $('p-name').value = p.name; $('p-coins').value = p.coins; $('p-price').value = p.price_toman; $('p-orig').value = p.original_price_toman ?? ''; $('p-sku').value = p.bazaar_sku; $('p-badge').value = p.badge || ''; $('p-type').value = p.pack_type || ''; $('p-sort').value = p.sort_order; $('p-gift').value = p.gift_coins || 0; $('p-gift-scope').value = p.gift_scope || 'every'; $('p-bazaar').checked = p.bazaar_enabled !== false; $('p-zibal').checked = !!p.zibal_enabled; $('p-fallback').checked = !!p.show_fallback_button; }
+function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-orig','p-sku','p-badge','p-type'].forEach(i => $(i).value = ''); $('p-sort').value = 0; $('p-gift').value = 0; $('p-gift-scope').value = 'every'; $('p-bazaar').checked = true; $('p-zibal').checked = false; }
+async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').value.trim(), coins: +$('p-coins').value, price_toman: +$('p-price').value, original_price_toman: $('p-orig').value.trim() === '' ? null : +$('p-orig').value, bazaar_sku: $('p-sku').value.trim(), badge: $('p-badge').value.trim() || null, pack_type: $('p-type').value.trim() || null, sort_order: +$('p-sort').value, gift_coins: +$('p-gift').value || 0, gift_scope: $('p-gift-scope').value, bazaar_enabled: $('p-bazaar').checked, zibal_enabled: $('p-zibal').checked, show_fallback_button: $('p-fallback').checked};
   try { editingPack ? await api('/admin/packs/' + editingPack, 'PATCH', body) : await api('/admin/packs', 'POST', body); setMsg('پک ذخیره شد.', true); resetPackForm(); loadPacks(); } catch(err){ setMsg(err.message); } }
 async function delPack(id){ if(!confirm('پک حذف شود؟')) return; try { await api('/admin/packs/' + id, 'DELETE'); loadPacks(); } catch(err){ setMsg(err.message); } }
 
@@ -635,6 +652,17 @@ async function reportAct(id, st){ try { await api('/admin/reports/' + id, 'PATCH
 function rpChecked(){ return [...document.querySelectorAll('.rp-check:checked')].map(c => +c.value); }
 async function reportsDeleteSelected(){ const ids = rpChecked(); if(!ids.length){ setMsg('چیزی تیک نخورده است.'); return; } if(!confirm(ids.length + ' گزارش حذف شود؟')) return; try { const r = await api('/admin/reports/bulk', 'DELETE', {ids}); setMsg(r.deleted + ' گزارش حذف شد.', true); loadReports(); } catch(err){ setMsg(err.message); } }
 async function reportsDeleteReviewed(){ if(!confirm('همه‌ی گزارش‌های بررسی‌شده و ردشده حذف شوند؟')) return; try { const r = await api('/admin/reports/bulk', 'DELETE', {statuses: ['reviewed', 'dismissed']}); setMsg(r.deleted + ' گزارش حذف شد.', true); loadReports(); } catch(err){ setMsg(err.message); } }
+
+async function loadTickets(){ const rows = await api('/admin/tickets');
+  $('tk-detail').innerHTML = '';
+  $('tk-list').innerHTML = rows.length ? `<table><tr><th>id</th><th>کاربر</th><th>موضوع</th><th>وضعیت</th><th>تاریخ</th><th></th></tr>` +
+    rows.map(t => `<tr><td>${t.id}</td><td>${t.user_id}</td><td>${esc(t.subject)}</td><td>${t.status === 'open' ? 'باز' : 'بسته'}</td><td class="muted">${esc(faDate(t.created_at))}</td><td><button class="small" onclick="loadTicketDetail(${t.id})">مشاهده</button></td></tr>`).join('') + '</table>' : '<p class="muted">تیکتی نیست.</p>'; }
+async function loadTicketDetail(id){ const t = await api('/admin/tickets/' + id);
+  $('tk-detail').innerHTML = `<h3>تیکت ${t.id} — ${esc(t.subject)}</h3><p class="muted">کاربر: ${t.user_id} | وضعیت: ${t.status === 'open' ? 'باز' : 'بسته'}</p>` +
+    (t.messages || []).map(m => `<p><b>${m.sender === 'admin' ? 'ادمین' : 'کاربر'}:</b> ${esc(m.body)} <span class="muted">${esc(faDate(m.created_at))}</span></p>`).join('') +
+    `<form class="grid" onsubmit="ticketReply(event, ${t.id})"><textarea id="tk-reply" rows="3" placeholder="پاسخ ادمین" required></textarea><span><button>ارسال پاسخ</button> ${t.status === 'open' ? `<button type="button" class="small danger" onclick="ticketSetStatus(${t.id},'closed')">بستن تیکت</button>` : `<button type="button" class="small gold" onclick="ticketSetStatus(${t.id},'open')">باز کردن تیکت</button>`}</span></form>`; }
+async function ticketReply(e, id){ e.preventDefault(); try { await api('/admin/tickets/' + id + '/messages', 'POST', {body: $('tk-reply').value.trim()}); setMsg('پاسخ فرستاده شد.', true); loadTicketDetail(id); loadTickets(); } catch(err){ setMsg(err.message); } }
+async function ticketSetStatus(id, st){ try { await api('/admin/tickets/' + id, 'PATCH', {status: st}); setMsg(st === 'closed' ? 'تیکت بسته شد.' : 'تیکت باز شد.', true); loadTicketDetail(id); loadTickets(); } catch(err){ setMsg(err.message); } }
 
 async function loadGallery(){ const rows = await api('/admin/gallery/pending');
   $('g-list').innerHTML = rows.length ? rows.map(r => `<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;"><img class="thumb" src="${esc(r.image_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | generation: ' + r.generation_id)}" onclick="openLightbox(this.src, this.dataset.cap)" style="cursor:pointer;"><div>موبایل: ${esc(r.mobile)}<br><span class="muted">generation: ${r.generation_id}</span></div><button class="small gold" onclick="galleryAct(${r.id},'approve')">تأیید</button><input id="gr-${r.id}" placeholder="دلیل رد (اختیاری)" style="min-width:180px;"><button class="small danger" onclick="galleryReject(${r.id})">رد</button></div>`).join('') : '<p class="muted">عکس در انتظاری نیست.</p>'; }
@@ -723,6 +751,20 @@ async function saveSetting(e){ e.preventDefault(); try { await api('/admin/setti
 async function saveGiftToggle(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'entry_gift_enabled', value: $('s-gift').checked ? '1' : '0'}); setMsg('تنظیم هدیه‌ی ورود ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function saveSmsToggle(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'sms_login_disabled', value: $('s-sms').checked ? '1' : '0'}); setMsg('تنظیم ورود با پیامک ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function saveMinVersion(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'min_app_version_code', value: $('s-minver').value.trim()}); setMsg('حداقل نسخه ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
+async function savePromoSettings(e){ e.preventDefault(); try {
+  await api('/admin/settings', 'PATCH', {key: 'promo_modal_title', value: $('ps-promo-title').value.trim()});
+  await api('/admin/settings', 'PATCH', {key: 'promo_modal_body', value: $('ps-promo-body').value.trim()});
+  await api('/admin/settings', 'PATCH', {key: 'promo_modal_show_number', value: $('ps-promo-show').value.trim()});
+  await api('/admin/settings', 'PATCH', {key: 'promo_modal_enabled', value: $('ps-promo-enabled').checked ? '1' : '0'});
+  setMsg('مودال تبلیغاتی ذخیره شد.', true); loadSettings();
+} catch(err){ setMsg(err.message); } }
+async function promoReshow(){ try {
+  const ss = await api('/admin/settings'); const m = {}; ss.forEach(s => m[s.key] = s.value);
+  const cur = parseInt(m.promo_modal_show_number || '0', 10);
+  const next = (isNaN(cur) ? 0 : cur) + 1;
+  await api('/admin/settings', 'PATCH', {key: 'promo_modal_show_number', value: String(next)});
+  setMsg('شماره‌ی نمایش به ' + next + ' رسید؛ مودال برای همه دوباره نشان داده می‌شود.', true); loadSettings();
+} catch(err){ setMsg(err.message); } }
 async function savePublicSettings(e){ e.preventDefault(); try {
   for (const [k, id] of [['about_us','ps-about'],['support_info','ps-support'],['bug_report_info','ps-bug'],['rules_privacy','ps-rules'],['bazaar_url','ps-bazaar'],['myket_url','ps-myket']]) {
     await api('/admin/settings', 'PATCH', {key: k, value: $(id).value.trim()});
@@ -732,6 +774,7 @@ async function savePublicSettings(e){ e.preventDefault(); try {
 async function loadPublicSettings(){ try { const ss = await api('/admin/settings');
   const m = {}; ss.forEach(s => m[s.key] = s.value);
   $('ps-about').value = m.about_us || ''; $('ps-support').value = m.support_info || ''; $('ps-bug').value = m.bug_report_info || ''; $('ps-rules').value = m.rules_privacy || ''; $('ps-bazaar').value = m.bazaar_url || ''; $('ps-myket').value = m.myket_url || '';
+  $('ps-promo-title').value = m.promo_modal_title || ''; $('ps-promo-body').value = m.promo_modal_body || ''; $('ps-promo-show').value = m.promo_modal_show_number || ''; $('ps-promo-enabled').checked = m.promo_modal_enabled === '1';
 } catch(_){} }
 
 async function loadNotifs(){ const rows = await api('/admin/announcements');

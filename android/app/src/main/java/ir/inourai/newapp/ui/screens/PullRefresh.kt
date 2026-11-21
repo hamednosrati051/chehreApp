@@ -1,4 +1,5 @@
 package ir.inourai.newapp.ui.screens
+import ir.inourai.newapp.ui.theme.themed
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -147,7 +148,7 @@ fun PullRefreshLayout(
                     Text(
                         if (refreshing) "در حال تازه‌سازی…" else "رها کنید تا تازه شود",
                         fontSize = 13.sp,
-                        color = Color.Gray,
+                        color = themed(Color.Gray, Color(0xFFAAB4C4)),
                     )
                 }
             }

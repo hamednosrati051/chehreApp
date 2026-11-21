@@ -202,6 +202,39 @@ class AppSetting(db.Model):
     value = db.Column(db.String(500), nullable=False)
 
 
+class AppTicket(db.Model):
+    """تیکت پشتیبانی کاربر ↔ ادمین (نسخه‌ی ۱۸؛ مینیمال، الگوی تیکت نورا).
+
+    status فقط "open" یا "closed" است؛ پیام‌ها در AppTicketMessage
+    با sender ‏"user" یا "admin" جدا می‌شوند (برخلاف نورا که is_admin
+    دارد — قرارداد WORKLIST نسخه‌ی ۱۸ همین است).
+    """
+
+    __tablename__ = "app_tickets"
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.BigInteger, db.ForeignKey("app_users.id"), nullable=False)
+    subject = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(16), default="open", nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        server_default=db.func.now(),
+        onupdate=db.func.now(),
+        nullable=False,
+    )
+
+
+class AppTicketMessage(db.Model):
+    __tablename__ = "app_ticket_messages"
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    ticket_id = db.Column(
+        db.BigInteger, db.ForeignKey("app_tickets.id"), nullable=False
+    )
+    sender = db.Column(db.String(16), nullable=False)  # "user" | "admin"
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+
 class AppCoinPack(db.Model):
     __tablename__ = "app_coin_packs"
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
@@ -227,6 +260,10 @@ class AppCoinPack(db.Model):
     # دکمه‌ی درگاه دیگر یک بار (در همان باز شدن شیت خرید) نشان داده
     # می‌شود — حتی اگر پرچم آن درگاه خاموش باشد؛ پیش‌فرض خاموش است.
     show_fallback_button = db.Column(db.Boolean, default=False, nullable=False)
+    # v18 قیمت اصلی (نمایشی، فقط برای خط‌خوردن در اپ): مبلغی که
+    # پرداخت می‌شود همان price_toman است؛ این ستون هرگز در هیچ مسیر
+    # شارژ/وریفای خوانده نمی‌شود. NULL یعنی بدون تخفیف نمایشی.
+    original_price_toman = db.Column(db.Integer, nullable=True)
 
 
 class AppPurchase(db.Model):

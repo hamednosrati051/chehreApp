@@ -77,7 +77,6 @@ import coil.compose.AsyncImage
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Balance
 import ir.inourai.newapp.data.Favorites
-import ir.inourai.newapp.data.GenerationRequest
 import ir.inourai.newapp.data.Session
 import ir.inourai.newapp.data.UserError
 import ir.inourai.newapp.data.networkError
@@ -382,14 +381,8 @@ fun CreateImageScreen(
         scope.launch {
             try {
                 val uri = picked ?: return@launch
-                val inputUrl = Api.uploadFile(uriToFile(context, uri))
-                val created = Api.service.createGeneration(
-                    GenerationRequest(
-                        kind = "image",
-                        world_id = worldId,
-                        input_url = inputUrl,
-                    ),
-                )
+                // v18 (1): تک‌مرحله‌ای — آپلود + ساخت در یک تماس.
+                val created = Api.createGenerationWithImage(uriToFile(context, uri), worldId)
                 if (hadGiftAtTap) ResultGiftContext.set(created.id)
                 jobId = created.id
                 status = "queued"

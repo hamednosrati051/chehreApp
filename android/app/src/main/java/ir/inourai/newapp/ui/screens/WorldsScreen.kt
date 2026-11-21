@@ -1,4 +1,5 @@
 package ir.inourai.newapp.ui.screens
+import ir.inourai.newapp.ui.theme.themed
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -80,7 +81,7 @@ fun WorldsScreen(onWorld: (Long) -> Unit) {
                     label = { Text("همه") },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.secondary,
-                        selectedLabelColor = Color.White,
+                        selectedLabelColor = themed(Color.White, Color(0xFF0B1E3A)),
                     ),
                 )
             }
@@ -91,7 +92,7 @@ fun WorldsScreen(onWorld: (Long) -> Unit) {
                     label = { Text("پیشنهادی") },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.secondary,
-                        selectedLabelColor = Color.White,
+                        selectedLabelColor = themed(Color.White, Color(0xFF0B1E3A)),
                     ),
                 )
             }
@@ -102,7 +103,7 @@ fun WorldsScreen(onWorld: (Long) -> Unit) {
                     label = { Text(c.name) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.secondary,
-                        selectedLabelColor = Color.White,
+                        selectedLabelColor = themed(Color.White, Color(0xFF0B1E3A)),
                     ),
                 )
             }
@@ -115,7 +116,7 @@ fun WorldsScreen(onWorld: (Long) -> Unit) {
         ) {
             if (shown.isEmpty()) {
                 item(span = { GridItemSpan(2) }) {
-                    Text("در این بخش هنوز دنیایی نیست.", color = Color.Gray)
+                    Text("در این بخش هنوز دنیایی نیست.", color = themed(Color.Gray, Color(0xFFAAB4C4)))
                 }
             }
             items(shown) { w ->

@@ -1,4 +1,5 @@
 package ir.inourai.newapp.ui.screens
+import ir.inourai.newapp.ui.theme.themed
 
 import ir.inourai.newapp.billing.StoreConfig
 import ir.inourai.newapp.data.PublicSettings
@@ -80,6 +81,7 @@ import ir.inourai.newapp.data.GalleryReportRequest
 import ir.inourai.newapp.data.ImageLikes
 import ir.inourai.newapp.data.GallerySubmitRequest
 import ir.inourai.newapp.data.Session
+import retrofit2.HttpException
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -135,13 +137,19 @@ object ResultGiftContext {
     }
 }
 
+/** عدد را با ارقام فارسی برمی‌گرداند (مثل CreateScreens). */
+private fun toPersianDigits(n: Int): String {
+    val fa = "۰۱۲۳۴۵۶۷۸۹"
+    return n.toString().map { c -> if (c in '0'..'9') fa[c - '0'] else c }.joinToString("")
+}
+
 /** نمایش تمام‌صفحه‌ی نتیجه (مثل رقیب): نام دنیا + قلب + اشتراک‌گذاری
  *  و دانلود؛ وقتی تازه ساخته شده، شیت امتیاز بازار هم نشان داده می‌شود.
  *  وقتی از «تصاویر من» باز شده باشد، با سوایپ افقی بین عکس‌های همان
  *  فهرست حرکت می‌کند؛ صفحه‌ی بعد از ساخت تک‌عکس می‌ماند. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBack: () -> Unit, onLogin: () -> Unit = {}) {
+fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBack: () -> Unit, onLogin: () -> Unit = {}, onRegenerate: (Long) -> Unit = {}) {
     val context = LocalContext.current
     // سوایپ فقط وقتی معنا دارد که صفحه از «تصاویر من» آمده باشد، فهرست
     // دست‌کم ۲ عکس داشته باشد و عکس فعلی عضو همان فهرست باشد؛ در غیر
@@ -157,6 +165,10 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
     var status by remember { mutableStateOf("loading") }
     var outputUrl by remember { mutableStateOf<String?>(null) }
     var worldName by remember { mutableStateOf<String?>(null) }
+    var worldId by remember { mutableStateOf<Long?>(null) }
+    // v18 (4): قیمتِ روز دنیا برای دکمه‌ی «همین عکس با کیفیت بالا».
+    var regenPrice by remember { mutableStateOf<Int?>(null) }
+    var regenerating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var submitted by remember { mutableStateOf(false) }
     var showGalleryConfirm by remember { mutableStateOf(false) }
@@ -202,6 +214,8 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
         status = "loading"
         outputUrl = null
         worldName = null
+        worldId = null
+        regenPrice = null
         error = null
         isFree = false
         inGallery = false
@@ -221,6 +235,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                 status = st.status
                 outputUrl = st.output_url
                 worldName = st.world_name
+                worldId = st.world_id
                 isFree = st.is_free
                 inGallery = st.in_gallery
                 if (st.status == "done" && st.output_url != null) {
@@ -242,6 +257,15 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
         }
     }
 
+    // v18 (4): قیمتِ روز دنیا برای برچسب دکمه‌ی بازسازی.
+    LaunchedEffect(worldId) {
+        val id = worldId ?: return@LaunchedEffect
+        try {
+            regenPrice = Api.service.world(id).coin_price
+        } catch (_: Exception) {
+        }
+    }
+
     // پیام کوتاه و موقت: بعد از ~۲٫۵ ثانیه محو می‌شود.
     LaunchedEffect(notice) {
         if (notice != null) {
@@ -250,6 +274,63 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
         }
     }
 
+
+    // v18 (4): «همین عکس با کیفیت بالا» — مستقیم ساخته نمی‌شود؛
+    // اول GET /generations/<id>/regenerate، بعد موجودی چک می‌شود
+    // (سکه ناکافی → شیت بسته‌ها، مثل منطق CreateScreens)، بعد ورودی
+    // اصلی دانلود و به‌عنوان عکس آخری ذخیره می‌شود تا صفحه‌ی ساخت همان
+    // دنیا آن را از پیش پر کند، و کاربر خودش دکمه‌ی ساخت را می‌زند.
+    // ۴۰۲ سرور موقع ساخت، پشتیبانِ دوم است.
+    fun onRegenerateTap() {
+        if (regenerating) return
+        regenerating = true
+        scope.launch {
+            try {
+                val res = Api.service.regenerate(currentId)
+                val price = res.coin_price.takeIf { it > 0 } ?: regenPrice ?: 0
+                val bal = try {
+                    Api.service.balance()
+                } catch (_: Exception) {
+                    null
+                }
+                val insufficient = bal != null && price > 0 &&
+                    (bal.free_image <= 0) && bal.coins < price
+                if (insufficient) {
+                    showPacks = true
+                    return@launch
+                }
+                res.input_url?.let { inputUrl ->
+                    try {
+                        val bytes = downloadResultBytes(inputUrl)
+                        val file = File(
+                            context.filesDir,
+                            "last_photo_${System.currentTimeMillis()}.jpg",
+                        )
+                        file.writeBytes(bytes)
+                        context.filesDir.listFiles { f ->
+                            f.name.startsWith("last_photo_") && f.name != file.name
+                        }?.forEach { old ->
+                            try {
+                                old.delete()
+                            } catch (_: Exception) {
+                            }
+                        }
+                    } catch (_: Exception) {
+                        // پیش‌پرکردن نشد؛ کاربر در صفحه‌ی ساخت خودش عکس می‌دهد.
+                    }
+                }
+                onRegenerate(res.world_id)
+            } catch (e: Exception) {
+                if (e is HttpException && e.code() == 402) {
+                    showPacks = true
+                } else {
+                    notice = "دوباره تلاش کن"
+                }
+            } finally {
+                regenerating = false
+            }
+        }
+    }
 
     fun share() {
         val url = outputUrl ?: return
@@ -445,7 +526,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                         Icon(
                             Icons.Rounded.Flag,
                             contentDescription = null,
-                            tint = if (reported) Color.Gray else Color.White,
+                            tint = if (reported) themed(Color.Gray, Color(0xFFAAB4C4)) else Color.White,
                             modifier = Modifier.size(28.dp),
                         )
                     }
@@ -454,9 +535,11 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
         }
         // پیام هدیه (نسخه‌ی ۱۲): خط اول کوچک و کم‌رنگ، خط دوم بزرگ و
         // پررنگ و طلایی تا تو چشم باشد؛ دکمه‌ی «خرید سکه» هم طلایی است.
-        // فقط در صفحه‌ی تازه‌ساخته‌شده و فقط وقتی همین generation با
-        // اعتبار هدیه ساخته شده باشد. «خرید سکه» شیت بسته‌ها را باز می‌کند.
-        if (showGiftNudge && outputUrl != null) {
+        // v18 (3+4): بلوک برای هر تصویر رایگان نشان داده می‌شود (نه فقط
+        // صفحه‌ی تازه‌ساخته‌شده) و دکمه‌ی «همین عکس با کیفیت بالا» با
+        // قیمتِ روز دنیا هم همین‌جاست؛ صفحه‌ی نتیجه هیچ برچسب کیفیتی
+        // روی عکس نمی‌گیرد.
+        if ((showGiftNudge || isFree) && outputUrl != null) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -475,6 +558,25 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 2.dp),
                 )
+                val price = regenPrice
+                if (price != null && price > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { onRegenerateTap() },
+                        enabled = !regenerating,
+                        shape = RoundedCornerShape(50),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFFC107),
+                            contentColor = Color.Black,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            "همین عکس با کیفیت بالا (${toPersianDigits(price)} سکه)",
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
                 TextButton(onClick = { showPacks = true }) {
                     Text("خرید سکه", color = Color(0xFFFFC107), fontWeight = FontWeight.Bold)
                 }
@@ -643,7 +745,7 @@ fun ResultScreen(genId: Long, fresh: Boolean, swipeIds: List<Long>? = null, onBa
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     "اگه خوشت اومد، امتیاز و نظرت توی " + if (StoreConfig.STORE_ID == "myket") "مایکت" else "کافه‌بازار" + " کلی بهمون کمک می‌کنه.",
-                    color = Color.Gray,
+                    color = themed(Color.Gray, Color(0xFFAAB4C4)),
                     fontSize = 14.sp,
                 )
                 Spacer(modifier = Modifier.height(16.dp))

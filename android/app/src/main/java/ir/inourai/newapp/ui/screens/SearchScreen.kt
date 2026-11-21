@@ -1,4 +1,5 @@
 package ir.inourai.newapp.ui.screens
+import ir.inourai.newapp.ui.theme.themed
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -84,10 +85,10 @@ fun SearchScreen(onWorld: (Long) -> Unit, onGoHome: () -> Unit) {
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
+                focusedContainerColor = themed(Color.White, Color(0xFF1E293B)),
+                unfocusedContainerColor = themed(Color.White, Color(0xFF1E293B)),
                 focusedBorderColor = Color(0xFF1D6FE0),
-                unfocusedBorderColor = Color(0xFFD4DCE8),
+                unfocusedBorderColor = themed(Color(0xFFD4DCE8), Color(0xFF3A465C)),
             ),
         )
         LazyRow(
@@ -112,7 +113,7 @@ fun SearchScreen(onWorld: (Long) -> Unit, onGoHome: () -> Unit) {
         ) {
             if (shown.isEmpty()) {
                 item(span = { GridItemSpan(2) }) {
-                    Text("چیزی پیدا نشد.", color = Color.Gray)
+                    Text("چیزی پیدا نشد.", color = themed(Color.Gray, Color(0xFFAAB4C4)))
                 }
             }
             items(shown) { w ->
@@ -128,7 +129,7 @@ private fun SearchChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .background(
-                if (selected) MaterialTheme.colorScheme.primary else Color(0xFFF1F3F5),
+                if (selected) MaterialTheme.colorScheme.primary else themed(Color(0xFFF1F3F5), Color(0xFF243247)),
                 RoundedCornerShape(28.dp),
             )
             .clickable { onClick() }
@@ -136,7 +137,7 @@ private fun SearchChip(label: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             label,
-            color = if (selected) Color.White else Color(0xFF334155),
+            color = if (selected) themed(Color.White, Color(0xFF0B1E3A)) else themed(Color(0xFF334155), Color(0xFFD7DEE8)),
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             fontSize = 14.sp,
         )

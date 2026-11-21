@@ -10,6 +10,7 @@
 
 import os
 import uuid
+from urllib.parse import urlparse
 
 from flask import current_app
 
@@ -61,3 +62,47 @@ def upload_bytes(data: bytes, filename: str) -> str:
         or "http://171.22.25.152:5001"
     )
     return f"{base.rstrip('/')}/static/uploads/{name}"
+
+
+def delete_url(url: str) -> bool:
+    """حذف best-effort فایلی که قبلاً با upload_bytes ذخیره شده
+    (نسخه‌ی ۱۸: جبران خطای DB بعد از store در /generations/with_image).
+
+    فقط URLهای همین سرویس قبول می‌شوند؛ S3 با delete_object و
+    دیسک-لوکال با unlink زیر static/uploads. خطا False برمی‌گرداند
+    (هرگز exception نمی‌دهد تا handler اصلی را نخواباند).
+    """
+    if not url:
+        return False
+    try:
+        if _s3_enabled():
+            parsed = urlparse(url)
+            parts = parsed.path.lstrip("/").split("/", 1)
+            if len(parts) != 2:
+                return False
+            _s3_client().delete_object(
+                Bucket=current_app.config["S3_BUCKET"], Key=parts[1]
+            )
+            return True
+        parsed = urlparse(url)
+        if parsed.netloc not in (
+            "",
+            "chehre.inourai.ir",
+            "171.22.25.152:5001",
+        ):
+            return False
+        if not parsed.path.startswith("/static/uploads/"):
+            return False
+        filename = os.path.basename(parsed.path)
+        if not filename or filename in (".", ".."):
+            return False
+        uploads_dir = os.path.realpath(_local_dir())
+        path = os.path.realpath(os.path.join(uploads_dir, filename))
+        if os.path.commonpath([path, uploads_dir]) != uploads_dir:
+            return False
+        if os.path.exists(path):
+            os.unlink(path)
+            return True
+        return False
+    except Exception:
+        return False

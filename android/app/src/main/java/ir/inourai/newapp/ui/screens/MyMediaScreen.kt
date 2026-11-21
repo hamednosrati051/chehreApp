@@ -1,4 +1,5 @@
 package ir.inourai.newapp.ui.screens
+import ir.inourai.newapp.ui.theme.themed
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -129,7 +130,7 @@ fun MyMediaScreen(
             Box(
                 modifier = Modifier
                     .background(
-                        if (tab == 0) Color(0xFF2E5BFF) else Color(0xFFF1F3F5),
+                        if (tab == 0) Color(0xFF2E5BFF) else themed(Color(0xFFF1F3F5), Color(0xFF243247)),
                         RoundedCornerShape(topStartPercent = 50, bottomStartPercent = 50),
                     )
                     .clickable { tab = 0 }
@@ -138,13 +139,13 @@ fun MyMediaScreen(
                 Icon(
                     Icons.Rounded.FavoriteBorder,
                     contentDescription = null,
-                    tint = if (tab == 0) Color.White else Color.Gray,
+                    tint = if (tab == 0) Color.White else themed(Color.Gray, Color(0xFFAAB4C4)),
                 )
             }
             Box(
                 modifier = Modifier
                     .background(
-                        if (tab == 1) Color(0xFF2E5BFF) else Color(0xFFF1F3F5),
+                        if (tab == 1) Color(0xFF2E5BFF) else themed(Color(0xFFF1F3F5), Color(0xFF243247)),
                         RoundedCornerShape(topEndPercent = 50, bottomEndPercent = 50),
                     )
                     .clickable { tab = 1 }
@@ -153,7 +154,7 @@ fun MyMediaScreen(
                 Icon(
                     Icons.Rounded.Image,
                     contentDescription = null,
-                    tint = if (tab == 1) Color.White else Color.Gray,
+                    tint = if (tab == 1) Color.White else themed(Color.Gray, Color(0xFFAAB4C4)),
                 )
             }
         }
@@ -163,7 +164,7 @@ fun MyMediaScreen(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("برای دیدن تصاویرت وارد شوید", color = Color.Gray)
+                Text("برای دیدن تصاویرت وارد شوید", color = themed(Color.Gray, Color(0xFFAAB4C4)))
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(onClick = onLogin) {
                     Text("ورود / ساخت حساب")
@@ -185,7 +186,7 @@ fun MyMediaScreen(
                     Icon(
                         Icons.Rounded.FavoriteBorder,
                         contentDescription = null,
-                        tint = Color.LightGray,
+                        tint = themed(Color.LightGray, Color(0xFF4A5568)),
                         modifier = Modifier.size(72.dp),
                     )
                     Spacer(modifier = Modifier.height(16.dp))
@@ -197,7 +198,7 @@ fun MyMediaScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         "قلب بالای هر تصویر را بزن تا اینجا بماند و بعداً سراغش بیایی",
-                        color = Color.Gray,
+                        color = themed(Color.Gray, Color(0xFFAAB4C4)),
                         fontSize = 14.sp,
                     )
                     Spacer(modifier = Modifier.height(20.dp))
@@ -237,6 +238,19 @@ fun MyMediaScreen(
                                     Text("✓ نگارخانه", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
+                            // v18 (6): برچسب کیفیت، گوشه‌ی بالا-انتها
+                            // (روبروی «✓ نگارخانه»).
+                            QualityChip(
+                                isFree = item.is_free,
+                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                            )
+                        }
+                        // v18 (7): نام دنیا زیر عکس (خط اول)؛ لمس → همان دنیا.
+                        if (item.world_name != null) {
+                            WorldNameText(
+                                name = item.world_name,
+                                onClick = item.world_id?.let { id -> { onWorld(id) } },
+                            )
                         }
                         // v13: اعلان ۲۴ ساعته زیر هر تصویر رایگان؛ پولی هیچ اعلانی نمی‌گیرد.
                         // تب لایک in_gallery ندارد (از /generations/mine نمی‌آید)؛ اصلاح
@@ -244,7 +258,7 @@ fun MyMediaScreen(
                         if (item.is_free) {
                             Text(
                                 "هدیه را دانلود کن؛ فقط ۲۴ ساعت می‌ماند",
-                                color = Color(0xFFB7791F),
+                                color = themed(Color(0xFFB7791F), Color(0xFFE8B84B)),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center,
@@ -315,12 +329,25 @@ fun MyMediaScreen(
                                 Text("✓ نگارخانه", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+                        // v18 (6): برچسب کیفیت، گوشه‌ی بالا-انتها
+                        // (روبروی «✓ نگارخانه»).
+                        QualityChip(
+                            isFree = item.is_free,
+                            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                        )
+                    }
+                    // v18 (7): نام دنیا زیر عکس (خط اول)؛ لمس → همان دنیا.
+                    if (item.world_name != null) {
+                        WorldNameText(
+                            name = item.world_name,
+                            onClick = item.world_id?.let { id -> { onWorld(id) } },
+                        )
                     }
                     // v14: اعلان ۲۴ ساعته فقط زیر تصویر رایگانِ بیرون از نگارخانه؛ پولی و گالری‌دار هیچ اعلانی نمی‌گیرند.
                     if (item.is_free && !item.in_gallery) {
                         Text(
                             "هدیه را دانلود کن؛ فقط ۲۴ ساعت می‌ماند",
-                            color = Color(0xFFB7791F),
+                            color = themed(Color(0xFFB7791F), Color(0xFFE8B84B)),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,

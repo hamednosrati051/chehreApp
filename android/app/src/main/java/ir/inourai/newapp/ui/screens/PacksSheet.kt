@@ -1,4 +1,5 @@
 package ir.inourai.newapp.ui.screens
+import ir.inourai.newapp.ui.theme.themed
 
 import android.app.Activity
 import android.content.Intent
@@ -35,7 +36,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -229,7 +232,7 @@ fun PacksSheet(
         sheetState = sheetState,
     ) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = themed(Color.White, Color(0xFF1E293B))),
             shape = RoundedCornerShape(28.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -257,27 +260,51 @@ fun PacksSheet(
                                 if (p.badge != null) {
                                     Text(
                                         p.badge,
-                                        color = PacksGold,
+                                        color = themed(PacksGold, Color(0xFFE8B84B)),
                                         fontWeight = FontWeight.Bold,
                                     )
                                 }
                                 if (p.pack_type != null) {
                                     Text(
                                         p.pack_type,
-                                        color = PacksBlue,
+                                        color = themed(PacksBlue, Color(0xFF7AA8F0)),
                                         fontWeight = FontWeight.Bold,
                                     )
                                 }
                             }
                             Text(
-                                "${p.coins} سکه — ${p.price_toman} تومان",
+                                "${p.coins} سکه",
                                 modifier = Modifier.padding(top = 4.dp),
                             )
+                            // v18 (10): قیمت اصلی خط‌خورده + قیمت پرداختی
+                            // پررنگ، فقط وقتی قیمت اصلی بزرگ‌تر است؛
+                            // وگرنه همان یک قیمتِ امروز. دکمه‌ها بی‌تغییرند.
+                            val original = p.original_price_toman
+                            if (original != null && original > p.price_toman) {
+                                Text(
+                                    "$original تومان",
+                                    color = themed(Color(0xFF9AA3AF), Color(0xFFAAB4C4)),
+                                    fontSize = 13.sp,
+                                    style = TextStyle(textDecoration = TextDecoration.LineThrough),
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                                Text(
+                                    "${p.price_toman} تومان",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            } else {
+                                Text(
+                                    "${p.price_toman} تومان",
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
                             // v11 هدیه‌ی خرید: فقط وقتی پک هدیه دارد.
                             if (p.gift_coins > 0) {
                                 Text(
                                     "+${p.gift_coins} سکه هدیه" + if (p.gift_scope == "first") " (فقط خرید اول)" else "",
-                                    color = PacksGold,
+                                    color = themed(PacksGold, Color(0xFFE8B84B)),
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(top = 2.dp),
                                 )

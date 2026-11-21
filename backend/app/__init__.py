@@ -16,6 +16,7 @@ def create_app(config_class=Config):
         coins_bp,
         gallery_bp,
         generations_bp,
+        tickets_bp,
         uploads_bp,
     )
 
@@ -25,6 +26,7 @@ def create_app(config_class=Config):
     app.register_blueprint(coins_bp, url_prefix="/api/v1")
     app.register_blueprint(gallery_bp, url_prefix="/api/v1")
     app.register_blueprint(uploads_bp, url_prefix="/api/v1")
+    app.register_blueprint(tickets_bp, url_prefix="/api/v1")
     app.register_blueprint(admin_bp, url_prefix="/api/v1")
 
     @app.get("/health")

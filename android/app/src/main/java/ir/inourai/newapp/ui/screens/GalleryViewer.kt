@@ -58,11 +58,15 @@ private val GalleryViewerBg = Color(0xFF0F172A)
 
 /** یک عکس گالری برای نمایشگر: شناسه‌ی نمایشی + خروجی + شناسه‌ی
  *  generation (برای قلب؛ در گالری عمومی ممکن است null باشد و آن‌وقت
- *  قلبی نشان داده نمی‌شود). */
+ *  قلبی نشان داده نمی‌شود).
+ *  v18 (6+7): isFree/worldName/worldId برای برچسب طلایی و نام دنیا. */
 data class GalleryPhoto(
     val id: Long,
     val outputUrl: String,
     val generationId: Long? = null,
+    val isFree: Boolean = false,
+    val worldName: String? = null,
+    val worldId: Long? = null,
 )
 
 /** نمایشگر تمام‌صفحه‌ی گالری: فقط عکس + ورق‌زدن بین عکس‌ها + دانلود +
@@ -85,6 +89,8 @@ fun GalleryViewer(
     submittedIds: Set<Long> = emptySet(),
     onSent: (Long) -> Unit = {},
     showHeart: Boolean = false,
+    // v18 (7): لمس نام دنیا → صفحه‌ی ساخت همان دنیا.
+    onWorld: (Long) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -173,7 +179,23 @@ fun GalleryViewer(
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)),
                         contentScale = ContentScale.FillWidth,
                     )
+                    // v18 (6): برچسب طلایی فقط روی عکس پولی.
+                    if (!photo.isFree) {
+                        QualityChip(
+                            isFree = false,
+                            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                        )
+                    }
                 }
+            }
+            // v18 (7): نام دنیا زیر عکس (فقط نام، بدون اعلان)؛ لمس → همان دنیا.
+            current?.worldName?.let { name ->
+                WorldNameText(
+                    name = name,
+                    onClick = current?.worldId?.let { id -> { onWorld(id) } },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = Color.White,
+                )
             }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),

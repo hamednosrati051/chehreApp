@@ -31,6 +31,8 @@ from .models import (
     AppPurchase,
     AppSetting,
     AppSinger,
+    AppTicket,
+    AppTicketMessage,
     AppTrend,
     AppTrendWorld,
     AppUser,
@@ -51,6 +53,7 @@ generations_bp = Blueprint("generations", __name__)
 coins_bp = Blueprint("coins", __name__)
 gallery_bp = Blueprint("gallery", __name__)
 uploads_bp = Blueprint("uploads", __name__)
+tickets_bp = Blueprint("tickets", __name__)
 admin_bp = Blueprint("admin", __name__)
 
 OTP_TTL_MINUTES = 2
@@ -743,6 +746,136 @@ def create_generation():
     return jsonify({"id": gen.id, "status": gen.status}), 201
 
 
+def _refund_and_drop_generation(gen, reserved):
+    """برگرداندن رزرو + حذف ردیف نسلِ هرگز صف‌نرفته (جبران خطا در
+    with_image؛ best-effort تا خطای اصلی پنهان نشود).
+
+    reserved=True یعنی reserve_for_generation قبلاً مصرف کرده است
+    (سکه یا اعتبار هدیه)؛ پرچم charged در حافظه True می‌شود چون
+    شاید commitِ ست‌کردنش ناموفق بوده و refund_reservation فقط
+    وقتی charged باشد جبران می‌کند.
+    """
+    if reserved:
+        try:
+            user = AppUser.query.get(gen.user_id)
+            if user is not None:
+                gen.charged = True
+                coins_svc.refund_reservation(user, gen)
+        except Exception:
+            db.session.rollback()
+    try:
+        db.session.delete(gen)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+@generations_bp.post("/generations/with_image")
+@require_auth
+def create_generation_with_image():
+    """آپلود + ساخت نسل در یک درخواست (نسخه‌ی ۱۸؛ رفع یتیم‌های ورودی).
+
+    آینه‌ی POST /generations + POST /uploads: اعتبارسنجی دنیا، سقف
+    ۲۰MB، تبدیل HEIC→JPEG، بعد رزرو (402 پیش از هر ذخیره‌ی فایل)،
+    بعد store، بعد ساخت ردیفِ وصل به فایل. /uploads دست نمی‌خورد
+    (اپ‌های قدیمی همان دو مرحله را دارند). خطای DB بعد از store،
+    فایلِ تازه‌ذخیره‌شده را در همین درخواست پاک می‌کند + رزرو
+    برمی‌گردد + ردیف حذف می‌شود. هیچ نوع خطای تازه‌ای به کاربر
+    نشان داده نمی‌شود (همان 400/402/404/409 قبلی + 500 داخلی).
+    """
+    f = request.files.get("file") or request.files.get("image")
+    if not f or not f.filename:
+        return jsonify({"error": "file required"}), 400
+    try:
+        world_id = int(request.form.get("world_id") or 0)
+    except (TypeError, ValueError):
+        world_id = 0
+    world = AppWorld.query.get(world_id) if world_id else None
+    if not world or not world.is_active:
+        return jsonify({"error": "world not found"}), 404
+    from .services import storage as storage_svc
+
+    raw = f.read()
+    if len(raw) > MAX_UPLOAD_BYTES:
+        return jsonify({"error": "file too large"}), 400
+    filename = f.filename or "upload.bin"
+    if _is_heif(raw):
+        # همان تبدیل /uploads (آیفون HEIC می‌فرستد).
+        try:
+            import io as _io
+
+            from PIL import Image, ImageOps
+            import pillow_heif
+
+            pillow_heif.register_heif_opener()
+            img = ImageOps.exif_transpose(Image.open(_io.BytesIO(raw))).convert("RGB")
+            buf = _io.BytesIO()
+            img.save(buf, format="JPEG", quality=90)
+            raw = buf.getvalue()
+            filename = os.path.splitext(filename)[0] + ".jpg"
+        except Exception:
+            return jsonify({"error": "heic conversion failed"}), 400
+    model = _main_image_model()
+    if not model or not model.is_active:
+        return jsonify({"error": "model not active"}), 409
+    cost = (
+        world.coin_price
+        if world.coin_price and world.coin_price > 0
+        else _default_image_coins()
+    )
+    gen = AppGeneration(
+        user_id=g.user.id,
+        kind="image",
+        world_id=world.id,
+        model_id=model.id,
+        input_url=None,
+        coin_cost=cost,
+    )
+    db.session.add(gen)
+    db.session.commit()
+    # رزرو اتمیک پیش از ذخیره‌ی فایل (مثل create_generation): اگر
+    # 402 شود، هنوز هیچ فایلی ذخیره نشده است.
+    source = coins_svc.reserve_for_generation(g.user, "image", cost, gen.id)
+    if source is None:
+        db.session.delete(gen)
+        db.session.commit()
+        return jsonify({"error": "insufficient coins"}), 402
+    gen.charged = True
+    role_model = (
+        _gift_image_model()
+        if source in ("gift", "free")
+        else _main_image_model()
+    )
+    if role_model is not None:
+        gen.model_id = role_model.id
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        _refund_and_drop_generation(gen, reserved=True)
+        return jsonify({"error": "failed to create generation"}), 500
+    try:
+        input_url = storage_svc.upload_bytes(raw, filename)
+    except Exception:
+        db.session.rollback()
+        _refund_and_drop_generation(gen, reserved=True)
+        return jsonify({"error": "failed to store image"}), 500
+    gen.input_url = input_url
+    try:
+        db.session.commit()
+    except Exception:
+        # خطای DB بعد از store: فایلِ تازه‌ذخیره‌شده در همین
+        # درخواست پاک می‌شود تا یتیم نماند؛ رزرو هم برمی‌گردد.
+        db.session.rollback()
+        storage_svc.delete_url(input_url)
+        _refund_and_drop_generation(gen, reserved=True)
+        return jsonify({"error": "failed to create generation"}), 500
+    from .worker import celery_app
+
+    celery_app.send_task("app.worker.process_image_job", args=[gen.id])
+    return jsonify({"id": gen.id, "status": gen.status}), 201
+
+
 def _spent_generation_ids(gen_ids):
     """شناسه‌ی تولیدهای پولی از روی دفتر سکه: سطر spend یعنی پولی.
 
@@ -809,6 +942,38 @@ def get_generation(gen_id):
     )
 
 
+@generations_bp.get("/generations/<int:gen_id>/regenerate")
+@require_auth
+def regenerate_generation(gen_id):
+    """آماده‌سازی «همین عکس با کیفیت بالا» (نسخه‌ی ۱۸) — فقط خواندنی.
+
+    صاحب نسل، ورودی اصلی + قیمتِ فعلیِ دنیا را می‌گیرد تا اپ صفحه‌ی
+    ساخت همان دنیا را با ورودیِ ازپیش‌پرشده باز کند. هیچ رزرو و
+    شارژی اینجا انجام نمی‌شود؛ تولید واقعی هنوز از POST /generations
+    می‌گذرد و قیمتِ جاریِ دنیا را همان‌جا می‌پردازد (مسیر اعتبار
+    یکی می‌ماند و idempotent است).
+    """
+    gen = AppGeneration.query.get(gen_id)
+    if not gen:
+        return jsonify({"error": "not found"}), 404
+    if gen.user_id != g.user.id:
+        return jsonify({"error": "forbidden"}), 403
+    world = AppWorld.query.get(gen.world_id) if gen.world_id else None
+    coin_price = (
+        world.coin_price
+        if world and world.coin_price and world.coin_price > 0
+        else gen.coin_cost
+    )
+    return jsonify(
+        {
+            "generation_id": gen.id,
+            "world_id": gen.world_id,
+            "input_url": gen.input_url,
+            "coin_price": coin_price,
+        }
+    )
+
+
 @generations_bp.get("/generations/mine")
 @require_auth
 def my_generations():
@@ -851,6 +1016,109 @@ def my_generations():
     )
 
 
+# ---------------- tickets ----------------
+
+MAX_TICKET_SUBJECT_CHARS = 255
+MAX_TICKET_BODY_CHARS = 4000
+
+
+def _ticket_message_public(m):
+    return {
+        "id": m.id,
+        "sender": m.sender,
+        "body": m.body,
+        "created_at": m.created_at.isoformat() if m.created_at else None,
+    }
+
+
+def _ticket_public(t, with_messages=False):
+    payload = {
+        "id": t.id,
+        "subject": t.subject,
+        "status": t.status,
+        "created_at": t.created_at.isoformat() if t.created_at else None,
+    }
+    if with_messages:
+        msgs = (
+            AppTicketMessage.query.filter_by(ticket_id=t.id)
+            .order_by(AppTicketMessage.id)
+            .all()
+        )
+        payload["messages"] = [_ticket_message_public(m) for m in msgs]
+    return payload
+
+
+def _owned_ticket(ticket_id):
+    """تیکت + خطا: نبودن → 404؛ مال دیگری → 403 (قرارداد نسخه‌ی ۱۸)."""
+    t = AppTicket.query.get(ticket_id)
+    if t is None:
+        return None, 404
+    if t.user_id != g.user.id:
+        return None, 403
+    return t, None
+
+
+@tickets_bp.post("/tickets")
+@require_auth
+def create_ticket():
+    body = request.json or {}
+    subject = (body.get("subject") or "").strip()
+    message = (body.get("message") or "").strip()
+    if not subject or not message:
+        return jsonify({"error": "subject and message required"}), 400
+    if len(subject) > MAX_TICKET_SUBJECT_CHARS or len(message) > MAX_TICKET_BODY_CHARS:
+        return jsonify({"error": "subject or message too long"}), 400
+    t = AppTicket(user_id=g.user.id, subject=subject, status="open")
+    db.session.add(t)
+    db.session.flush()
+    db.session.add(
+        AppTicketMessage(ticket_id=t.id, sender="user", body=message)
+    )
+    db.session.commit()
+    return jsonify(_ticket_public(t)), 201
+
+
+@tickets_bp.get("/tickets")
+@require_auth
+def list_tickets():
+    tickets = (
+        AppTicket.query.filter_by(user_id=g.user.id)
+        .order_by(AppTicket.id.desc())
+        .all()
+    )
+    return jsonify([_ticket_public(t) for t in tickets])
+
+
+@tickets_bp.get("/tickets/<int:ticket_id>")
+@require_auth
+def get_ticket(ticket_id):
+    t, err = _owned_ticket(ticket_id)
+    if err:
+        return jsonify({"error": "not found" if err == 404 else "forbidden"}), err
+    return jsonify(_ticket_public(t, with_messages=True))
+
+
+@tickets_bp.post("/tickets/<int:ticket_id>/messages")
+@require_auth
+def reply_ticket(ticket_id):
+    body = request.json or {}
+    text = (body.get("body") or "").strip()
+    if not text:
+        return jsonify({"error": "body required"}), 400
+    if len(text) > MAX_TICKET_BODY_CHARS:
+        return jsonify({"error": "body too long"}), 400
+    t, err = _owned_ticket(ticket_id)
+    if err:
+        return jsonify({"error": "not found" if err == 404 else "forbidden"}), err
+    if t.status == "closed":
+        return jsonify({"error": "ticket closed"}), 422
+    m = AppTicketMessage(ticket_id=t.id, sender="user", body=text)
+    db.session.add(m)
+    t.updated_at = datetime.datetime.utcnow()
+    db.session.commit()
+    return jsonify(_ticket_message_public(m)), 201
+
+
 # ---------------- coins ----------------
 
 
@@ -886,6 +1154,7 @@ def coin_packs():
                 "sort_order": p.sort_order,
                 "gift_coins": p.gift_coins or 0,
                 "gift_scope": p.gift_scope or "every",
+                "original_price_toman": p.original_price_toman,
                 "bazaar_enabled": bool(getattr(p, "bazaar_enabled", True)),
                 "zibal_enabled": bool(getattr(p, "zibal_enabled", False)),
                 "show_fallback_button": bool(getattr(p, "show_fallback_button", False)),
@@ -1010,13 +1279,47 @@ def public_gallery():
         .limit(50)
         .all()
     )
-    return jsonify([{"id": r.id, "generation_id": r.generation_id, "image_url": r.image_url} for r in rows])
+    # نسخه‌ی ۱۸، افزایشی: is_free (همان قانون دفتر سکه که
+    # my_generations استفاده می‌کند) + world_name + world_id (همان join که
+    # my_generations استفاده می‌کند). اپ‌های قدیمی نمی‌شناسند و
+    # نادیده می‌گیرند. world_id برای ناوبری مطمئن به دنیا لازم است
+    # (تطابق با نام ممکن است در صورت تغییر نام دنیا بشکند).
+    gen_ids = [r.generation_id for r in rows]
+    gens = (
+        {g.id: g for g in AppGeneration.query.filter(AppGeneration.id.in_(gen_ids)).all()}
+        if gen_ids
+        else {}
+    )
+    world_ids = [g.world_id for g in gens.values() if g.world_id]
+    worlds = (
+        {w.id: w for w in AppWorld.query.filter(AppWorld.id.in_(world_ids)).all()}
+        if world_ids
+        else {}
+    )
+    spent_ids = _spent_generation_ids(gen_ids)
+    out = []
+    for r in rows:
+        gen = gens.get(r.generation_id)
+        world_name = None
+        if gen is not None and gen.world_id in worlds:
+            world_name = worlds[gen.world_id].name
+        out.append(
+            {
+                "id": r.id,
+                "generation_id": r.generation_id,
+                "image_url": r.image_url,
+                "is_free": r.generation_id not in spent_ids,
+                "world_name": world_name,
+                "world_id": gen.world_id if gen is not None else None,
+            }
+        )
+    return jsonify(out)
 
 
 # ---------------- world detail ----------------
 
 
-PUBLIC_SETTINGS = ("about_us", "support_info", "bug_report_info", "bazaar_url", "myket_url", "rules_privacy", "entry_gift_enabled")
+PUBLIC_SETTINGS = ("about_us", "support_info", "bug_report_info", "bazaar_url", "myket_url", "rules_privacy", "entry_gift_enabled", "promo_modal_title", "promo_modal_body", "promo_modal_show_number", "promo_modal_enabled")
 
 
 @content_bp.get("/app-config")
@@ -2384,10 +2687,25 @@ def _pack_admin(p):
         "is_active": bool(p.is_active),
         "gift_coins": p.gift_coins or 0,
         "gift_scope": p.gift_scope or "every",
+        "original_price_toman": p.original_price_toman,
         "bazaar_enabled": bool(getattr(p, "bazaar_enabled", True)),
         "zibal_enabled": bool(getattr(p, "zibal_enabled", False)),
         "show_fallback_button": bool(getattr(p, "show_fallback_button", False)),
     }
+
+
+def _original_price_value(value):
+    """قیمت اصلی نمایشی پک (نسخه‌ی ۱۸): None/خالی یعنی بدون تخفیف
+    نمایشی؛ عدد صحیح ≥ 0؛ ورودی بد → ValueError (ادمین 400 می‌گیرد)."""
+    if value is None or (isinstance(value, str) and value.strip() == ""):
+        return None
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("original_price_toman must be an integer or empty")
+    if v < 0:
+        raise ValueError("original_price_toman must be >= 0")
+    return v
 
 
 def _gift_coins_value(value):
@@ -2419,6 +2737,10 @@ def admin_create_pack():
             return jsonify({"error": f"{field} required"}), 400
     if AppCoinPack.query.filter_by(bazaar_sku=body["bazaar_sku"]).first():
         return jsonify({"error": "sku exists"}), 409
+    try:
+        original_price = _original_price_value(body.get("original_price_toman"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     p = AppCoinPack(
         name=body.get("name", ""),
         coins=body["coins"],
@@ -2430,6 +2752,7 @@ def admin_create_pack():
         is_active=bool(body.get("is_active", True)),
         gift_coins=_gift_coins_value(body.get("gift_coins", 0)),
         gift_scope=_gift_scope_value(body.get("gift_scope", "every")),
+        original_price_toman=original_price,
         bazaar_enabled=bool(body.get("bazaar_enabled", True)),
         zibal_enabled=bool(body.get("zibal_enabled", False)),
         show_fallback_button=bool(body.get("show_fallback_button", False)),
@@ -2457,6 +2780,11 @@ def admin_update_pack(pack_id):
         p.is_active = bool(body["is_active"])
     if "gift_coins" in body:
         p.gift_coins = _gift_coins_value(body["gift_coins"])
+    if "original_price_toman" in body:
+        try:
+            p.original_price_toman = _original_price_value(body["original_price_toman"])
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
     if "gift_scope" in body:
         p.gift_scope = _gift_scope_value(body["gift_scope"])
     if "bazaar_enabled" in body:
@@ -3791,6 +4119,65 @@ def admin_bulk_delete_purchases():
         deleted += 1
     db.session.commit()
     return jsonify({"ok": True, "deleted": deleted, "skipped": skipped})
+
+
+# ---------------- admin: tickets (نسخه‌ی ۱۸) ----------------
+
+
+def _ticket_admin(t, with_messages=False):
+    payload = _ticket_public(t, with_messages=with_messages)
+    payload["user_id"] = t.user_id
+    return payload
+
+
+@admin_bp.get("/admin/tickets")
+@require_admin
+def admin_list_tickets():
+    tickets = AppTicket.query.order_by(AppTicket.id.desc()).all()
+    return jsonify([_ticket_admin(t) for t in tickets])
+
+
+@admin_bp.get("/admin/tickets/<int:ticket_id>")
+@require_admin
+def admin_get_ticket(ticket_id):
+    t = AppTicket.query.get(ticket_id)
+    if not t:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(_ticket_admin(t, with_messages=True))
+
+
+@admin_bp.post("/admin/tickets/<int:ticket_id>/messages")
+@require_admin
+def admin_reply_ticket(ticket_id):
+    body = request.json or {}
+    text = (body.get("body") or "").strip()
+    if not text:
+        return jsonify({"error": "body required"}), 400
+    if len(text) > MAX_TICKET_BODY_CHARS:
+        return jsonify({"error": "body too long"}), 400
+    t = AppTicket.query.get(ticket_id)
+    if not t:
+        return jsonify({"error": "not found"}), 404
+    m = AppTicketMessage(ticket_id=t.id, sender="admin", body=text)
+    db.session.add(m)
+    t.updated_at = datetime.datetime.utcnow()
+    db.session.commit()
+    return jsonify(_ticket_message_public(m)), 201
+
+
+@admin_bp.patch("/admin/tickets/<int:ticket_id>")
+@require_admin
+def admin_update_ticket(ticket_id):
+    body = request.json or {}
+    status = body.get("status")
+    if status not in ("open", "closed"):
+        return jsonify({"error": 'status must be "open" or "closed"'}), 400
+    t = AppTicket.query.get(ticket_id)
+    if not t:
+        return jsonify({"error": "not found"}), 404
+    t.status = status
+    db.session.commit()
+    return jsonify(_ticket_admin(t))
 
 
 # ---------------- admin: models (ساخت مدل جدید) ----------------

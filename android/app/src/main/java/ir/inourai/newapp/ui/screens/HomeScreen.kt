@@ -1,6 +1,8 @@
 package ir.inourai.newapp.ui.screens
+import ir.inourai.newapp.ui.theme.themed
 
 import android.content.Context
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -51,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import ir.inourai.newapp.R
 import ir.inourai.newapp.data.Announcement
 import ir.inourai.newapp.data.Api
 import ir.inourai.newapp.data.Category
@@ -78,55 +83,191 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
 
     // پاپ‌آپ هدیه‌ی ورود — برای هر ثبت‌نام جدید (بدون محدودیت یک بار در هر گوشی)،
     // و فقط وقتی هدیه روشن است.
+    // v18 (5): مودال مقایسه‌ی رایگان/پولی (جفت باغ قاجار، دنیا ۲۰۴) با
+    // مودال هدیه یکی شده؛ همان یک دکمه‌ی «شروع کن» و بس.
+    // v18 (9): مودال پرومو — بعد از بسته‌شدن مودال هدیه، در همان باز شدن
+    // اپ؛ اگر مودال هدیه‌ای در کار نباشد، مستقیم.
     var showGift by remember { mutableStateOf(false) }
+    var showPromo by remember { mutableStateOf(false) }
+    var promoPending by remember { mutableStateOf(false) }
+    var promoTitle by remember { mutableStateOf("") }
+    var promoBody by remember { mutableStateOf("") }
+    var promoShowNumber by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) {
+        val settings = try {
+            Api.service.publicSettings()
+        } catch (_: Exception) {
+            null
+        }
         if (Session.justRegistered) {
             Session.justRegistered = false
             // نبودن تنظیم یعنی روشن (پیش‌فرض بک‌اند)؛ خطا در خواندن یعنی پاپ‌آپ نشان داده نشود
             // تا وعده‌ی هدیه‌ای داده نشود که ثبت نشده است.
-            val giftOn = try {
-                val v = Api.service.publicSettings().entry_gift_enabled
+            val giftOn = settings?.let { s ->
+                val v = s.entry_gift_enabled
                 v != "0" && !v.equals("false", ignoreCase = true)
-            } catch (_: Exception) { false }
+            } ?: false
             if (giftOn) {
                 showGift = true
+            }
+        }
+        // پرومو: فقط وقتی روشن است و شماره‌ی نمایش سرور از شماره‌ای که
+        // کاربر دیده بزرگ‌تر باشد؛ ویرایش متن با همان شماره دوباره نشان نمی‌دهد.
+        val showNumber = settings?.promo_modal_show_number?.toIntOrNull() ?: 0
+        val promoOn = settings?.promo_modal_enabled?.let { v ->
+            v != "0" && !v.equals("false", ignoreCase = true)
+        } ?: false
+        if (promoOn && showNumber > Session.promoSeenShowNumber) {
+            val title = settings?.promo_modal_title ?: ""
+            val body = settings?.promo_modal_body ?: ""
+            if (title.isNotBlank() || body.isNotBlank()) {
+                promoTitle = title
+                promoBody = body
+                promoShowNumber = showNumber
+                if (showGift) promoPending = true else showPromo = true
             }
         }
     }
     if (showGift) {
         val dismissGift: () -> Unit = {
             showGift = false
+            // پرومو بلافاصله بعد از هدیه، در همان باز شدن اپ — هرگز هم‌زمان.
+            if (promoPending) {
+                promoPending = false
+                showPromo = true
+            }
         }
         Dialog(onDismissRequest = dismissGift) {
             Card(
                 shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = themed(Color.White, Color(0xFF1E293B))),
             ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text("🎁", fontSize = 48.sp)
-                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         "۱ تصویر رایگان هدیه گرفتید!",
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
                         textAlign = TextAlign.Center,
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "اولین تصویرت رایگان است؛ یک دنیا انتخاب کن و عکست را بده.",
-                        fontSize = 14.sp,
+                        "همون عکس، دو کیفیت — ببین تفاوت رو:",
+                        fontSize = 13.sp,
+                        color = themed(Color.Gray, Color(0xFFAAB4C4)),
                         textAlign = TextAlign.Center,
                     )
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
+                    // جفت مقایسه (باغ قاجار، دنیا ۲۰۴): رایگان راست،
+                    // پولی چپ با قاب طلایی — مثل موکاپ تاییدشده.
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        // رایگان (مدل ۷) — راست.
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Box {
+                                Image(
+                                    painter = painterResource(R.drawable.modal_free),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                                        .clip(RoundedCornerShape(14.dp)),
+                                )
+                                QualityChip(
+                                    isFree = true,
+                                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("مدل رایگان", fontSize = 12.sp, color = themed(Color.Gray, Color(0xFFAAB4C4)))
+                        }
+                        // پولی (مدل ۶) — چپ، قاب طلایی.
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Box {
+                                Image(
+                                    painter = painterResource(R.drawable.modal_paid),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .border(2.dp, Color(0xFFE8B84B), RoundedCornerShape(14.dp)),
+                                )
+                                QualityChip(
+                                    isFree = false,
+                                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("مدل پولی", fontSize = 12.sp, color = themed(Color.Gray, Color(0xFFAAB4C4)))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        "با سکه، چهره و جزئیات قشنگ‌تر می‌شه",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = dismissGift,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(50),
                     ) {
                         Text("شروع کن", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+    // v18 (9): مودال پرومو — فقط بعد از هدیه (یا مستقیم، اگر هدیه‌ای
+    // نباشد)؛ با بستن، شماره‌ی نمایش دیده‌شده ذخیره می‌شود.
+    if (showPromo) {
+        val dismissPromo: () -> Unit = {
+            showPromo = false
+            Session.promoSeenShowNumber = promoShowNumber
+        }
+        Dialog(onDismissRequest = dismissPromo) {
+            Card(
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = themed(Color.White, Color(0xFF1E293B))),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    if (promoTitle.isNotBlank()) {
+                        Text(
+                            promoTitle,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    if (promoBody.isNotBlank()) {
+                        Text(
+                            promoBody,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(modifier = Modifier.height(20.dp))
+                    }
+                    Button(
+                        onClick = dismissPromo,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(50),
+                    ) {
+                        Text("باشه", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -239,7 +380,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
         items(announcements.filter { it.id !in dismissedAnnouncements }) { ann ->
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = themed(Color.White, Color(0xFF1E293B))),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -256,7 +397,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
                     Text(
                         "✕",
                         fontSize = 16.sp,
-                        color = Color.Gray,
+                        color = themed(Color.Gray, Color(0xFFAAB4C4)),
                         modifier = Modifier.clickable {
                             dismissedAnnouncements = dismissedAnnouncements + ann.id
                         },
@@ -385,7 +526,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
                                     .size(if (i == trendIndex) 8.dp else 6.dp)
                                     .background(
                                         if (i == trendIndex) MaterialTheme.colorScheme.primary
-                                        else Color.LightGray,
+                                        else themed(Color.LightGray, Color(0xFF4A5568)),
                                         CircleShape,
                                     ),
                             )
@@ -413,7 +554,7 @@ fun HomeScreen(onWorld: (Long) -> Unit) {
         }
         if (shown.isEmpty()) {
             item {
-                Text("دنیایی اینجا نیست؛ دسته‌ی دیگری را انتخاب کن.", color = Color.Gray)
+                Text("دنیایی اینجا نیست؛ دسته‌ی دیگری را انتخاب کن.", color = themed(Color.Gray, Color(0xFFAAB4C4)))
             }
         } else {
             item {
@@ -448,7 +589,7 @@ private fun HomeChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .background(
-                if (selected) MaterialTheme.colorScheme.primary else Color(0xFFF1F3F5),
+                if (selected) MaterialTheme.colorScheme.primary else themed(Color(0xFFF1F3F5), Color(0xFF243247)),
                 RoundedCornerShape(28.dp),
             )
             .clickable { onClick() }
@@ -456,7 +597,7 @@ private fun HomeChip(label: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             label,
-            color = if (selected) Color.White else Color(0xFF334155),
+            color = if (selected) themed(Color.White, Color(0xFF0B1E3A)) else themed(Color(0xFF334155), Color(0xFFD7DEE8)),
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             fontSize = 14.sp,
         )
