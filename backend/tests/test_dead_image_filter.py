@@ -244,12 +244,12 @@ def main():
             r = client.get("/api/v1/gallery/public")
             gal_ids_s3 = {it["id"] for it in (r.get_json() or [])}
             check("gallery S3: ردیف مرده فیلتر نمی‌شود",
-                  gal_dead.id in gal_ids_s3,
+                  extra_gal_dead[-1].id in gal_ids_s3,
                   f"got {gal_ids_s3}")
             r = _auth(client, token, "/generations/mine", method="GET")
             mine_ids_s3 = {it["id"] for it in (r.get_json() or [])}
             check("mine S3: نسل مرده فیلتر نمی‌شود",
-                  gen_dead.id in mine_ids_s3,
+                  extra_dead[-1].id in mine_ids_s3,
                   f"got {mine_ids_s3}")
             r = _auth(client, token, "/image-likes", method="GET")
             like_ids_s3 = {it["id"] for it in (r.get_json() or [])}
