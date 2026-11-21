@@ -592,6 +592,13 @@ def list_image_likes():
         gen = gens.get(r.generation_id)
         if gen is None:
             continue
+        # ردیف‌های مرده پنهان می‌شوند: خروجی‌ای که فایلش روی دیسک نیست
+        # (حذف‌شده) در تب پسندیده‌ها نشان داده نمی‌شود. فقط دیسک لوکال.
+        if (
+            not current_app.config.get("S3_ENDPOINT")
+            and not _upload_file_exists(gen.output_url)
+        ):
+            continue
         out.append(
             {
                 "id": gen.id,
@@ -981,18 +988,20 @@ def my_generations():
         AppGeneration.query.filter_by(user_id=g.user.id)
         .filter(AppGeneration.status != "failed")
         .order_by(AppGeneration.id.desc())
-        .limit(50)
         .all()
     )
     # ردیف‌های مرده پنهان می‌شوند: خروجی‌ای که فایلش روی دیسک نیست
     # (حذف‌شده) به کاربر نشان داده نمی‌شود. فقط دیسک لوکال؛ خروجیِ
     # None (در صف/در حال پردازش) مثل قبل می‌ماند.
+    # سقف ۵۰ روی لیستِ فیلترشده اعمال می‌شود تا ردیف‌های مرده جای
+    # ردیف‌های سالم را در ۵۰ تای اول نگیرند.
     if not current_app.config.get("S3_ENDPOINT"):
         gens = [
             gen
             for gen in gens
             if gen.output_url is None or _upload_file_exists(gen.output_url)
         ]
+    gens = gens[:50]
     world_ids = [gen.world_id for gen in gens if gen.world_id]
     worlds = (
         {w.id: w for w in AppWorld.query.filter(AppWorld.id.in_(world_ids)).all()}
@@ -1285,15 +1294,17 @@ def public_gallery():
     rows = (
         AppGallery.query.filter_by(status="approved", published_in_app=True)
         .order_by(AppGallery.id.desc())
-        .limit(50)
         .all()
     )
     # ردیف‌های مرده پنهان می‌شوند: عکسی که فایلش روی دیسک نیست
     # (حذف‌شده) در نگارخانه نشان داده نمی‌شود. فقط دیسک لوکال.
+    # سقف ۵۰ روی لیستِ فیلترشده اعمال می‌شود تا ردیف‌های مرده جای
+    # ردیف‌های سالم را در ۵۰ تای اول نگیرند.
     if not current_app.config.get("S3_ENDPOINT"):
         rows = [
             r for r in rows if not r.image_url or _upload_file_exists(r.image_url)
         ]
+    rows = rows[:50]
     # نسخه‌ی ۱۸، افزایشی: is_free (همان قانون دفتر سکه که
     # my_generations استفاده می‌کند) + world_name + world_id (همان join که
     # my_generations استفاده می‌کند). اپ‌های قدیمی نمی‌شناسند و
@@ -2058,8 +2069,7 @@ def _current_admin_id():
     return None
 
 
-def _paginate(query, default_size=50):
-    """صفحه‌بندی مثل نورا: ?page=&page_size= (سقف ۲۰۰)."""
+def _page_params(default_size=50):
     try:
         page = max(int(request.args.get("page", 1)), 1)
     except ValueError:
@@ -2068,9 +2078,27 @@ def _paginate(query, default_size=50):
         page_size = min(max(int(request.args.get("page_size", default_size)), 1), 200)
     except ValueError:
         page_size = default_size
+    return page, page_size
+
+
+def _paginate(query, default_size=50):
+    """صفحه‌بندی مثل نورا: ?page=&page_size= (سقف ۲۰۰)."""
+    page, page_size = _page_params(default_size)
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
     return items, {"total": total, "page": page, "page_size": page_size}
+
+
+def _paginate_list(items, default_size=50):
+    """صفحه‌بندی روی لیستِ از پیش فیلترشده: total فقط ردیف‌های
+    دیده‌شده را می‌شمارد. برای لیست‌هایی که فیلترِ وجودِ فایل روی
+    دیسک (ردیف مرده) در پایتون اعمال می‌شود، total باید بعد از
+    فیلتر حساب شود — وگرنه صفحه‌ها کوتاه برمی‌گردند و total ردیف‌های
+    پنهان را هم می‌شمارد."""
+    page, page_size = _page_params(default_size)
+    total = len(items)
+    start = (page - 1) * page_size
+    return items[start:start + page_size], {"total": total, "page": page, "page_size": page_size}
 
 
 # سهمیه روزانه مدل‌های رایگان کلادفلر (تخمین؛ سقف دقیق نورون سمت کلادفلر
@@ -3012,7 +3040,10 @@ def admin_list_generations():
             AppGeneration.output_url.isnot(None),
         ),
     ).order_by(AppGeneration.id.desc())
-    rows, meta = _paginate(query)
+    # اول همه‌ی ردیف‌ها خوانده و فیلتر می‌شوند، بعد صفحه‌بندی می‌شود تا
+    # total فقط ردیف‌های دیده‌شده را بشمارد (فیلتر بعد از _paginate
+    # صفحه‌ها را کوتاه و total را غلط می‌کرد).
+    rows = query.all()
     # ردیف‌های مرده پنهان می‌شوند: خروجی‌ای که فایلش روی دیسک نیست
     # (حذف‌شده) نشان داده نمی‌شود. خروجیِ None (در صف/در حال پردازش)
     # مثل قبل می‌ماند.
@@ -3022,6 +3053,7 @@ def admin_list_generations():
             for r in rows
             if r.output_url is None or _upload_file_exists(r.output_url)
         ]
+    rows, meta = _paginate_list(rows)
     users = {u.id: u.mobile for u in AppUser.query.all()}
     bazaar_ids = {u.id: u.bazaar_account_id for u in AppUser.query.all()}
     worlds = {w.id: w.name for w in AppWorld.query.all()}
@@ -3606,7 +3638,6 @@ def admin_get_user(user_id):
         AppGeneration.query.filter_by(user_id=u.id)
         .filter(AppGeneration.status != "failed")
         .order_by(AppGeneration.id.desc())
-        .limit(20)
         .all()
     )
     failed_gens = (
@@ -3624,7 +3655,6 @@ def admin_get_user(user_id):
     gallery = (
         AppGallery.query.filter_by(user_id=u.id)
         .order_by(AppGallery.id.desc())
-        .limit(20)
         .all()
     )
     # ردیف‌های مرده پنهان می‌شوند (مثل نگارخانه‌ی عمومی).
@@ -3635,6 +3665,10 @@ def admin_get_user(user_id):
         gallery = [
             r for r in gallery if not r.image_url or _upload_file_exists(r.image_url)
         ]
+    # سقف ۲۰ روی لیستِ فیلترشده اعمال می‌شود تا ردیف‌های مرده جای
+    # ردیف‌های سالم را در ۲۰ تای اول نگیرند.
+    gens = gens[:20]
+    gallery = gallery[:20]
     return jsonify(
         {
             **_user_admin(u),
@@ -4028,7 +4062,9 @@ def admin_list_stale_purchases():
 @require_admin
 def admin_list_reports():
     query = AppImageReport.query.order_by(AppImageReport.id.desc())
-    rows, meta = _paginate(query)
+    # اول همه‌ی ردیف‌ها خوانده و فیلتر می‌شوند، بعد صفحه‌بندی می‌شود تا
+    # total فقط ردیف‌های دیده‌شده را بشمارد.
+    rows = query.all()
     gen_ids = {r.generation_id for r in rows}
     gens = {
         g.id: g
@@ -4045,6 +4081,7 @@ def admin_list_reports():
             or not gens[r.generation_id].output_url
             or _upload_file_exists(gens[r.generation_id].output_url)
         ]
+    rows, meta = _paginate_list(rows)
     return jsonify(
         {
             "items": [
@@ -4298,10 +4335,13 @@ def admin_gallery_all():
     if status:
         query = query.filter_by(status=status)
     query = query.order_by(AppGallery.id.desc())
-    rows, meta = _paginate(query)
+    # اول همه‌ی ردیف‌ها خوانده و فیلتر می‌شوند، بعد صفحه‌بندی می‌شود تا
+    # total فقط ردیف‌های دیده‌شده را بشمارد.
+    rows = query.all()
     # ردیف‌های مرده پنهان می‌شوند: عکسی که فایلش روی دیسک نیست.
     if not current_app.config.get("S3_ENDPOINT"):
         rows = [r for r in rows if not r.image_url or _upload_file_exists(r.image_url)]
+    rows, meta = _paginate_list(rows)
     users = {u.id: u.mobile for u in AppUser.query.all()}
     admins = {a.id: a.username for a in AppAdminUser.query.all()}
     out = []
