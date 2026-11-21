@@ -585,12 +585,12 @@ def main():
         check("gallery public paid: is_free=false + world_name + world_id",
               by_gen.get(paid_gen.id, {}).get("is_free") is False
               and by_gen.get(paid_gen.id, {}).get("world_name") == "دنیای تست"
-              and by_gen.get(paid_gen.id, {}).get("world_id") == test_world.id,
+              and by_gen.get(paid_gen.id, {}).get("world_id") == world.id,
               f"got {by_gen.get(paid_gen.id)}")
         check("gallery public free: is_free=true + world_name + world_id",
               by_gen.get(free_gen.id, {}).get("is_free") is True
               and by_gen.get(free_gen.id, {}).get("world_name") == "دنیای تست"
-              and by_gen.get(free_gen.id, {}).get("world_id") == test_world.id,
+              and by_gen.get(free_gen.id, {}).get("world_id") == world.id,
               f"got {by_gen.get(free_gen.id)}")
 
         # ============ (f) packs original_price_toman ============
