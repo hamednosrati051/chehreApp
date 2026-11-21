@@ -984,6 +984,15 @@ def my_generations():
         .limit(50)
         .all()
     )
+    # ردیف‌های مرده پنهان می‌شوند: خروجی‌ای که فایلش روی دیسک نیست
+    # (حذف‌شده) به کاربر نشان داده نمی‌شود. فقط دیسک لوکال؛ خروجیِ
+    # None (در صف/در حال پردازش) مثل قبل می‌ماند.
+    if not current_app.config.get("S3_ENDPOINT"):
+        gens = [
+            gen
+            for gen in gens
+            if gen.output_url is None or _upload_file_exists(gen.output_url)
+        ]
     world_ids = [gen.world_id for gen in gens if gen.world_id]
     worlds = (
         {w.id: w for w in AppWorld.query.filter(AppWorld.id.in_(world_ids)).all()}
@@ -1279,6 +1288,12 @@ def public_gallery():
         .limit(50)
         .all()
     )
+    # ردیف‌های مرده پنهان می‌شوند: عکسی که فایلش روی دیسک نیست
+    # (حذف‌شده) در نگارخانه نشان داده نمی‌شود. فقط دیسک لوکال.
+    if not current_app.config.get("S3_ENDPOINT"):
+        rows = [
+            r for r in rows if not r.image_url or _upload_file_exists(r.image_url)
+        ]
     # نسخه‌ی ۱۸، افزایشی: is_free (همان قانون دفتر سکه که
     # my_generations استفاده می‌کند) + world_name + world_id (همان join که
     # my_generations استفاده می‌کند). اپ‌های قدیمی نمی‌شناسند و
@@ -3244,6 +3259,25 @@ def admin_bulk_delete_inputs():
 def _uploads_dir():
     """مسیر واقعی پوشه‌ی آپلودها زیر static."""
     return os.path.realpath(os.path.join(current_app.static_folder, "uploads"))
+
+
+def _upload_file_exists(url):
+    """True اگر فایلِ تصویرِ URL روی دیسک لوکال موجود باشد.
+
+    فقط برای URLهای لوکالِ static/uploads بررسی می‌شود؛ URL خالی،
+    خارجی، یا غیر uploads مثل قبل True برمی‌گردد (فیلتر نمی‌شود).
+    فقط خواندنی است — چیزی پاک نمی‌کند.
+    """
+    if not url:
+        return True
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.netloc not in ("", "chehre.inourai.ir", "171.22.25.152:5001"):
+        return True
+    if not parsed.path.startswith("/static/uploads/"):
+        return True
+    return os.path.exists(os.path.join(_uploads_dir(), os.path.basename(parsed.path)))
 
 
 def _referenced_upload_basenames():
