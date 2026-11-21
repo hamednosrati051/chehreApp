@@ -2283,7 +2283,7 @@ def _world_admin(w):
 @admin_bp.get("/admin/worlds")
 @require_admin
 def admin_list_worlds():
-    worlds = AppWorld.query.order_by(AppWorld.sort_order, AppWorld.id).all()
+    worlds = AppWorld.query.order_by(AppWorld.sort_order.desc(), AppWorld.id.desc()).all()
     return jsonify([_world_admin(w) for w in worlds])
 
 
