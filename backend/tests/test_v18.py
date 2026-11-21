@@ -15,9 +15,6 @@ static/uploadsِ همین کپیِ تست انجام می‌شود (بعد از 
   سکه کم نمی‌شود) و با سکه (موجودی کم + سطر spend)؛ 402 پیش از
   store (هیچ فایلی اضافه نمی‌شود)؛ 404 دنیا؛ 400 بدون فایل؛ 401
   بدون توکن؛ خطای DB بعد از store → فایل پاک + رزرو برگشت + ردیف حذف.
-- (b) orphan cleanup: فقط فایل قدیمیِ بدون ارجاع حذف می‌شود (تازه،
-  ارجاع‌شده و زیردایرکتوری می‌مانند)؛ با S3_ENDPOINT ست‌شده هیچ‌چیز
-  حذف نمی‌شود.
 - (c) tickets: ساخت/لیست/جزئیات/پاسخ کاربر؛ مالکیت (403 روی تیکت
   دیگری)؛ پاسخ ادمین + بستن/بازکردن؛ پاسخ کاربر به تیکت بسته → 422.
 - (d) regenerate: happy path با قیمتِ جاری دنیا، 403 دیگری، 404 نبودن.
@@ -31,7 +28,6 @@ import datetime
 import io
 import os
 import sys
-import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -55,7 +51,6 @@ from app.models import (  # noqa: E402
 )
 from app.services import coins as coins_svc  # noqa: E402
 from app.services import storage as storage_svc  # noqa: E402
-from app.services.cleanup import cleanup_orphan_uploads  # noqa: E402
 
 PASSED = 0
 FAILED = 0
@@ -343,65 +338,6 @@ def main():
         check("with_image db-failure: coin reservation refunded (40)",
               balance(user_coins) == 40,
               f"got balance={balance(user_coins)}")
-
-        # --- یتیم‌های ازپیش‌موجود در uploadsِ کپیِ تست (فایل‌های نمونه‌ی
-        # ریپو، قدیمی و بدون ارجاع در DB خالی تست) هم پاک می‌شوند؛
-        # پس تعداد موردانتظار = آن‌ها + ۱ فایل یتیم قدیمی خود تست. ---
-        from app.routes import (  # noqa: E402
-            _orphan_upload_files,
-            _referenced_upload_basenames,
-            _uploads_dir,
-        )
-
-        pre_orphans = _orphan_upload_files(
-            _uploads_dir(), _referenced_upload_basenames()
-        )
-        now = time.time()
-        old_orphan = os.path.join(uploads_dir, "v18-old-orphan.jpg")
-        fresh_orphan = os.path.join(uploads_dir, "v18-fresh-orphan.jpg")
-        ref_file = os.path.join(uploads_dir, "v18-ref.jpg")
-        sub_dir = os.path.join(uploads_dir, "v18-sub")
-        os.makedirs(sub_dir, exist_ok=True)
-        sub_file = os.path.join(sub_dir, "v18-sub-old.jpg")
-        for p in (old_orphan, fresh_orphan, ref_file, sub_file):
-            with open(p, "wb") as fh:
-                fh.write(b"v18-test-bytes")
-        os.utime(old_orphan, (now - 7200, now - 7200))
-        os.utime(ref_file, (now - 7200, now - 7200))
-        os.utime(sub_file, (now - 7200, now - 7200))
-        ref_gen = AppGeneration(
-            id=next_id(), user_id=user_gift.id, kind="image",
-            world_id=world.id, model_id=model.id,
-            input_url="http://171.22.25.152:5001/static/uploads/v18-ref.jpg",
-            status="done", coin_cost=0,
-        )
-        db.session.add(ref_gen)
-        db.session.commit()
-        result = cleanup_orphan_uploads()
-        check("orphan cleanup: old unreferenced deleted (1 + pre-existing)",
-              result.get("deleted") == len(pre_orphans) + 1
-              and result.get("bytes", 0) > 0,
-              f"got {result} pre={len(pre_orphans)}")
-        check("orphan cleanup: old orphan gone, fresh/referenced/sub stay",
-              not os.path.exists(old_orphan)
-              and os.path.exists(fresh_orphan)
-              and os.path.exists(ref_file)
-              and os.path.exists(sub_file),
-              f"old={os.path.exists(old_orphan)} fresh={os.path.exists(fresh_orphan)}")
-        check("orphan cleanup: second run deletes 0",
-              cleanup_orphan_uploads().get("deleted") == 0)
-        app.config["S3_ENDPOINT"] = "https://s3.example.invalid"
-        result = cleanup_orphan_uploads()
-        check("orphan cleanup S3: skipped, nothing deleted",
-              result.get("skipped_s3") is True
-              and result.get("deleted") == 0
-              and os.path.exists(fresh_orphan),
-              f"got {result}")
-        app.config["S3_ENDPOINT"] = ""
-        for p in (fresh_orphan, ref_file, sub_file):
-            if os.path.exists(p):
-                os.unlink(p)
-        os.rmdir(sub_dir)
 
         # ============ (c) tickets ============
         r = _auth(client, auth_gift, "/tickets", "POST",

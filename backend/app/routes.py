@@ -2834,6 +2834,9 @@ def admin_gallery_pending():
         .order_by(AppGallery.id)
         .all()
     )
+    # ردیف‌های مرده پنهان می‌شوند: عکسی که فایلش روی دیسک نیست.
+    if not current_app.config.get("S3_ENDPOINT"):
+        rows = [r for r in rows if not r.image_url or _upload_file_exists(r.image_url)]
     out = []
     for r in rows:
         user = AppUser.query.get(r.user_id)
@@ -3010,6 +3013,15 @@ def admin_list_generations():
         ),
     ).order_by(AppGeneration.id.desc())
     rows, meta = _paginate(query)
+    # ردیف‌های مرده پنهان می‌شوند: خروجی‌ای که فایلش روی دیسک نیست
+    # (حذف‌شده) نشان داده نمی‌شود. خروجیِ None (در صف/در حال پردازش)
+    # مثل قبل می‌ماند.
+    if not current_app.config.get("S3_ENDPOINT"):
+        rows = [
+            r
+            for r in rows
+            if r.output_url is None or _upload_file_exists(r.output_url)
+        ]
     users = {u.id: u.mobile for u in AppUser.query.all()}
     bazaar_ids = {u.id: u.bazaar_account_id for u in AppUser.query.all()}
     worlds = {w.id: w.name for w in AppWorld.query.all()}
@@ -3615,6 +3627,14 @@ def admin_get_user(user_id):
         .limit(20)
         .all()
     )
+    # ردیف‌های مرده پنهان می‌شوند (مثل نگارخانه‌ی عمومی).
+    if not current_app.config.get("S3_ENDPOINT"):
+        gens = [
+            g for g in gens if g.output_url is None or _upload_file_exists(g.output_url)
+        ]
+        gallery = [
+            r for r in gallery if not r.image_url or _upload_file_exists(r.image_url)
+        ]
     return jsonify(
         {
             **_user_admin(u),
@@ -4016,6 +4036,15 @@ def admin_list_reports():
             AppGeneration.id.in_(gen_ids)
         ).all()
     } if gen_ids else {}
+    # ردیف‌های مرده پنهان می‌شوند: عکسی که فایلش روی دیسک نیست.
+    if not current_app.config.get("S3_ENDPOINT"):
+        rows = [
+            r
+            for r in rows
+            if r.generation_id not in gens
+            or not gens[r.generation_id].output_url
+            or _upload_file_exists(gens[r.generation_id].output_url)
+        ]
     return jsonify(
         {
             "items": [
@@ -4270,6 +4299,9 @@ def admin_gallery_all():
         query = query.filter_by(status=status)
     query = query.order_by(AppGallery.id.desc())
     rows, meta = _paginate(query)
+    # ردیف‌های مرده پنهان می‌شوند: عکسی که فایلش روی دیسک نیست.
+    if not current_app.config.get("S3_ENDPOINT"):
+        rows = [r for r in rows if not r.image_url or _upload_file_exists(r.image_url)]
     users = {u.id: u.mobile for u in AppUser.query.all()}
     admins = {a.id: a.username for a in AppAdminUser.query.all()}
     out = []
