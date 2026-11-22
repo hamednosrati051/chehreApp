@@ -25,11 +25,26 @@ def _ledger(user_id, delta, reason, ref_type=None, ref_id=None):
 
 
 def credit_coins(user, amount, reason="purchase", ref_type=None, ref_id=None, commit=True):
-    row = AppCoinBalance.query.get(user.id)
-    if row is None:
-        row = AppCoinBalance(user_id=user.id, balance=0)
-    row.balance += amount
-    db.session.add(row)
+    """شارژ سکه با افزایش اتمی در خود دیتابیس (balance = balance + amount).
+
+    باگ قدیمی: خواندن-بعد-نوشتن (row.balance += amount) بود؛ دو تسویه‌ی
+    هم‌زمان یک موجودیِ قدیمی را می‌خواندند و آخری روی اولی می‌نوشت و
+    شارژِ اولی گم می‌شد. حالا UPDATE یک‌مرحله‌ای است — همان الگوی
+    refund_reservation (رفع نسل ۲۳۹۶) — و مقدارِ در حافظه دیگر ملاک
+    نیست. برای amount منفی هم همان‌طور کار می‌کند (کسر).
+    """
+    rows = (
+        AppCoinBalance.query.filter(
+            AppCoinBalance.user_id == user.id,
+        ).update(
+            {AppCoinBalance.balance: AppCoinBalance.balance + amount},
+            synchronize_session=False,
+        )
+    )
+    if not rows:
+        # ردیف موجودی نیست (کاربر تازه، هنوز شارژی نگرفته)؛ ساخته
+        # می‌شود تا شارژ گم نشود.
+        db.session.add(AppCoinBalance(user_id=user.id, balance=amount))
     _ledger(user.id, amount, reason, ref_type, ref_id)
     if commit:
         db.session.commit()
