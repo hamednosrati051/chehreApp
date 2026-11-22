@@ -3924,10 +3924,14 @@ def admin_list_purchases():
                 )
     totals = {
         "count": query.count(),
-        "amount_irr": query.with_entities(
-            func.coalesce(func.sum(AppPurchase.amount_irr), 0)
-        ).scalar()
-        or 0,
+        # SUM روی MySQL عدد Decimal برمی‌گرداند؛ int می‌کنیم تا JSON
+        # عدد بدهد و toLocaleString در ادمین درست فرمت کند.
+        "amount_irr": int(
+            query.with_entities(
+                func.coalesce(func.sum(AppPurchase.amount_irr), 0)
+            ).scalar()
+            or 0
+        ),
     }
     query = query.order_by(AppPurchase.id.desc())
     rows, meta = _paginate(query)
