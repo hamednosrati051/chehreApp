@@ -284,6 +284,12 @@ class AppPurchase(db.Model):
     )
     verified_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    deleted_at = db.Column(db.DateTime)
+    # حذف منطقی (۲۰۲۶-۱۱-۲۲): به‌جای DELETE واقعی، انقضا و حذف گروهی
+    # ادمین این ستون را پر می‌کنند تا ردیف بعداً از ادمین پیداشدنی
+    # بماند. NULL یعنی حذف نشده؛ همه‌ی لیست‌ها فقط NULL را می‌بینند و
+    # فقط مسیر وریفای (توکن/pending_id) ردیف حذف‌شده را هم پیدا و
+    # برمی‌گرداند تا سکه دوبار شارژ نشود.
 
 
 class AppGeneration(db.Model):

@@ -1523,6 +1523,10 @@ def zibal_create_purchase():
             user_id=g.user.id, pack_id=pack.id, gateway="zibal", status="pending",
         )
         .filter(AppPurchase.zibal_track_id.isnot(None))
+        # حذف منطقی (۲۰۲۶-۱۱-۲۲): ردیف حذف‌شده trackId زنده ندارد؛
+        # اگر اینجا دیده شود، کاربر به آدرس پرداختِ منقضی‌شده‌ی قدیمی
+        # فرستاده می‌شود به‌جای ساختن پرداخت تازه.
+        .filter(AppPurchase.deleted_at.is_(None))
         .order_by(AppPurchase.id.desc())
         .first()
     )
@@ -1923,6 +1927,7 @@ def verify_purchase_route():
 def pending_purchases():
     rows = (
         AppPurchase.query.filter_by(user_id=g.user.id, status="pending")
+        .filter(AppPurchase.deleted_at.is_(None))
         .order_by(AppPurchase.id.desc())
         .all()
     )
@@ -1947,6 +1952,7 @@ def my_purchases():
     """سابقه‌ی پرداخت‌های خود کاربر (برای بخش سابقه پرداخت پروفایل)."""
     rows = (
         AppPurchase.query.filter_by(user_id=g.user.id)
+        .filter(AppPurchase.deleted_at.is_(None))
         .order_by(AppPurchase.id.desc())
         .limit(50)
         .all()
@@ -3896,7 +3902,10 @@ def _purchase_admin(r, mobile, pack_name, pack_coins):
 @admin_bp.get("/admin/purchases")
 @require_admin
 def admin_list_purchases():
-    query = AppPurchase.query
+    # حذف منطقی (۲۰۲۶-۱۱-۲۲): ردیف‌های حذف‌شده اینجا دیده نمی‌شوند
+    # (مودال «حذف‌شده‌ها» آن‌ها را نشان می‌دهد)؛ totals هم روی همان
+    # کوئری فیلترشده حساب می‌شود.
+    query = AppPurchase.query.filter(AppPurchase.deleted_at.is_(None))
     status = request.args.get("status")
     if status:
         query = query.filter_by(status=status)
@@ -3942,6 +3951,42 @@ def admin_list_purchases():
         name, coins = packs.get(r.pack_id, (None, None))
         out.append(_purchase_admin(r, users.get(r.user_id), name, coins))
     return jsonify({"items": out, "totals": totals, **meta})
+
+
+@admin_bp.get("/admin/purchases/deleted")
+@require_admin
+def admin_list_deleted_purchases():
+    """پرداخت‌های حذف‌شده (حذف منطقی، ۲۰۲۶-۱۱-۲۲) — مودال «حذف‌شده‌ها».
+
+    فقط ردیف‌های deleted_at IS NOT NULL. جست‌وجوی اختیاری q روی
+    توکن بازار یا trackId زیبال (LIKE %q%) — برای پیدا کردن پرداختی
+    که کاربر می‌گوید انجام داده ولی در لیست نیست. صفحه‌بندی مثل
+    لیست اصلی؛ هر آیتم همان فیلدهای _purchase_admin را دارد به‌علاوه‌ی
+    deleted_at.
+    """
+    query = AppPurchase.query.filter(AppPurchase.deleted_at.isnot(None))
+    q = (request.args.get("q") or "").strip()
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                AppPurchase.bazaar_purchase_token.like(like),
+                AppPurchase.zibal_track_id.like(like),
+            )
+        )
+    query = query.order_by(AppPurchase.id.desc())
+    rows, meta = _paginate(query)
+    users = {u.id: u.mobile for u in AppUser.query.all()}
+    packs = {p.id: (p.name, p.coins) for p in AppCoinPack.query.all()}
+    out = []
+    for r in rows:
+        name, coins = packs.get(r.pack_id, (None, None))
+        item = _purchase_admin(r, users.get(r.user_id), name, coins)
+        item["deleted_at"] = (
+            r.deleted_at.isoformat() if r.deleted_at else None
+        )
+        out.append(item)
+    return jsonify({"items": out, **meta})
 
 
 @admin_bp.get("/admin/purchases/<int:purchase_id>")
@@ -4035,7 +4080,9 @@ def admin_list_stale_purchases():
     )
     query = (
         AppPurchase.query.filter(
-            AppPurchase.status == "pending", AppPurchase.created_at < cutoff
+            AppPurchase.status == "pending",
+            AppPurchase.created_at < cutoff,
+            AppPurchase.deleted_at.is_(None),
         ).order_by(AppPurchase.id.desc())
     )
     rows, meta = _paginate(query)
@@ -4168,6 +4215,10 @@ def admin_bulk_delete_reports():
 def admin_bulk_delete_purchases():
     """حذف گروهی پرداخت‌ها — فقط ردیف‌های pending و failed.
 
+    حذف منطقی (۲۰۲۶-۱۱-۲۲): ردیف DELETE نمی‌شود، فقط deleted_at پر
+    می‌شود تا بعداً از مودال «حذف‌شده‌ها» پیداشدنی بماند؛ وریفایِ
+    دیرهنگام با همان توکن آن را برمی‌گرداند. ردیفِ از قبل حذف‌شده
+    دوباره شمرده نمی‌شود.
     ورودی: {"ids": [...]} یا {"statuses": ["pending", "failed"]}؛
     حذف بر اساس وضعیت فقط pending/failed را می‌پذیرد — consumed و
     verified هرگز با این مسیر پاک نمی‌شوند: آن‌ها سند مالی‌اند و
@@ -4199,9 +4250,12 @@ def admin_bulk_delete_purchases():
         if any(s not in allowed for s in statuses):
             return jsonify({"error": "statuses must be pending or failed"}), 400
         query = query.filter(AppPurchase.status.in_(statuses))
+    # ردیفِ از قبل حذف‌شده دوباره شمرده نمی‌شود.
+    query = query.filter(AppPurchase.deleted_at.is_(None))
     rows = query.all()
     deleted = 0
     skipped = []
+    now = datetime.datetime.utcnow()
     for row in rows:
         if row.status not in allowed:
             skipped.append({"id": row.id, "reason": "not pending/failed"})
@@ -4226,7 +4280,8 @@ def admin_bulk_delete_purchases():
                 {"id": row.id, "reason": "pending purchase has a store token"}
             )
             continue
-        db.session.delete(row)
+        # حذف منطقی: ردیف سر جایش می‌ماند، فقط deleted_at پر می‌شود.
+        row.deleted_at = now
         deleted += 1
     db.session.commit()
     return jsonify({"ok": True, "deleted": deleted, "skipped": skipped})

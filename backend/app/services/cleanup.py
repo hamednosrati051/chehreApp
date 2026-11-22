@@ -267,7 +267,7 @@ STALE_PENDING_MINUTES = 30
 
 
 def expire_stale_pending_purchases():
-    """حذف خریدهای pendingِ قدیمیِ بدون توکن (نسخه‌ی ۱۶؛ نسخه‌ی ۱۷: gateway-aware).
+    """حذف منطقی خریدهای pendingِ قدیمیِ بدون توکن (نسخه‌ی ۱۶؛ نسخه‌ی ۱۷: gateway-aware؛ ۲۰۲۶-۱۱-۲۲: soft-delete).
 
     بازار/مایکت: فقط ردیف‌های pending با bazaar_purchase_token IS NULL و
     قدیمی‌تر از ۳۰ دقیقه — یعنی پرداخت‌هایی که کاربر لغو کرد و اپ
@@ -277,36 +277,40 @@ def expire_stale_pending_purchases():
     زیبال (pending یا failed) فقط وقتی حذف می‌شود که قدیمی‌تر از
     ۱ ساعت باشد — جارو تا آن موقع دست‌کم دوبار وریفایش کرده؛ پرداختِ
     انجام‌شده تا آن موقع با کالبک یا recheck تسویه شده است.
-    برمی‌گرداند: تعداد ردیف‌های حذف‌شده.
+    حذف منطقی: ردیف DELETE نمی‌شود، فقط deleted_at پر می‌شود تا
+    بعداً از ادمین (مودال حذف‌شده‌ها) پیداشدنی بماند؛ وریفایِ دیرهنگام
+    با همان توکن آن را برمی‌گرداند و تسویه می‌کند.
+    برمی‌گرداند: تعداد ردیف‌های حذف‌شده (علامت‌خورده).
     """
-    cutoff = datetime.datetime.utcnow() - datetime.timedelta(
-        minutes=STALE_PENDING_MINUTES
-    )
+    now = datetime.datetime.utcnow()
+    cutoff = now - datetime.timedelta(minutes=STALE_PENDING_MINUTES)
     stale = (
         AppPurchase.query.filter(
             AppPurchase.status == "pending",
             AppPurchase.bazaar_purchase_token.is_(None),
             AppPurchase.created_at < cutoff,
             AppPurchase.gateway.in_(("bazaar", "myket")),
+            AppPurchase.deleted_at.is_(None),
         ).all()
     )
     count = len(stale)
     for row in stale:
-        db.session.delete(row)
+        row.deleted_at = now
     # زیبالِ رهاشده: فقط قدیمی‌تر از ۱ ساعت (قانون ۱ ساعته، ۲۰۲۶-۱۱-۱۹).
     # جارو تا آن موقع دست‌کم دوبار وریفایش کرده؛ اگر هنوز پرداخت نشده
     # بود (pending یا failed)، حذف می‌شود.
-    zibal_cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=1)
+    zibal_cutoff = now - datetime.timedelta(hours=1)
     zibal_stale = (
         AppPurchase.query.filter(
             AppPurchase.status.in_(("pending", "failed")),
             AppPurchase.gateway == "zibal",
             AppPurchase.created_at < zibal_cutoff,
+            AppPurchase.deleted_at.is_(None),
         ).all()
     )
     count += len(zibal_stale)
     for row in zibal_stale:
-        db.session.delete(row)
+        row.deleted_at = now
     db.session.commit()
     return count
 
@@ -314,6 +318,10 @@ def expire_stale_pending_purchases():
 RECONCILE_MIN_AGE_MINUTES = 10
 RECONCILE_MAX_AGE_MINUTES = 60
 RECONCILE_BATCH = 50
+# حذف منطقی (۲۰۲۶-۱۱-۲۲): ردیف زیبالِ حذف‌شده تا این مدت بعد از
+# ساختش هنوز در جارو چک می‌شود (کاندیدای پرداختِ دیرهنگام)؛ بعد از
+# آن فقط کالبک/ریچک می‌تواند آن را تسویه کند.
+RECONCILE_DELETED_LOOKBACK_HOURS = 24
 
 
 def reconcile_zibal_purchases():
@@ -324,26 +332,48 @@ def reconcile_zibal_purchases():
     و تازه‌تر از ۱ ساعت دوباره وریفای می‌شوند — یعنی هر خرید درانتظار
     تو اون ۱ ساعت دست‌کم دوبار چک می‌شه؛ اگر پرداخت شده بود
     تسویه می‌شوند (settle idempotent است؛ دوبار شارژ نمی‌شود).
+    حذف منطقی (۲۰۲۶-۱۱-۲۲): ردیف‌های حذف‌شده‌ی دارای trackId هم
+    چک می‌شوند — این‌ها دقیقاً کاندیداهای «پرداخت‌شده ولی
+    تسویه‌نشده» هستند (مثل باگ ۷۵۴: کالبک دیرهنگام بعد از انقضای
+    ۱ ساعته). نگاه به عقب برای آن‌ها ۲۴ ساعت است تا جارو برای همیشه
+    ردیف‌های قدیمیِ پرداخت‌نشده را دوباره وریفای نکند. تسویه با
+    settle_purchase انجام می‌شود که deleted_at را پاک می‌کند
+    (برگرداندن ردیف)؛ جارو هیچ‌وقت چیزی را حذف نمی‌کند و ردیف
+    حذف‌شده را بی‌صدا رد نمی‌کند.
     خطای ارتباط ردیف را دست نمی‌زند. مرچنت موقع هر وریفای از
     کانفیگ خوانده می‌شود، پس عوض‌کردن مرچنت جارو را خراب نمی‌کند
     (فقط خریدهای مرچنت قبلی دیگر وریفای نمی‌شوند).
     برمی‌گرداند (checked, settled).
     """
     now = datetime.datetime.utcnow()
-    rows = (
+    live = (
         AppPurchase.query.filter(
             AppPurchase.gateway == "zibal",
             AppPurchase.status.in_(("pending", "failed")),
             AppPurchase.zibal_track_id.isnot(None),
+            AppPurchase.deleted_at.is_(None),
             AppPurchase.created_at
             < now - datetime.timedelta(minutes=RECONCILE_MIN_AGE_MINUTES),
             AppPurchase.created_at
             > now - datetime.timedelta(minutes=RECONCILE_MAX_AGE_MINUTES),
         )
         .order_by(AppPurchase.id)
-        .limit(RECONCILE_BATCH)
         .all()
     )
+    deleted = (
+        AppPurchase.query.filter(
+            AppPurchase.gateway == "zibal",
+            AppPurchase.status.in_(("pending", "failed")),
+            AppPurchase.zibal_track_id.isnot(None),
+            AppPurchase.deleted_at.isnot(None),
+            AppPurchase.created_at
+            > now
+            - datetime.timedelta(hours=RECONCILE_DELETED_LOOKBACK_HOURS),
+        )
+        .order_by(AppPurchase.id)
+        .all()
+    )
+    rows = sorted(live + deleted, key=lambda r: r.id)[:RECONCILE_BATCH]
     checked = 0
     settled = 0
     for row in rows:

@@ -147,9 +147,16 @@ def settle_purchase(user, pack, purchase):
     برمی‌گرداند (purchase, already_credited, gift_granted) — همان قرارداد
     bazaar.verify_purchase؛ اگر ردیف قبلاً تسویه شده، شارژ مجدد نمی‌شود.
     منطق هدیه عین bazaar.py است (scope 'first' = فقط اولین خرید
-    وریفای‌شده‌ی همین پک برای همین کاربر، بدون شمردن ردیف فعلی)."""
+    وریفای‌شده‌ی همین پک برای همین کاربر، بدون شمردن ردیف فعلی).
+    حذف منطقی (۲۰۲۶-۱۱-۲۲): تسویه ردیف حذف‌شده (کالبک/ریچکِ
+    دیرهنگام) آن را برمی‌گرداند — deleted_at پاک می‌شود."""
     if purchase.status in ("verified", "consumed"):
+        if getattr(purchase, "deleted_at", None) is not None:
+            purchase.deleted_at = None
+            db.session.commit()
         return purchase, True, 0
+    if getattr(purchase, "deleted_at", None) is not None:
+        purchase.deleted_at = None
     if pack is None:
         pack = AppCoinPack.query.get(purchase.pack_id)
     coins_svc.credit_coins(

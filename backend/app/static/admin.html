@@ -39,9 +39,9 @@
   #lightbox.on{display:flex;}
   #lightbox img{max-width:92vw; max-height:78vh; border-radius:12px;}
   #lightbox .cap{color:#e2e8f0; font-size:14px; text-align:center;}
-  #failModal, #orphanModal{position:fixed; inset:0; background:rgba(0,0,0,.88); display:none; align-items:flex-start; justify-content:center; z-index:50; padding:24px 16px; overflow-y:auto;}
-  #failModal.on, #orphanModal.on{display:flex;}
-  #failModal .card, #orphanModal .card{margin:0; width:100%;}
+  #failModal, #orphanModal, #deletedPurchasesModal{position:fixed; inset:0; background:rgba(0,0,0,.88); display:none; align-items:flex-start; justify-content:center; z-index:50; padding:24px 16px; overflow-y:auto;}
+  #failModal.on, #orphanModal.on, #deletedPurchasesModal.on{display:flex;}
+  #failModal .card, #orphanModal .card, #deletedPurchasesModal .card{margin:0; width:100%;}
   #msg{color:#f87171; min-height:20px; margin:8px 0;}
   #msg.ok{color:#4ade80;}
   .muted{color:#94a3b8; font-size:13px;}
@@ -232,7 +232,7 @@
       <label>تا تاریخ: <input id="pu-to" type="date"></label>
       <button>اعمال فیلتر</button>
     </form>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button class="small danger" onclick="purchasesDeleteSelected()">حذف تیک‌خورده‌ها</button><button class="small danger" onclick="purchasesDeletePending()">حذف همه‌ی در انتظار/ناموفق</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button class="small danger" onclick="purchasesDeleteSelected()">حذف تیک‌خورده‌ها</button><button class="small danger" onclick="purchasesDeletePending()">حذف همه‌ی در انتظار/ناموفق</button><button class="small" onclick="openDeletedPurchasesModal()">حذف‌شده‌ها</button></div>
     <div id="pu-total" class="muted" style="margin-top:8px;"></div>
     <div id="pu-list"></div>
     <div id="pu-pager"></div>
@@ -397,6 +397,7 @@
   <div id="lightbox" onclick="closeLightbox()"><img id="lb-img" onclick="event.stopPropagation()"><div class="cap" id="lb-cap"></div><button class="small gold" onclick="closeLightbox()">بستن</button></div>
   <div id="failModal" onclick="closeFailModal()"><div class="card" onclick="event.stopPropagation()"><h3>گزارش ناموفق‌ها</h3><div id="fail-list"></div><button class="small gold" onclick="closeFailModal()">بستن</button></div></div>
   <div id="orphanModal" onclick="closeOrphanModal()"><div class="card" onclick="event.stopPropagation()"><h3>فایل‌های یتیم</h3><p id="orphan-summary" class="muted"></p><div id="orphan-list"></div><div id="orphan-pages"></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"><button class="small danger" onclick="orphansDeleteFromModal()">حذف همه‌ی یتیم‌ها</button><button class="small gold" onclick="closeOrphanModal()">بستن</button></div></div></div>
+  <div id="deletedPurchasesModal" onclick="closeDeletedPurchasesModal()"><div class="card" onclick="event.stopPropagation()"><h3>پرداخت‌های حذف‌شده</h3><p class="muted">پرداخت‌هایی که با انقضا یا حذف گروهی حذف شدند؛ ردیف واقعاً پاک نشده و با وریفای دیرهنگامِ همان توکن برمی‌گردد.</p><form class="grid" onsubmit="applyDelPuSearch(event)"><input id="delpu-q" placeholder="جستجو با توکن بازار یا شناسه زیبال"><button>جستجو</button></form><div id="delpu-list"></div><div id="delpu-pager"></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"><button class="small gold" onclick="closeDeletedPurchasesModal()">بستن</button></div></div></div>
 </main>
 <script>
 const $ = id => document.getElementById(id);
@@ -628,6 +629,16 @@ async function purchasesDeleteSelected(){ const ids = [...document.querySelector
 async function purchasesDeletePending(){ if(!confirm('همه‌ی پرداخت‌های در انتظار و ناموفق حذف شوند؟ مصرف‌شده‌ها پاک نمی‌شوند.')) return; try { const r = await api('/admin/purchases/bulk', 'DELETE', {statuses: ['pending', 'failed']}); setMsg(r.deleted + ' پرداخت حذف شد.', true); loadPurchases(); } catch(err){ setMsg(err.message); } }
 async function loadPurchaseDetail(id){ const r = await api('/admin/purchases/' + id);
   $('pu-detail').innerHTML = `<h3>پرداخت ${r.id}</h3><p>کاربر: ${r.user_id} | موبایل: ${esc(r.mobile)} | پک: ${esc(r.pack_name)} (${r.pack_coins} سکه) | مبلغ: ${r.amount_irr.toLocaleString('fa-IR')} ریال | وضعیت: ${purchaseFa[r.status] || esc(r.status)} | درگاه: ${esc(r.gateway || 'bazaar')} | توکن بازار: <span class="muted" style="word-break:break-all;">${esc(r.token || r.zibal_track_id || r.token_tail || '')}</span> | تأیید: ${esc(faDate(r.verified_at))} | ثبت: ${esc(faDate(r.created_at))}</p>`; }
+let delPuPageNo = 1;
+function delPuPage(n){ if(n < 1) return; delPuPageNo = n; loadDeletedPurchases(); }
+function applyDelPuSearch(e){ e.preventDefault(); delPuPageNo = 1; loadDeletedPurchases(); }
+async function openDeletedPurchasesModal(){ delPuPageNo = 1; $('delpu-q').value = ''; await loadDeletedPurchases(); $('deletedPurchasesModal').classList.add('on'); }
+function closeDeletedPurchasesModal(){ $('deletedPurchasesModal').classList.remove('on'); }
+async function loadDeletedPurchases(){ const q = new URLSearchParams({q: $('delpu-q').value.trim(), page: delPuPageNo});
+  const res = await api('/admin/purchases/deleted?' + q);
+  $('delpu-list').innerHTML = res.items.length ? `<table><tr><th>id</th><th>کاربر</th><th>موبایل</th><th>پک</th><th>مبلغ (ریال)</th><th>وضعیت</th><th>توکن بازار</th><th>تاریخ حذف</th><th>تاریخ ثبت</th></tr>` +
+    res.items.map(r => `<tr><td>${r.id}</td><td>${r.user_id}</td><td>${esc(r.mobile)}</td><td>${esc(r.pack_name)}</td><td>${r.amount_irr.toLocaleString('fa-IR')}</td><td>${purchaseFa[r.status] || esc(r.status)}</td><td class="muted" style="word-break:break-all;font-size:11px;">${esc(r.token || r.zibal_track_id || '')}</td><td class="muted">${esc(faDate(r.deleted_at))}</td><td class="muted">${esc(faDate(r.created_at))}</td></tr>`).join('') + '</table>' : '<p class="muted">پرداخت حذف‌شده‌ای نیست.</p>';
+  $('delpu-pager').innerHTML = pagerHTML('delPu', res); }
 
 let vaPageNo = 1;
 function vaPage(n){ if(n < 1) return; vaPageNo = n; loadVerifyAttempts(); }

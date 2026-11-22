@@ -89,6 +89,16 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature,
     # نباید برای کاربر فعلی «موفق» برگردد.
     if existing is not None and existing.user_id != user.id:
         raise ValueError("purchase token belongs to another user")
+    if (
+        existing is not None
+        and existing.deleted_at is not None
+        and existing.status in ("verified", "consumed")
+    ):
+        # حذف منطقی (۲۰۲۶-۱۱-۲۲): ردیف مصرف‌شده‌ی حذف‌شده برگردد.
+        # (ردیف مصرف‌شده یعنی قبلاً تسویه شده؛ شارژ مجدد نیست.)
+        existing.deleted_at = None
+        db.session.commit()
+        return existing, True, 0
     if existing is not None and existing.status in ("verified", "consumed"):
         return existing, True, 0
 
@@ -140,6 +150,14 @@ def verify_purchase(user, pack, purchase_token, purchase_data, signature,
 
     if not signature or not verify_signature(purchase_data or "", signature):
         raise ValueError("invalid bazaar signature")
+
+    # حذف منطقی (۲۰۲۶-۱۱-۲۲): امضا درست است — ردیف حذف‌شده برگردد.
+    # پاک‌کردنِ deleted_at با commitِ تسویه در انتها ذخیره می‌شود.
+    # این پاک‌کردن عمداً بعد از وریفای امضاست: اگر امضا نامعتبر بود،
+    # هیچ تغییری در سشن نیست تا commitِ لاگِ وریفای آن را ذخیره کند —
+    # پس وریفای ناموفق ردیف را برنمی‌گرداند.
+    if existing is not None and existing.deleted_at is not None:
+        existing.deleted_at = None
 
     if existing is None:
         if pack is None:
