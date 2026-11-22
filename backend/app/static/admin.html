@@ -42,6 +42,15 @@
   #failModal, #orphanModal, #deletedPurchasesModal{position:fixed; inset:0; background:rgba(0,0,0,.88); display:none; align-items:flex-start; justify-content:center; z-index:50; padding:24px 16px; overflow-y:auto;}
   #failModal.on, #orphanModal.on, #deletedPurchasesModal.on{display:flex;}
   #failModal .card, #orphanModal .card, #deletedPurchasesModal .card{margin:0; width:100%;}
+  #deletedPurchasesModal .card{max-width:1120px; width:calc(100vw - 48px); padding:24px;}
+  #deletedPurchasesModal form.grid{grid-template-columns:1fr auto;}
+  #deletedPurchasesModal form.grid input{margin:0;}
+  #delpu-list{overflow:auto; max-height:70vh;}
+  #deletedPurchasesModal table{font-size:13px; min-width:920px;}
+  #deletedPurchasesModal th{position:sticky; top:0; background:#1e293b; white-space:nowrap;}
+  #deletedPurchasesModal td{white-space:nowrap;}
+  #deletedPurchasesModal td.tok{white-space:normal; word-break:break-all; font-size:12px; direction:ltr; text-align:left; min-width:240px;}
+  #deletedPurchasesModal table tr:nth-child(even) td{background:rgba(255,255,255,.02);}
   #msg{color:#f87171; min-height:20px; margin:8px 0;}
   #msg.ok{color:#4ade80;}
   .muted{color:#94a3b8; font-size:13px;}
@@ -637,7 +646,7 @@ function closeDeletedPurchasesModal(){ $('deletedPurchasesModal').classList.remo
 async function loadDeletedPurchases(){ const q = new URLSearchParams({q: $('delpu-q').value.trim(), page: delPuPageNo});
   const res = await api('/admin/purchases/deleted?' + q);
   $('delpu-list').innerHTML = res.items.length ? `<table><tr><th>id</th><th>کاربر</th><th>موبایل</th><th>پک</th><th>مبلغ (ریال)</th><th>وضعیت</th><th>توکن بازار</th><th>تاریخ حذف</th><th>تاریخ ثبت</th></tr>` +
-    res.items.map(r => `<tr><td>${r.id}</td><td>${r.user_id}</td><td>${esc(r.mobile)}</td><td>${esc(r.pack_name)}</td><td>${r.amount_irr.toLocaleString('fa-IR')}</td><td>${purchaseFa[r.status] || esc(r.status)}</td><td class="muted" style="word-break:break-all;font-size:11px;">${esc(r.token || r.zibal_track_id || '')}</td><td class="muted">${esc(faDate(r.deleted_at))}</td><td class="muted">${esc(faDate(r.created_at))}</td></tr>`).join('') + '</table>' : '<p class="muted">پرداخت حذف‌شده‌ای نیست.</p>';
+    res.items.map(r => `<tr><td>${r.id}</td><td>${r.user_id}</td><td>${esc(r.mobile)}</td><td>${esc(r.pack_name)}</td><td>${r.amount_irr.toLocaleString('fa-IR')}</td><td>${purchaseFa[r.status] || esc(r.status)}</td><td class="muted tok">${esc(r.token || r.zibal_track_id || '')}</td><td class="muted">${esc(faDate(r.deleted_at))}</td><td class="muted">${esc(faDate(r.created_at))}</td></tr>`).join('') + '</table>' : '<p class="muted">پرداخت حذف‌شده‌ای نیست.</p>';
   $('delpu-pager').innerHTML = pagerHTML('delPu', res); }
 
 let vaPageNo = 1;
