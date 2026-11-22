@@ -178,6 +178,43 @@ def main():
         check("purchases: no admin token -> 403", r.status_code == 403,
               f"got {r.status_code}")
 
+        # --- 4. فیلتر تاریخ به وقت تهران (نه UTC) ---
+        # خرید ساعت ۰۱:۰۴ تهران ۱ آذر = ۲۱:۳۴ UTC روز قبل؛ باید با
+        # date_from=2026-11-22 دیده شود. خرید ساعت ۰۰:۳۰ تهران ۲ آذر =
+        # ۲۱:۰۰ UTC روز ۲۲ نوامبر؛ باید با date_to=2026-11-22 دیده نشود.
+        early = AppPurchase(id=next_id(), user_id=u1.id, pack_id=pack.id,
+                            amount_irr=59900, status="consumed",
+                            created_at=datetime.datetime(2026, 11, 21, 21, 34))
+        late = AppPurchase(id=next_id(), user_id=u1.id, pack_id=pack.id,
+                           amount_irr=59900, status="consumed",
+                           created_at=datetime.datetime(2026, 11, 22, 21, 0))
+        db.session.add_all([early, late])
+        db.session.commit()
+        r = client.get("/api/v1/admin/purchases?date_from=2026-11-22",
+                       headers=admin_h)
+        j = r.get_json()
+        check("purchases: date_from Tehran day includes 01:04 Tehran purchase",
+              j["totals"]["count"] == 2
+              and j["totals"]["amount_irr"] == 119800
+              and any(it["id"] == early.id for it in j["items"]),
+              f"got {j.get('totals')}")
+        r = client.get("/api/v1/admin/purchases?date_to=2026-11-22",
+                       headers=admin_h)
+        j = r.get_json()
+        check("purchases: date_to Tehran day excludes 00:30-next-day purchase",
+              j["totals"]["count"] == 5
+              and j["totals"]["amount_irr"] == 389500
+              and all(it["id"] != late.id for it in j["items"]),
+              f"got {j.get('totals')}")
+        r = client.get("/api/v1/admin/purchases?date_from=2026-11-22"
+                       "&date_to=2026-11-22", headers=admin_h)
+        j = r.get_json()
+        check("purchases: same-day Tehran range holds only the 01:04 purchase",
+              j["totals"]["count"] == 1
+              and j["totals"]["amount_irr"] == 59900
+              and j["items"][0]["id"] == early.id,
+              f"got {j.get('totals')}")
+
         # --- 2. user_id در ورودی‌ها ---
         r = client.get("/api/v1/admin/inputs", headers=admin_h)
         j = r.get_json()

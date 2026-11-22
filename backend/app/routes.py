@@ -3928,6 +3928,10 @@ def admin_list_purchases():
                 dt = datetime.datetime.strptime(val, "%Y-%m-%d")
             except ValueError:
                 continue
+            # تاریخ ورودی روز تقویمی تهران است (ادمین تاریخ شمسی می‌زند و
+            # فرانت آن را به میلادی تبدیل می‌کند)؛ created_at به UTC ذخیره
+            # می‌شود، پس شروع روز تهران = نیمه‌شب UTC منهای ۳:۳۰.
+            dt = dt - datetime.timedelta(hours=3, minutes=30)
             if arg == "date_from":
                 query = query.filter(AppPurchase.created_at >= dt)
             else:
