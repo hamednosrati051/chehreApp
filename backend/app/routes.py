@@ -759,15 +759,18 @@ def _refund_and_drop_generation(gen, reserved):
 
     reserved=True یعنی reserve_for_generation قبلاً مصرف کرده است
     (سکه یا اعتبار هدیه)؛ پرچم charged در حافظه True می‌شود چون
-    شاید commitِ ست‌کردنش ناموفق بوده و refund_reservation فقط
-    وقتی charged باشد جبران می‌کند.
+    شاید commitِ ست‌کردنش ناموفق بوده و refund_reservation بدون
+    force فقط وقتی پرچمِ دیتابیس True باشد جبران می‌کند. force=True
+    این‌جا امن است: ردیف چند ثانیه‌ای است، هرگز صف نرفته (send_task
+    فقط در مسیر موفق می‌آید) و بلافاصله حذف می‌شود، پس هیچ مسیر
+    هم‌روندی (ورکر/سوئیپر) نمی‌تواند همان رزرو را برگرداند.
     """
     if reserved:
         try:
             user = AppUser.query.get(gen.user_id)
             if user is not None:
                 gen.charged = True
-                coins_svc.refund_reservation(user, gen)
+                coins_svc.refund_reservation(user, gen, force=True)
         except Exception:
             db.session.rollback()
     try:

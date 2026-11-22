@@ -7,7 +7,7 @@
 """
 
 from ..extensions import db
-from ..models import AppCoinBalance, AppCoinLedger, AppUser
+from ..models import AppCoinBalance, AppCoinLedger, AppGeneration, AppUser
 
 
 def get_balance(user):
@@ -135,14 +135,37 @@ def reserve_for_generation(user, kind, cost, generation_id=None):
     return None
 
 
-def refund_reservation(user, generation):
-    """برگرداندن رزرو موقع ثبت برای job ناموفق. فقط وقتی صدا زده شود که
-    generation.charged یعنی رزرو شده باشد؛ در این صورت charged را هم False
-    می‌کند (در همان تراکنش) تا refund دوباره تکرار نشود.
+def refund_reservation(user, generation, force=False):
+    """برگرداندن رزرو موقع ثبت برای job ناموفق. ایدم‌پوتنت: دقیقاً یک
+    بار برمی‌گردد، هر چند مسیر آن را صدا بزند.
+
+    باگ قدیمی (نسل ۲۳۹۵، آبان ۱۴۰۵): سوئیپر (گیرکرده >۱۲۰ ثانیه) و
+    ورکر (خطای provider) هر دو با یک شیء قدیمی در حافظه charged=True
+    می‌دیدند و هر دو برگشت می‌زدند (+۲۰ به‌جای +۱۰). حالا ادعا
+    اتمیک است: یک UPDATE مشروط روی سطر دیتابیس که فقط وقتی سطر را
+    واقعاً تغییر داد (rowcount=1) ادامه می‌دهد — همان الگوی
+    reserve_for_generation. پرچم در حافظه دیگر ملاک نیست.
+    force=True فقط برای _refund_and_drop_generation است: ردیفش چند
+    ثانیه‌ای است، هرگز صف نرفته و بلافاصله حذف می‌شود، پس هیچ مسیر
+    هم‌روندی نمی‌تواند همان رزرو را برگرداند؛ ولی commitِ ست‌کردن
+    charged ممکن است ناموفق بوده باشد (پرچم در DB هنوز False است).
     منبع از روی ledger فهمیده می‌شود: سطر spend برای این generation یعنی
     سکه رزرو شده بود، نبودنش یعنی اعتبار هدیه."""
-    if generation.coin_cost <= 0 or not generation.charged:
+    if generation.coin_cost <= 0:
         return
+    if not force:
+        claimed = (
+            AppGeneration.query.filter(
+                AppGeneration.id == generation.id,
+                AppGeneration.charged == True,  # noqa: E712
+            ).update(
+                {AppGeneration.charged: False},
+                synchronize_session=False,
+            )
+        )
+        if not claimed:
+            return
+    generation.charged = False
     spent = (
         AppCoinLedger.query.filter_by(
             user_id=user.id,
@@ -152,22 +175,45 @@ def refund_reservation(user, generation):
         ).first()
     )
     if spent is not None:
-        credit_coins(
-            user,
-            generation.coin_cost,
-            reason="refund",
-            ref_type="generation",
-            ref_id=generation.id,
-            commit=True,
+        # افزایش اتمیِ موجودی در خود دیتابیس (balance = balance + cost):
+        # ورکر Celery تراکنشِ چنددقیقه‌ای دارد؛ خواندن-بعد-نوشتن با
+        # snapshot قدیمی (REPEATABLE READ) تغییرهای هم‌زمان را گم
+        # می‌کند — نسل ۲۳۹۶ در ۰۵:۱۹:۵۹ دقیقاً همین‌طور ۱۰ سکه گم کرد
+        # (سطر refund نوشته شد ولی موجودی ۱۰ تا کمتر ماند).
+        rows = (
+            AppCoinBalance.query.filter(
+                AppCoinBalance.user_id == user.id,
+            ).update(
+                {
+                    AppCoinBalance.balance: AppCoinBalance.balance
+                    + generation.coin_cost
+                },
+                synchronize_session=False,
+            )
         )
+        if not rows:
+            # ردیف موجودی نیست (نباید برای برگشت رخ دهد — سکه از همین
+            # ردیف خرج شده بود)؛ ساخته می‌شود تا برگشت گم نشود.
+            db.session.add(
+                AppCoinBalance(
+                    user_id=user.id, balance=generation.coin_cost
+                )
+            )
+        _ledger(
+            user.id,
+            generation.coin_cost,
+            "refund",
+            "generation",
+            generation.id,
+        )
+        db.session.commit()
     elif generation.kind == "image":
         user.free_image_credits += 1
         db.session.add(user)
+        db.session.commit()
     elif generation.kind == "voice":
         user.free_voice_credits += 1
         db.session.add(user)
+        db.session.commit()
     else:
         return
-    generation.charged = False
-    db.session.add(generation)
-    db.session.commit()
