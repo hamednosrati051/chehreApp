@@ -233,6 +233,7 @@
       <button>اعمال فیلتر</button>
     </form>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button class="small danger" onclick="purchasesDeleteSelected()">حذف تیک‌خورده‌ها</button><button class="small danger" onclick="purchasesDeletePending()">حذف همه‌ی در انتظار/ناموفق</button></div>
+    <div id="pu-total" class="muted" style="margin-top:8px;"></div>
     <div id="pu-list"></div>
     <div id="pu-pager"></div>
     <div id="pu-detail"></div>
@@ -619,6 +620,7 @@ function applyPuFilter(e){ e.preventDefault(); puPageNo = 1; loadPurchases(); }
 const purchaseFa = {pending: 'در انتظار', verified: 'تأییدشده', consumed: 'مصرف‌شده', failed: 'ناموفق'};
 async function loadPurchases(){ const q = new URLSearchParams({status: $('pu-status').value, mobile: $('pu-mobile').value.trim(), date_from: $('pu-from').value, date_to: $('pu-to').value, page: puPageNo});
   const res = await api('/admin/purchases?' + q);
+  $('pu-total').innerHTML = res.totals ? `مجموع ${res.totals.count} پرداخت | ${(res.totals.amount_irr || 0).toLocaleString('fa-IR')} ریال` : '';
   $('pu-list').innerHTML = res.items.length ? `<table><tr><th></th><th>id</th><th>کاربر</th><th>موبایل</th><th>پک</th><th>سکه</th><th>مبلغ (ریال)</th><th>وضعیت</th><th>توکن</th><th>توکن بازار</th><th>تاریخ</th><th></th></tr>` +
     res.items.map(r => `<tr><td>${(r.status==='pending'||r.status==='failed') ? `<input type="checkbox" class="pu-check" value="${r.id}">` : ''}</td><td>${r.id}</td><td>${r.user_id}</td><td>${esc(r.mobile)}</td><td>${esc(r.pack_name)}</td><td>${r.pack_coins}</td><td>${r.amount_irr.toLocaleString('fa-IR')}</td><td>${purchaseFa[r.status] || esc(r.status)}</td><td class="muted">${esc(r.token_tail)}</td><td class="muted" style="word-break:break-all;font-size:11px;">${esc(r.token || r.zibal_track_id || '')}</td><td class="muted">${esc(faDate(r.created_at))}</td><td><button class="small" onclick="loadPurchaseDetail(${r.id})">جزئیات</button></td></tr>`).join('') + '</table>' : '<p class="muted">پرداختی نیست.</p>';
   $('pu-pager').innerHTML = pagerHTML('pu', res); }
@@ -656,13 +658,14 @@ async function reportsDeleteReviewed(){ if(!confirm('همه‌ی گزارش‌ه
 async function loadTickets(){ const rows = await api('/admin/tickets');
   $('tk-detail').innerHTML = '';
   $('tk-list').innerHTML = rows.length ? `<table><tr><th>id</th><th>کاربر</th><th>موضوع</th><th>وضعیت</th><th>تاریخ</th><th></th></tr>` +
-    rows.map(t => `<tr><td>${t.id}</td><td>${t.user_id}</td><td>${esc(t.subject)}</td><td>${t.status === 'open' ? 'باز' : 'بسته'}</td><td class="muted">${esc(faDate(t.created_at))}</td><td><button class="small" onclick="loadTicketDetail(${t.id})">مشاهده</button></td></tr>`).join('') + '</table>' : '<p class="muted">تیکتی نیست.</p>'; }
+    rows.map(t => `<tr><td>${t.id}</td><td>${t.user_id}</td><td>${esc(t.subject)}</td><td>${t.status === 'open' ? 'باز' : 'بسته'}</td><td class="muted">${esc(faDate(t.created_at))}</td><td><button class="small" onclick="loadTicketDetail(${t.id})">مشاهده</button> <button class="small danger" onclick="ticketDelete(${t.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">تیکتی نیست.</p>'; }
 async function loadTicketDetail(id){ const t = await api('/admin/tickets/' + id);
   $('tk-detail').innerHTML = `<h3>تیکت ${t.id} — ${esc(t.subject)}</h3><p class="muted">کاربر: ${t.user_id} | وضعیت: ${t.status === 'open' ? 'باز' : 'بسته'}</p>` +
     (t.messages || []).map(m => `<p><b>${m.sender === 'admin' ? 'ادمین' : 'کاربر'}:</b> ${esc(m.body)} <span class="muted">${esc(faDate(m.created_at))}</span></p>`).join('') +
     `<form class="grid" onsubmit="ticketReply(event, ${t.id})"><textarea id="tk-reply" rows="3" placeholder="پاسخ ادمین" required></textarea><span><button>ارسال پاسخ</button> ${t.status === 'open' ? `<button type="button" class="small danger" onclick="ticketSetStatus(${t.id},'closed')">بستن تیکت</button>` : `<button type="button" class="small gold" onclick="ticketSetStatus(${t.id},'open')">باز کردن تیکت</button>`}</span></form>`; }
 async function ticketReply(e, id){ e.preventDefault(); try { await api('/admin/tickets/' + id + '/messages', 'POST', {body: $('tk-reply').value.trim()}); setMsg('پاسخ فرستاده شد.', true); loadTicketDetail(id); loadTickets(); } catch(err){ setMsg(err.message); } }
 async function ticketSetStatus(id, st){ try { await api('/admin/tickets/' + id, 'PATCH', {status: st}); setMsg(st === 'closed' ? 'تیکت بسته شد.' : 'تیکت باز شد.', true); loadTicketDetail(id); loadTickets(); } catch(err){ setMsg(err.message); } }
+async function ticketDelete(id){ if(!confirm('تیکت ' + id + ' با همه‌ی پیام‌هایش حذف شود؟')) return; try { await api('/admin/tickets/' + id, 'DELETE', {}); setMsg('تیکت حذف شد.', true); $('tk-detail').innerHTML = ''; loadTickets(); } catch(err){ setMsg(err.message); } }
 
 async function loadGallery(){ const rows = await api('/admin/gallery/pending');
   $('g-list').innerHTML = rows.length ? rows.map(r => `<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;"><img class="thumb" src="${esc(r.image_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | generation: ' + r.generation_id)}" onclick="openLightbox(this.src, this.dataset.cap)" style="cursor:pointer;"><div>موبایل: ${esc(r.mobile)}<br><span class="muted">generation: ${r.generation_id}</span></div><button class="small gold" onclick="galleryAct(${r.id},'approve')">تأیید</button><input id="gr-${r.id}" placeholder="دلیل رد (اختیاری)" style="min-width:180px;"><button class="small danger" onclick="galleryReject(${r.id})">رد</button></div>`).join('') : '<p class="muted">عکس در انتظاری نیست.</p>'; }
@@ -690,7 +693,7 @@ function inPage(n){ if(n < 1) return; inPageNo = n; loadInputs(); }
 async function loadInputs(){ const res = await api('/admin/inputs?page=' + inPageNo);
   const t = res.totals || {};
   $('in-summary').innerHTML = `<p class="muted">مجموع ${t.distinct_inputs ?? res.total} عکس ورودی از ${t.users ?? '—'} کاربر | مجموع ${t.usages ?? '—'} استفاده</p>`;
-  $('in-list').innerHTML = res.items.length ? `<div class="gen-grid">` + res.items.map(r => `<div class="gen-item"><img class="gthumb" src="${esc(r.input_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | استفاده: ' + r.uses + ' | ' + (r.last_used ? faDate(r.last_used) : ''))}" onclick="openLightbox(this.src, this.dataset.cap)"><div class="muted">${r.mobile ? esc(r.mobile) : esc(shortId(r.bazaar_account_id))}<br>استفاده: ${r.uses}</div><input type="checkbox" class="in-check" value="${esc(r.input_url)}" title="انتخاب برای حذف گروهی"> <button class="small danger" data-url="${esc(r.input_url)}" onclick="inputDelete(this.dataset.url)">حذف</button></div>`).join('') + `</div>` : '<p class="muted">عکس ورودی نیست.</p>';
+  $('in-list').innerHTML = res.items.length ? `<div class="gen-grid">` + res.items.map(r => `<div class="gen-item"><img class="gthumb" src="${esc(r.input_url)}" data-cap="${esc('موبایل: ' + (r.mobile || '—') + ' | استفاده: ' + r.uses + ' | ' + (r.last_used ? faDate(r.last_used) : ''))}" onclick="openLightbox(this.src, this.dataset.cap)"><div class="muted">${r.user_id ? `<a href="javascript:void(0)" onclick="showTab('users');loadUserDetail(${r.user_id})" style="color:#E8B84B">کاربر ${r.user_id}</a><br>` : ''}${r.mobile ? esc(r.mobile) : esc(shortId(r.bazaar_account_id))}<br>استفاده: ${r.uses}</div><input type="checkbox" class="in-check" value="${esc(r.input_url)}" title="انتخاب برای حذف گروهی"> <button class="small danger" data-url="${esc(r.input_url)}" onclick="inputDelete(this.dataset.url)">حذف</button></div>`).join('') + `</div>` : '<p class="muted">عکس ورودی نیست.</p>';
   $('in-pager').innerHTML = pagerHTML('in', res); }
 async function inputDelete(url){ if(!confirm('عکس ورودی از روی سرور حذف شود؟ خروجی‌ها دست نمی‌خورند.')) return; try { await api('/admin/inputs', 'DELETE', {input_url: url}); loadInputs(); } catch(err){ setMsg(err.message); } }
 function inChecked(){ return [...document.querySelectorAll('.in-check:checked')].map(c => c.value); }

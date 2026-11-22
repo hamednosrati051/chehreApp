@@ -3922,6 +3922,13 @@ def admin_list_purchases():
                 query = query.filter(
                     AppPurchase.created_at < dt + datetime.timedelta(days=1)
                 )
+    totals = {
+        "count": query.count(),
+        "amount_irr": query.with_entities(
+            func.coalesce(func.sum(AppPurchase.amount_irr), 0)
+        ).scalar()
+        or 0,
+    }
     query = query.order_by(AppPurchase.id.desc())
     rows, meta = _paginate(query)
     users = {u.id: u.mobile for u in AppUser.query.all()}
@@ -3930,7 +3937,7 @@ def admin_list_purchases():
     for r in rows:
         name, coins = packs.get(r.pack_id, (None, None))
         out.append(_purchase_admin(r, users.get(r.user_id), name, coins))
-    return jsonify({"items": out, **meta})
+    return jsonify({"items": out, "totals": totals, **meta})
 
 
 @admin_bp.get("/admin/purchases/<int:purchase_id>")
@@ -4278,6 +4285,18 @@ def admin_update_ticket(ticket_id):
     t.status = status
     db.session.commit()
     return jsonify(_ticket_admin(t))
+
+
+@admin_bp.delete("/admin/tickets/<int:ticket_id>")
+@require_admin
+def admin_delete_ticket(ticket_id):
+    t = AppTicket.query.get(ticket_id)
+    if not t:
+        return jsonify({"error": "not found"}), 404
+    AppTicketMessage.query.filter_by(ticket_id=t.id).delete()
+    db.session.delete(t)
+    db.session.commit()
+    return jsonify({"deleted": ticket_id})
 
 
 # ---------------- admin: models (ساخت مدل جدید) ----------------
