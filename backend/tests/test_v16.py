@@ -545,8 +545,10 @@ def main():
         deleted = expire_stale_pending_purchases()
         check("expiry: deletes exactly 1 row",
               deleted == 1, f"got {deleted}")
-        check("expiry: old token-less deleted",
-              AppPurchase.query.get(p_old_notok.id) is None)
+        # حذف منطقی (۲۰۲۶-۱۱-۲۲): ردیف می‌ماند، فقط deleted_at می‌خورد.
+        _expired = AppPurchase.query.get(p_old_notok.id)
+        check("expiry: old token-less soft-deleted",
+              _expired is not None and _expired.deleted_at is not None)
         check("expiry: old WITH token kept",
               AppPurchase.query.get(p_old_tok.id) is not None)
         check("expiry: fresh token-less kept",

@@ -597,18 +597,23 @@ def main():
         deleted = expire_stale_pending_purchases()
         check("expiry: deletes exactly 4 rows (old bazaar + 2h zibal x2 + 8-day zibal)",
               deleted == 4, f"got {deleted}")
-        check("expiry: old bazaar token-less deleted",
-              AppPurchase.query.get(p_old_baz.id) is None)
+        # حذف منطقی (۲۰۲۶-۱۱-۲۲): ردیف‌ها می‌مانند، فقط deleted_at می‌خورند.
+        _r = AppPurchase.query.get(p_old_baz.id)
+        check("expiry: old bazaar token-less soft-deleted",
+              _r is not None and _r.deleted_at is not None)
         check("expiry: old bazaar WITH token kept",
               AppPurchase.query.get(p_old_baz_tok.id) is not None)
         check("expiry: 40-min zibal kept (G3)",
               AppPurchase.query.get(p_old_zib.id) is not None)
-        check("expiry: 2-hour zibal pending deleted (1-hour rule)",
-              AppPurchase.query.get(p_2h_zib.id) is None)
-        check("expiry: 2-hour zibal failed deleted (1-hour rule)",
-              AppPurchase.query.get(p_2h_zib_failed.id) is None)
-        check("expiry: 8-day zibal deleted",
-              AppPurchase.query.get(p_old_zib_8d.id) is None)
+        _r = AppPurchase.query.get(p_2h_zib.id)
+        check("expiry: 2-hour zibal pending soft-deleted (1-hour rule)",
+              _r is not None and _r.deleted_at is not None)
+        _r = AppPurchase.query.get(p_2h_zib_failed.id)
+        check("expiry: 2-hour zibal failed soft-deleted (1-hour rule)",
+              _r is not None and _r.deleted_at is not None)
+        _r = AppPurchase.query.get(p_old_zib_8d.id)
+        check("expiry: 8-day zibal soft-deleted",
+              _r is not None and _r.deleted_at is not None)
         check("expiry: fresh zibal kept",
               AppPurchase.query.get(p_fresh_zib.id) is not None)
 
@@ -889,10 +894,12 @@ def main():
         r = _admin(client, "/admin/purchases/bulk", "DELETE",
                    {"ids": [pu_ids[0], pu_ids[1]]})
         j = r.get_json() or {}
-        check("purchases bulk by ids: deletes pending, skips consumed",
+        # حذف منطقی (۲۰۲۶-۱۱-۲۲): ردیف می‌ماند، فقط deleted_at می‌خورد.
+        _bulk0 = AppPurchase.query.get(pu_ids[0])
+        check("purchases bulk by ids: soft-deletes pending, skips consumed",
               r.status_code == 200 and j.get("deleted") == 1
               and len(j.get("skipped") or []) == 1
-              and AppPurchase.query.get(pu_ids[0]) is None
+              and _bulk0 is not None and _bulk0.deleted_at is not None
               and AppPurchase.query.get(pu_ids[1]) is not None,
               f"got {r.status_code} {r.data!r}")
         r = _admin(client, "/admin/purchases/bulk", "DELETE",
@@ -905,9 +912,11 @@ def main():
         # deleted >= 1: بخش‌های قبلی تست هم ردیف pending/failed
         # به‌جا گذاشته‌اند؛ مهم این است که failed ما پاک و
         # verified/consumed ما سر جایشان باشند.
-        check("purchases bulk by status: deletes failed, verified stays",
+        # حذف منطقی (۲۰۲۶-۱۱-۲۲): ردیف failed می‌ماند، فقط deleted_at می‌خورد.
+        _bulk2 = AppPurchase.query.get(pu_ids[2])
+        check("purchases bulk by status: soft-deletes failed, verified stays",
               r.status_code == 200 and j.get("deleted", 0) >= 1
-              and AppPurchase.query.get(pu_ids[2]) is None
+              and _bulk2 is not None and _bulk2.deleted_at is not None
               and AppPurchase.query.get(pu_ids[3]) is not None
               and AppPurchase.query.get(pu_ids[1]) is not None,
               f"got {r.status_code} {r.data!r}")
