@@ -71,6 +71,19 @@
     section{padding:12px;}
     table{min-width:560px;}
   }
+  #jcal{position:fixed; z-index:70; background:#1e293b; border:1px solid #334155; border-radius:12px; padding:12px; width:264px; box-shadow:0 8px 32px rgba(0,0,0,.5); direction:rtl; display:none;}
+  #jcal .jcal-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+  #jcal .jcal-head b{font-size:14px; color:#93c5fd;}
+  #jcal .jcal-head button{background:#0f172a; border:1px solid #334155; padding:2px 12px;}
+  #jcal table{min-width:0; width:100%;}
+  #jcal th, #jcal td{border:0; padding:2px; text-align:center;}
+  #jcal th{color:#94a3b8; font-size:12px;}
+  #jcal td button{width:100%; background:transparent; color:#e2e8f0; border:0; border-radius:6px; padding:5px 0;}
+  #jcal td button:hover{background:#1D6FE0;}
+  #jcal td button.today{background:#334155; font-weight:bold;}
+  #jcal td button.sel{background:#E8B84B; color:#222; font-weight:bold;}
+  #jcal .jcal-foot{margin-top:8px; display:flex; justify-content:space-between;}
+  #jcal .jcal-foot button{background:transparent; color:#93c5fd; font-size:12px; padding:2px 8px;}
 </style>
 </head>
 <body>
@@ -237,8 +250,8 @@
     <form class="grid" onsubmit="applyPuFilter(event)">
       <select id="pu-status"><option value="">همه وضعیت‌ها</option><option value="pending">در انتظار</option><option value="verified">تأییدشده</option><option value="consumed">مصرف‌شده</option></select>
       <input id="pu-mobile" placeholder="موبایل">
-      <label>از تاریخ: <input id="pu-from" type="text" inputmode="numeric" dir="ltr" placeholder="1405/09/01"></label>
-      <label>تا تاریخ: <input id="pu-to" type="text" inputmode="numeric" dir="ltr" placeholder="1405/09/01"></label>
+      <label>از تاریخ: <input id="pu-from" type="text" inputmode="numeric" dir="ltr" placeholder="1405/09/01" onclick="openJcal(this)"></label>
+      <label>تا تاریخ: <input id="pu-to" type="text" inputmode="numeric" dir="ltr" placeholder="1405/09/01" onclick="openJcal(this)"></label>
       <button>اعمال فیلتر</button>
     </form>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button class="small danger" onclick="purchasesDeleteSelected()">حذف تیک‌خورده‌ها</button><button class="small danger" onclick="purchasesDeletePending()">حذف همه‌ی در انتظار/ناموفق</button><button class="small" onclick="openDeletedPurchasesModal()">حذف‌شده‌ها</button></div>
@@ -449,15 +462,124 @@ function jalaliToGregorian(jy, jm, jd){
   var g = new Date(gy, 2, march + dayOfYear);
   return [g.getFullYear(), g.getMonth() + 1, g.getDate()];
 }
-function jalaliInputToGregorian(s){
+function parseJalaliInput(s){
   s = faToEnDigits(String(s || '').trim());
-  if (!s) return '';
+  if (!s) return null;
   var m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
-  if (!m) return '';
-  var g = jalaliToGregorian(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));
+  if (!m) return null;
+  return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+}
+function jalaliInputToGregorian(s){
+  var p = parseJalaliInput(s);
+  if (!p) return '';
+  var g = jalaliToGregorian(p[0], p[1], p[2]);
   if (!g) return '';
   function pad(n){ return (n < 10 ? '0' : '') + n; }
   return g[0] + '-' + pad(g[1]) + '-' + pad(g[2]);
+}
+// تقویم شمسی کوچک برای فیلدهای تاریخ پرداخت‌ها — بدون کتابخانه خارجی.
+// «امروز» را از Intl می‌گیرد (همان مکانیزمی که faDate استفاده می‌کند)؛ طول ماه و
+// روز هفته‌ی اول ماه را از jalaliToGregorian می‌سازد. تایپ دستی همچنان کار می‌کند.
+var JALALI_MONTHS = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+var JALALI_WEEKDAYS = ['شنبه','یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه'];
+function jMonthLength(jy, jm){
+  if (jm <= 6) return 31;
+  if (jm <= 11) return 30;
+  return jalaliToGregorian(jy, 12, 30) ? 30 : 29; // اسفند: ۳۰ روز فقط در سال کبیسه
+}
+// فاصله‌ی روز اول ماه تا شنبه‌ی همان هفته (شنبه=۰ … جمعه=۶)
+function jMonthStartOffset(jy, jm){
+  var g = jalaliToGregorian(jy, jm, 1);
+  if (!g) return 0;
+  var wd = new Date(Date.UTC(g[0], g[1] - 1, g[2])).getUTCDay(); // ۰=یکشنبه … ۶=شنبه
+  return (wd + 1) % 7;
+}
+// تاریخ شمسی امروز (تهران) با Intl
+function jToday(){
+  var parts = new Intl.DateTimeFormat('fa-IR', {timeZone: 'Asia/Tehran', year: 'numeric', month: 'numeric', day: 'numeric'}).formatToParts(new Date());
+  var o = {};
+  parts.forEach(function(p){ o[p.type] = p.value; });
+  return [parseInt(faToEnDigits(o.year), 10), parseInt(faToEnDigits(o.month), 10), parseInt(faToEnDigits(o.day), 10)];
+}
+var jcalInput = null, jcalView = null; // jcalView = [jy, jm] ماه در حال نمایش
+function jcalEl(){
+  var el = $('jcal');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'jcal';
+  document.body.appendChild(el);
+  if (!window._jcalBound){
+    window._jcalBound = true;
+    document.addEventListener('click', function(e){
+      var pop = $('jcal');
+      if (!pop || pop.style.display === 'none' || !jcalInput) return;
+      if (pop.contains(e.target) || e.target === jcalInput) return;
+      closeJcal();
+    });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeJcal(); });
+  }
+  return el;
+}
+function openJcal(input){
+  jcalInput = input;
+  var p = parseJalaliInput(input.value);
+  var t = jToday();
+  if (p && jalaliToGregorian(p[0], p[1], p[2])) jcalView = [p[0], p[1]];
+  else jcalView = [t[0], t[1]];
+  renderJcal();
+  var el = jcalEl();
+  var r = input.getBoundingClientRect();
+  el.style.display = 'block';
+  el.style.top = (r.bottom + 6) + 'px';
+  el.style.left = Math.min(Math.max(8, r.left), window.innerWidth - 280) + 'px';
+  el.style.right = 'auto';
+}
+function closeJcal(){ var el = $('jcal'); if (el) el.style.display = 'none'; jcalInput = null; }
+function jcalMove(dir){
+  var jy = jcalView[0], jm = jcalView[1] + dir;
+  if (jm < 1) { jm = 12; jy -= 1; }
+  if (jm > 12) { jm = 1; jy += 1; }
+  if (jy < 1300 || jy > 1500) return; // محدوده‌ی مبدل
+  jcalView = [jy, jm];
+  renderJcal();
+}
+function jcalPick(d){
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  if (!jcalInput) return;
+  jcalInput.value = jcalView[0] + '/' + pad(jcalView[1]) + '/' + pad(d);
+  closeJcal();
+  puPageNo = 1; loadPurchases();
+}
+function jcalToday(){
+  var t = jToday();
+  jcalView = [t[0], t[1]];
+  jcalPick(t[2]);
+}
+function renderJcal(){
+  var el = jcalEl();
+  var jy = jcalView[0], jm = jcalView[1];
+  var t = jToday();
+  var sel = jcalInput ? parseJalaliInput(jcalInput.value) : null;
+  if (sel && !jalaliToGregorian(sel[0], sel[1], sel[2])) sel = null;
+  var h = '<div class="jcal-head"><button type="button" onclick="jcalMove(-1)">›</button><b>' + JALALI_MONTHS[jm - 1] + ' ' + jy + '</b><button type="button" onclick="jcalMove(1)">‹</button></div>';
+  h += '<table><tr>';
+  JALALI_WEEKDAYS.forEach(function(w){ h += '<th>' + w + '</th>'; });
+  h += '</tr><tr>';
+  var off = jMonthStartOffset(jy, jm), len = jMonthLength(jy, jm);
+  var i, d;
+  for (i = 0; i < off; i++) h += '<td></td>';
+  for (d = 1; d <= len; d++){
+    var cls = '';
+    if (t[0] === jy && t[1] === jm && t[2] === d) cls = 'today';
+    if (sel && sel[0] === jy && sel[1] === jm && sel[2] === d) cls = 'sel';
+    h += '<td><button type="button" class="' + cls + '" onclick="jcalPick(' + d + ')">' + d + '</button></td>';
+    if ((off + d) % 7 === 0 && d < len) h += '</tr><tr>';
+  }
+  var tail = (off + len) % 7;
+  if (tail) { for (i = tail; i < 7; i++) h += '<td></td>'; }
+  h += '</tr></table>';
+  h += '<div class="jcal-foot"><button type="button" onclick="jcalToday()">امروز</button><button type="button" onclick="closeJcal()">بستن</button></div>';
+  el.innerHTML = h;
 }
 function shortId(s){
   if (!s) return '—';
