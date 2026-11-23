@@ -260,6 +260,11 @@ class AppCoinPack(db.Model):
     # دکمه‌ی درگاه دیگر یک بار (در همان باز شدن شیت خرید) نشان داده
     # می‌شود — حتی اگر پرچم آن درگاه خاموش باشد؛ پیش‌فرض خاموش است.
     show_fallback_button = db.Column(db.Boolean, default=False, nullable=False)
+    # v19 مایکت (فلِیور جدا): پرچم‌های پرداخت مایکت، جدا از پرچم‌های
+    # بازار؛ نسخه‌ی بازار این ستون‌ها را نمی‌خواند و رفتارش عوض نمی‌شود.
+    myket_enabled = db.Column(db.Boolean, default=True, nullable=False)
+    myket_zibal_enabled = db.Column(db.Boolean, default=False, nullable=False)
+    show_fallback_button_myket = db.Column(db.Boolean, default=False, nullable=False)
     # v18 قیمت اصلی (نمایشی، فقط برای خط‌خوردن در اپ): مبلغی که
     # پرداخت می‌شود همان price_toman است؛ این ستون هرگز در هیچ مسیر
     # شارژ/وریفای خوانده نمی‌شود. NULL یعنی بدون تخفیف نمایشی.

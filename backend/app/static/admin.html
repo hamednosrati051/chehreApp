@@ -202,9 +202,12 @@
       <label>ترتیب <input id="p-sort" type="number" value="0"></label>
       <label>سکه هدیه <input id="p-gift" type="number" value="0" min="0" placeholder="۰ = بدون هدیه"></label>
       <label>دامنه هدیه <select id="p-gift-scope"><option value="every">هدیه: همه خریدها</option><option value="first">هدیه: فقط خرید اول</option></select></label>
-      <label><input id="p-bazaar" type="checkbox" checked> پرداخت بازار</label>
-      <label><input id="p-zibal" type="checkbox"> پرداخت زیبال</label>
-      <label><input id="p-fallback" type="checkbox"> نشان دادن دکمه جایگزین</label>
+      <label><input id="p-bazaar" type="checkbox" checked> پرداخت بازار (بازار)</label>
+      <label><input id="p-zibal" type="checkbox"> پرداخت زیبال (بازار)</label>
+      <label><input id="p-fallback" type="checkbox"> نشان دادن دکمه جایگزین (بازار)</label>
+      <label><input id="p-myket" type="checkbox" checked> پرداخت با مایکت (مایکت)</label>
+      <label><input id="p-myket-zibal" type="checkbox"> پرداخت با زیبال (مایکت)</label>
+      <label><input id="p-myket-fallback" type="checkbox"> نشان دادن دکمه جایگزین (مایکت)</label>
       <span><button>ذخیره پک</button> <button type="button" class="gold" onclick="resetPackForm()">فرم جدید</button></span>
     </form>
     <input id="p-search" class="search" placeholder="جستجو در پک‌ها…">
@@ -365,13 +368,26 @@
       <button>ذخیره هدیه‌ی ورود</button>
     </form>
     <form class="grid" onsubmit="saveSmsToggle(event)">
-      <label><input type="checkbox" id="s-sms"> غیرفعال کردن ورود با پیامک (فعال = ورود با پیامک خاموش و کاربر به ورود با بازار هدایت می‌شود)</label>
-      <button>ذخیره ورود با پیامک</button>
+      <label><input type="checkbox" id="s-sms"> غیرفعال کردن ورود با پیامک (بازار) (فعال = ورود با پیامک خاموش و کاربر به ورود با بازار هدایت می‌شود)</label>
+      <button>ذخیره ورود با پیامک (بازار)</button>
+    </form>
+    <form class="grid" onsubmit="saveMyketBazaarToggle(event)">
+      <label><input type="checkbox" id="s-myket-bazaar" checked> غیرفعال کردن ورود با بازار (مایکت) (فعال = ورود با بازار در نسخه‌ی مایکت خاموش)</label>
+      <button>ذخیره ورود با بازار (مایکت)</button>
+    </form>
+    <form class="grid" onsubmit="saveMyketSmsToggle(event)">
+      <label><input type="checkbox" id="s-myket-sms"> غیرفعال کردن ورود با پیامک (مایکت) (فعال = ورود با پیامک در نسخه‌ی مایکت خاموش)</label>
+      <button>ذخیره ورود با پیامک (مایکت)</button>
     </form>
     <form class="grid" onsubmit="saveMinVersion(event)">
-      <label>حداقل نسخه‌ی اپ (برای پاپ‌آپ به‌روزرسانی؛ خالی = خاموش)</label>
+      <label>حداقل نسخه‌ی اپ (بازار) (برای پاپ‌آپ به‌روزرسانی؛ خالی = خاموش)</label>
       <input id="s-minver" type="number" min="0" step="1" placeholder="مثلا 13">
-      <button>ذخیره حداقل نسخه</button>
+      <button>ذخیره حداقل نسخه (بازار)</button>
+    </form>
+    <form class="grid" onsubmit="saveMyketMinVersion(event)">
+      <label>حداقل نسخه‌ی اپ (مایکت) (برای پاپ‌آپ به‌روزرسانی؛ خالی = خاموش)</label>
+      <input id="s-myket-minver" type="number" min="0" step="1" placeholder="مثلا 18">
+      <button>ذخیره حداقل نسخه (مایکت)</button>
     </form>
     <form class="grid" onsubmit="savePromoSettings(event)">
       <h3 style="margin:0;">مودال تبلیغاتی (بلک‌فرایدی)</h3>
@@ -747,12 +763,12 @@ async function saveCat(e){ e.preventDefault(); const body = {name: $('c-name').v
 async function delCat(id){ if(!confirm('دسته حذف شود؟ (اگر دنیا داشته باشد رد می‌شود)')) return; try { await api('/admin/categories/' + id, 'DELETE'); loadCats(); } catch(err){ setMsg(err.message); } }
 
 async function loadPacks(){ const ps = await api('/admin/packs');
-  $('p-list').innerHTML = ps.length ? `<table><tr><th>نام</th><th>سکه</th><th>تومان</th><th>قیمت اصلی</th><th>SKU</th><th>بج</th><th>نوع</th><th>هدیه</th><th>بازار</th><th>زیبال</th><th>جایگزین</th><th>فعال</th><th></th></tr>` +
-    ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${p.original_price_toman ? p.original_price_toman.toLocaleString('fa-IR') : '—'}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${esc(p.pack_type)}</td><td>${p.gift_coins ? `+${p.gift_coins}${p.gift_scope === 'first' ? ' (اول)' : ''}` : '—'}</td><td>${p.bazaar_enabled === false ? '—' : '✓'}</td><td>${p.zibal_enabled ? '✓' : '—'}</td><td>${p.show_fallback_button ? '✓' : '—'}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>';
+  $('p-list').innerHTML = ps.length ? `<table><tr><th>نام</th><th>سکه</th><th>تومان</th><th>قیمت اصلی</th><th>SKU</th><th>بج</th><th>نوع</th><th>هدیه</th><th>بازار (بازار)</th><th>زیبال (بازار)</th><th>جایگزین (بازار)</th><th>مایکت</th><th>زیبال (مایکت)</th><th>جایگزین (مایکت)</th><th>فعال</th><th></th></tr>` +
+    ps.map(p => `<tr><td>${esc(p.name)}</td><td>${p.coins}</td><td>${p.price_toman.toLocaleString('fa-IR')}</td><td>${p.original_price_toman ? p.original_price_toman.toLocaleString('fa-IR') : '—'}</td><td>${esc(p.bazaar_sku)}</td><td>${esc(p.badge)}</td><td>${esc(p.pack_type)}</td><td>${p.gift_coins ? `+${p.gift_coins}${p.gift_scope === 'first' ? ' (اول)' : ''}` : '—'}</td><td>${p.bazaar_enabled === false ? '—' : '✓'}</td><td>${p.zibal_enabled ? '✓' : '—'}</td><td>${p.show_fallback_button ? '✓' : '—'}</td><td>${p.myket_enabled === false ? '—' : '✓'}</td><td>${p.myket_zibal_enabled ? '✓' : '—'}</td><td>${p.show_fallback_button_myket ? '✓' : '—'}</td><td>${p.is_active ? '✓' : '—'}</td><td><button class="small" onclick='editPack(${JSON.stringify(p).replace(/'/g, "&#39;")})'>ویرایش</button> <button class="small danger" onclick="delPack(${p.id})">حذف</button></td></tr>`).join('') + '</table>' : '<p class="muted">پکی نیست.</p>';
   applyFilter('p-list'); }
-function editPack(p){ editingPack = p.id; $('p-name').value = p.name; $('p-coins').value = p.coins; $('p-price').value = p.price_toman; $('p-orig').value = p.original_price_toman ?? ''; $('p-sku').value = p.bazaar_sku; $('p-badge').value = p.badge || ''; $('p-type').value = p.pack_type || ''; $('p-sort').value = p.sort_order; $('p-gift').value = p.gift_coins || 0; $('p-gift-scope').value = p.gift_scope || 'every'; $('p-bazaar').checked = p.bazaar_enabled !== false; $('p-zibal').checked = !!p.zibal_enabled; $('p-fallback').checked = !!p.show_fallback_button; }
-function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-orig','p-sku','p-badge','p-type'].forEach(i => $(i).value = ''); $('p-sort').value = 0; $('p-gift').value = 0; $('p-gift-scope').value = 'every'; $('p-bazaar').checked = true; $('p-zibal').checked = false; }
-async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').value.trim(), coins: +$('p-coins').value, price_toman: +$('p-price').value, original_price_toman: $('p-orig').value.trim() === '' ? null : +$('p-orig').value, bazaar_sku: $('p-sku').value.trim(), badge: $('p-badge').value.trim() || null, pack_type: $('p-type').value.trim() || null, sort_order: +$('p-sort').value, gift_coins: +$('p-gift').value || 0, gift_scope: $('p-gift-scope').value, bazaar_enabled: $('p-bazaar').checked, zibal_enabled: $('p-zibal').checked, show_fallback_button: $('p-fallback').checked};
+function editPack(p){ editingPack = p.id; $('p-name').value = p.name; $('p-coins').value = p.coins; $('p-price').value = p.price_toman; $('p-orig').value = p.original_price_toman ?? ''; $('p-sku').value = p.bazaar_sku; $('p-badge').value = p.badge || ''; $('p-type').value = p.pack_type || ''; $('p-sort').value = p.sort_order; $('p-gift').value = p.gift_coins || 0; $('p-gift-scope').value = p.gift_scope || 'every'; $('p-bazaar').checked = p.bazaar_enabled !== false; $('p-zibal').checked = !!p.zibal_enabled; $('p-fallback').checked = !!p.show_fallback_button; $('p-myket').checked = p.myket_enabled !== false; $('p-myket-zibal').checked = !!p.myket_zibal_enabled; $('p-myket-fallback').checked = !!p.show_fallback_button_myket; }
+function resetPackForm(){ editingPack = null; ['p-name','p-coins','p-price','p-orig','p-sku','p-badge','p-type'].forEach(i => $(i).value = ''); $('p-sort').value = 0; $('p-gift').value = 0; $('p-gift-scope').value = 'every'; $('p-bazaar').checked = true; $('p-zibal').checked = false; $('p-myket').checked = true; $('p-myket-zibal').checked = false; $('p-myket-fallback').checked = false; }
+async function savePack(e){ e.preventDefault(); const body = {name: $('p-name').value.trim(), coins: +$('p-coins').value, price_toman: +$('p-price').value, original_price_toman: $('p-orig').value.trim() === '' ? null : +$('p-orig').value, bazaar_sku: $('p-sku').value.trim(), badge: $('p-badge').value.trim() || null, pack_type: $('p-type').value.trim() || null, sort_order: +$('p-sort').value, gift_coins: +$('p-gift').value || 0, gift_scope: $('p-gift-scope').value, bazaar_enabled: $('p-bazaar').checked, zibal_enabled: $('p-zibal').checked, show_fallback_button: $('p-fallback').checked, myket_enabled: $('p-myket').checked, myket_zibal_enabled: $('p-myket-zibal').checked, show_fallback_button_myket: $('p-myket-fallback').checked};
   try { editingPack ? await api('/admin/packs/' + editingPack, 'PATCH', body) : await api('/admin/packs', 'POST', body); setMsg('پک ذخیره شد.', true); resetPackForm(); loadPacks(); } catch(err){ setMsg(err.message); } }
 async function delPack(id){ if(!confirm('پک حذف شود؟')) return; try { await api('/admin/packs/' + id, 'DELETE'); loadPacks(); } catch(err){ setMsg(err.message); } }
 
@@ -792,8 +808,8 @@ const purchaseFa = {pending: 'در انتظار', verified: 'تأییدشده', 
 async function loadPurchases(){ const q = new URLSearchParams({status: $('pu-status').value, mobile: $('pu-mobile').value.trim(), date_from: jalaliInputToGregorian($('pu-from').value), date_to: jalaliInputToGregorian($('pu-to').value), page: puPageNo});
   const res = await api('/admin/purchases?' + q);
   $('pu-total').innerHTML = res.totals ? `مجموع ${res.totals.count} پرداخت | ${(res.totals.amount_irr || 0).toLocaleString('fa-IR')} ریال` : '';
-  $('pu-list').innerHTML = res.items.length ? `<table><tr><th></th><th>id</th><th>کاربر</th><th>موبایل</th><th>پک</th><th>سکه</th><th>مبلغ (ریال)</th><th>وضعیت</th><th>توکن</th><th>توکن بازار</th><th>تاریخ</th><th></th></tr>` +
-    res.items.map(r => `<tr><td>${(r.status==='pending'||r.status==='failed') ? `<input type="checkbox" class="pu-check" value="${r.id}">` : ''}</td><td>${r.id}</td><td><a href="javascript:void(0)" onclick="showTab('users');loadUserDetail(${r.user_id})" style="color:#E8B84B">کاربر ${r.user_id}</a></td><td>${esc(r.mobile)}</td><td>${esc(r.pack_name)}</td><td>${r.pack_coins}</td><td>${r.amount_irr.toLocaleString('fa-IR')}</td><td>${purchaseFa[r.status] || esc(r.status)}</td><td class="muted">${esc(r.token_tail)}</td><td class="muted" style="word-break:break-all;font-size:11px;">${esc(r.token || r.zibal_track_id || '')}</td><td class="muted">${esc(faDate(r.created_at))}</td><td><button class="small" onclick="loadPurchaseDetail(${r.id})">جزئیات</button></td></tr>`).join('') + '</table>' : '<p class="muted">پرداختی نیست.</p>';
+  $('pu-list').innerHTML = res.items.length ? `<table><tr><th></th><th>id</th><th>کاربر</th><th>موبایل</th><th>پک</th><th>سکه</th><th>مبلغ (ریال)</th><th>وضعیت</th><th>درگاه</th><th>توکن</th><th>توکن بازار</th><th>تاریخ</th><th></th></tr>` +
+    res.items.map(r => `<tr><td>${(r.status==='pending'||r.status==='failed') ? `<input type="checkbox" class="pu-check" value="${r.id}">` : ''}</td><td>${r.id}</td><td><a href="javascript:void(0)" onclick="showTab('users');loadUserDetail(${r.user_id})" style="color:#E8B84B">کاربر ${r.user_id}</a></td><td>${esc(r.mobile)}</td><td>${esc(r.pack_name)}</td><td>${r.pack_coins}</td><td>${r.amount_irr.toLocaleString('fa-IR')}</td><td>${purchaseFa[r.status] || esc(r.status)}</td><td>${esc(r.gateway || 'bazaar')}</td><td class="muted">${esc(r.token_tail)}</td><td class="muted" style="word-break:break-all;font-size:11px;">${esc(r.token || r.zibal_track_id || '')}</td><td class="muted">${esc(faDate(r.created_at))}</td><td><button class="small" onclick="loadPurchaseDetail(${r.id})">جزئیات</button></td></tr>`).join('') + '</table>' : '<p class="muted">پرداختی نیست.</p>';
   $('pu-pager').innerHTML = pagerHTML('pu', res); }
 async function purchasesDeleteSelected(){ const ids = [...document.querySelectorAll('.pu-check:checked')].map(c => parseInt(c.value)); if(!ids.length){ setMsg('چیزی تیک نخورده است.'); return; } if(!confirm(ids.length + ' پرداخت در انتظار/ناموفق حذف شود؟ مصرف‌شده‌ها پاک نمی‌شوند.')) return; try { const r = await api('/admin/purchases/bulk', 'DELETE', {ids}); let m = r.deleted + ' پرداخت حذف شد.'; if((r.skipped || []).length) m += ' ' + r.skipped.length + ' تا رد شد (مصرف‌شده/تأییدشده).'; setMsg(m, true); loadPurchases(); } catch(err){ setMsg(err.message); } }
 async function purchasesDeletePending(){ if(!confirm('همه‌ی پرداخت‌های در انتظار و ناموفق حذف شوند؟ مصرف‌شده‌ها پاک نمی‌شوند.')) return; try { const r = await api('/admin/purchases/bulk', 'DELETE', {statuses: ['pending', 'failed']}); setMsg(r.deleted + ' پرداخت حذف شد.', true); loadPurchases(); } catch(err){ setMsg(err.message); } }
@@ -929,12 +945,18 @@ async function loadSettings(){ loadPublicSettings(); const ss = await api('/admi
   const gm = {}; ss.forEach(s => gm[s.key] = s.value);
   $('s-gift').checked = gm.entry_gift_enabled !== '0' && (gm.entry_gift_enabled || '').toLowerCase() !== 'false';
   $('s-sms').checked = gm.sms_login_disabled === '1';
+  $('s-myket-bazaar').checked = gm.myket_bazaar_login_disabled !== '0';
+  $('s-myket-sms').checked = gm.myket_sms_login_disabled === '1';
   $('s-minver').value = gm.min_app_version_code || '';
+  $('s-myket-minver').value = gm.min_app_version_code_myket || '';
   $('s-list').innerHTML = ss.length ? `<table><tr><th>کلید</th><th>مقدار</th></tr>` + ss.map(s => `<tr><td>${esc(s.key)}</td><td>${esc(s.value)}</td></tr>`).join('') + '</table>' : '<p class="muted">تنظیمی نیست.</p>'; }
 async function saveSetting(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: $('s-key').value.trim(), value: $('s-val').value.trim()}); setMsg('تنظیم ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function saveGiftToggle(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'entry_gift_enabled', value: $('s-gift').checked ? '1' : '0'}); setMsg('تنظیم هدیه‌ی ورود ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
-async function saveSmsToggle(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'sms_login_disabled', value: $('s-sms').checked ? '1' : '0'}); setMsg('تنظیم ورود با پیامک ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
-async function saveMinVersion(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'min_app_version_code', value: $('s-minver').value.trim()}); setMsg('حداقل نسخه ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
+async function saveSmsToggle(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'sms_login_disabled', value: $('s-sms').checked ? '1' : '0'}); setMsg('تنظیم ورود با پیامک (بازار) ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
+async function saveMyketBazaarToggle(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'myket_bazaar_login_disabled', value: $('s-myket-bazaar').checked ? '1' : '0'}); setMsg('تنظیم ورود با بازار (مایکت) ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
+async function saveMyketSmsToggle(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'myket_sms_login_disabled', value: $('s-myket-sms').checked ? '1' : '0'}); setMsg('تنظیم ورود با پیامک (مایکت) ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
+async function saveMinVersion(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'min_app_version_code', value: $('s-minver').value.trim()}); setMsg('حداقل نسخه (بازار) ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
+async function saveMyketMinVersion(e){ e.preventDefault(); try { await api('/admin/settings', 'PATCH', {key: 'min_app_version_code_myket', value: $('s-myket-minver').value.trim()}); setMsg('حداقل نسخه (مایکت) ذخیره شد.', true); loadSettings(); } catch(err){ setMsg(err.message); } }
 async function savePromoSettings(e){ e.preventDefault(); try {
   await api('/admin/settings', 'PATCH', {key: 'promo_modal_title', value: $('ps-promo-title').value.trim()});
   await api('/admin/settings', 'PATCH', {key: 'promo_modal_body', value: $('ps-promo-body').value.trim()});

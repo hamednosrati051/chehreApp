@@ -115,6 +115,34 @@ def _sms_login_disabled():
     return str(row.value).strip() == "1"
 
 
+def _myket_sms_login_disabled():
+    """ورود با پیامک در نسخه‌ی مایکت خاموش است؟ (v19، کلید
+    myket_sms_login_disabled؛ شاخه‌ی جدا از چکِ سراسری بازار).
+
+    "1" = خاموش (otp_request مایکت با 503 رد می‌شود)؛ نبودن کلید یا
+    "0" = روشن (پیش‌فرض). فقط وقتی درخواست از نسخه‌ی مایکت است خوانده
+    می‌شود؛ چکِ بازار دست نمی‌خورد.
+    """
+    row = AppSetting.query.get("myket_sms_login_disabled")
+    if row is None:
+        return False
+    return str(row.value).strip() == "1"
+
+
+def _myket_bazaar_login_disabled():
+    """ورود با بازار در نسخه‌ی مایکت خاموش است؟ (v19، کلید
+    myket_bazaar_login_disabled؛ شاخه‌ی جدا).
+
+    "1" = خاموش (bazaar_login مایکت با 403 رد می‌شود)؛ نبودن کلید هم
+    یعنی خاموش (پیش‌فرض نسخه‌ی مایکت: ورود با بازار خاموش). فقط وقتی
+    درخواست از نسخه‌ی مایکت است خوانده می‌شود؛ مسیر بازار دست نمی‌خورد.
+    """
+    row = AppSetting.query.get("myket_bazaar_login_disabled")
+    if row is None:
+        return True
+    return str(row.value).strip() == "1"
+
+
 def _valid_store(body):
     """استور فرستاده‌شده در لاگین (bazaar/myket)؛ بقیه‌ی مقدارها نادیده
     گرفته می‌شوند تا اپ قدیمی یا مقدار اشتباه، ستون را خراب نکند."""
@@ -227,13 +255,19 @@ def require_admin(f):
 
 @auth_bp.post("/auth/otp/request")
 def otp_request():
-    mobile = (request.json or {}).get("mobile", "").strip()
+    body = request.json or {}
+    mobile = body.get("mobile", "").strip()
     if not mobile:
         return jsonify({"error": "mobile required"}), 400
     # نسخه‌ی ۱۶: وقتی ورود با پیامک خاموش است، پیش از rate-limit و
     # ساخت OTP و هر تماس پیامکی، با 503 رد می‌شود (اپ کاربر را به
     # ورود با بازار هدایت می‌کند).
     if _sms_login_disabled():
+        return jsonify({"error": "sms_disabled"}), 503
+    # v19 مایکت: شاخه‌ی جدا — فقط وقتی درخواست از نسخه‌ی مایکت است؛
+    # چکِ سراسری بازار دست نمی‌خورد. (اپ استور را با درخواست می‌فرستد؛
+    # نبودن آن یعنی مسیر قدیمی بازار.)
+    if _valid_store(body) == "myket" and _myket_sms_login_disabled():
         return jsonify({"error": "sms_disabled"}), 503
     since = datetime.datetime.utcnow() - datetime.timedelta(hours=1)
     recent = (
@@ -319,6 +353,11 @@ def bazaar_login():
     account_id = account_id.strip() if isinstance(account_id, str) else ""
     if not account_id:
         return jsonify({"error": "account_id required"}), 400
+    # v19 مایکت: شاخه‌ی جدا — ورود با بازار در نسخه‌ی مایکت به‌تنظیم
+    # خودش بستگی دارد؛ مسیر بازار دست نمی‌خورد. (اپ استور را با درخواست
+    # می‌فرستد؛ نبودن آن یعنی مسیر قدیمی بازار.)
+    if _valid_store(body) == "myket" and _myket_bazaar_login_disabled():
+        return jsonify({"error": "bazaar_login_disabled"}), 403
     user = AppUser.query.filter_by(bazaar_account_id=account_id).first()
     is_new = user is None
     if user is None:
@@ -1179,6 +1218,9 @@ def coin_packs():
                 "bazaar_enabled": bool(getattr(p, "bazaar_enabled", True)),
                 "zibal_enabled": bool(getattr(p, "zibal_enabled", False)),
                 "show_fallback_button": bool(getattr(p, "show_fallback_button", False)),
+                "myket_enabled": bool(getattr(p, "myket_enabled", True)),
+                "myket_zibal_enabled": bool(getattr(p, "myket_zibal_enabled", False)),
+                "show_fallback_button_myket": bool(getattr(p, "show_fallback_button_myket", False)),
             }
             for p in packs
         ]
@@ -1348,7 +1390,7 @@ def public_gallery():
 # ---------------- world detail ----------------
 
 
-PUBLIC_SETTINGS = ("about_us", "support_info", "bug_report_info", "bazaar_url", "myket_url", "rules_privacy", "entry_gift_enabled", "promo_modal_title", "promo_modal_body", "promo_modal_show_number", "promo_modal_enabled")
+PUBLIC_SETTINGS = ("about_us", "support_info", "bug_report_info", "bazaar_url", "myket_url", "rules_privacy", "entry_gift_enabled", "promo_modal_title", "promo_modal_body", "promo_modal_show_number", "promo_modal_enabled", "myket_bazaar_login_disabled", "myket_sms_login_disabled")
 
 
 @content_bp.get("/app-config")
@@ -1358,15 +1400,21 @@ def app_config():
     مقدار از تنظیم min_app_version_code خوانده می‌شود؛ نبودن یا
     ناخوانا بودن یعنی ۰ (خاموش؛ هیچ پاپ‌آپی). فقط نسخه‌های ۱۳ به بعد
     این endpoint را می‌خوانند؛ نسخه‌های قدیمی کاری با آن ندارند.
+    v19: مقدار مایکت جدا (min_app_version_code_myket) هم برگردانده
+    می‌شود؛ نبودن آن یعنی ۰ (در نسخه‌ی مایکت هیچ پاپ‌آپی).
     """
-    row = AppSetting.query.get("min_app_version_code")
-    try:
-        value = int(str(row.value).strip()) if row else 0
-    except (TypeError, ValueError):
-        value = 0
-    if value < 0:
-        value = 0
-    return jsonify({"min_app_version_code": value})
+    def _min_version(key):
+        row = AppSetting.query.get(key)
+        try:
+            value = int(str(row.value).strip()) if row else 0
+        except (TypeError, ValueError):
+            value = 0
+        return value if value >= 0 else 0
+
+    return jsonify({
+        "min_app_version_code": _min_version("min_app_version_code"),
+        "min_app_version_code_myket": _min_version("min_app_version_code_myket"),
+    })
 
 
 @content_bp.get("/app/settings")
@@ -1503,7 +1551,10 @@ def zibal_create_purchase():
     باشد (وگرنه ۴۰۳ — مخفی‌کردن دکمه در اپ کافی نیست)؛ استثنا: وقتی
     درخواست fallback=true است و تنظیم show_fallback_button همان پک
     روشن است (دکمه‌ی جایگزین یک‌باره بعد از خطای بازار)، ساخت با
-    پرچم خاموش هم مجاز است. اگر برای همین کاربر و همین پک
+    پرچم خاموش هم مجاز است. v19 مایکت: وقتی درخواست از نسخه‌ی مایکت
+    است، به‌جای پرچم‌های بازار، myket_zibal_enabled و
+    show_fallback_button_myket همان پک خوانده می‌شوند (شاخه‌ی جدا؛
+    چکِ بازار دست نمی‌خورد). اگر برای همین کاربر و همین پک
     یک خرید زیبال pending با trackId زنده هست، همان ردیف + آدرس
     برگردد (idempotency؛ درخواست دوم، درخواست دوم به زیبال نمی‌سازد).
     اگر ساخت درخواست در زیبال شکست بخورد، ردیف pendingِ ساخته‌شده
@@ -1517,7 +1568,20 @@ def zibal_create_purchase():
     if not pack or not pack.is_active:
         return jsonify({"error": "pack not found"}), 404
     is_fallback = bool(body.get("fallback", False))
-    if not getattr(pack, "zibal_enabled", False) and not (
+    # v19 مایکت: شاخه‌ی جدا — وقتی درخواست از نسخه‌ی مایکت است، فقط
+    # پرچم‌های مایکت (myket_zibal_enabled / show_fallback_button_myket)
+    # خوانده می‌شوند و چکِ بازار اجرا نمی‌شود؛ وگرنه دقیقاً همان چکِ
+    # قبلی بازار. (اپ استور را با درخواست می‌فرستد؛ نبودن آن یعنی
+    # مسیر قدیمی بازار.) این if/elif لازم است چون شرط «اجازه» است نه
+    # «رد»: اگر چکِ بازار اول اجرا شود، با خاموش‌بودن zibal_enabled
+    # (پیش‌فرض) هر درخواست مایکت را ۴۰۳ می‌کند و تاگلِ مایکت بی‌اثر
+    # می‌ماند.
+    if _valid_store(body) == "myket":
+        if not getattr(pack, "myket_zibal_enabled", False) and not (
+            is_fallback and getattr(pack, "show_fallback_button_myket", False)
+        ):
+            return jsonify({"error": "zibal is not enabled for this pack"}), 403
+    elif not getattr(pack, "zibal_enabled", False) and not (
         is_fallback and getattr(pack, "show_fallback_button", False)
     ):
         return jsonify({"error": "zibal is not enabled for this pack"}), 403
@@ -2743,6 +2807,9 @@ def _pack_admin(p):
         "bazaar_enabled": bool(getattr(p, "bazaar_enabled", True)),
         "zibal_enabled": bool(getattr(p, "zibal_enabled", False)),
         "show_fallback_button": bool(getattr(p, "show_fallback_button", False)),
+        "myket_enabled": bool(getattr(p, "myket_enabled", True)),
+        "myket_zibal_enabled": bool(getattr(p, "myket_zibal_enabled", False)),
+        "show_fallback_button_myket": bool(getattr(p, "show_fallback_button_myket", False)),
     }
 
 
@@ -2808,6 +2875,9 @@ def admin_create_pack():
         bazaar_enabled=bool(body.get("bazaar_enabled", True)),
         zibal_enabled=bool(body.get("zibal_enabled", False)),
         show_fallback_button=bool(body.get("show_fallback_button", False)),
+        myket_enabled=bool(body.get("myket_enabled", True)),
+        myket_zibal_enabled=bool(body.get("myket_zibal_enabled", False)),
+        show_fallback_button_myket=bool(body.get("show_fallback_button_myket", False)),
     )
     db.session.add(p)
     db.session.commit()
@@ -2845,6 +2915,12 @@ def admin_update_pack(pack_id):
         p.zibal_enabled = bool(body["zibal_enabled"])
     if "show_fallback_button" in body:
         p.show_fallback_button = bool(body["show_fallback_button"])
+    if "myket_enabled" in body:
+        p.myket_enabled = bool(body["myket_enabled"])
+    if "myket_zibal_enabled" in body:
+        p.myket_zibal_enabled = bool(body["myket_zibal_enabled"])
+    if "show_fallback_button_myket" in body:
+        p.show_fallback_button_myket = bool(body["show_fallback_button_myket"])
     db.session.commit()
     return jsonify(_pack_admin(p))
 
@@ -3560,9 +3636,10 @@ def admin_update_settings():
         ):
             return jsonify({"error": "model not found or not active"}), 400
         body["value"] = str(mid)
-    if body["key"] == "min_app_version_code":
-        # حداقل نسخه‌ی اپ برای پاپ‌آپ به‌روزرسانی (نسخه‌ی ۱۳): عدد صحیح
-        # نامنفی؛ مقدار خالی یعنی خاموش (ردیف حذف می‌شود، مثل نقش‌های مدل).
+    if body["key"] in ("min_app_version_code", "min_app_version_code_myket"):
+        # حداقل نسخه‌ی اپ برای پاپ‌آپ به‌روزرسانی (نسخه‌ی ۱۳؛ مایکت جدا
+        # از v19): عدد صحیح نامنفی؛ مقدار خالی یعنی خاموش (ردیف حذف
+        # می‌شود، مثل نقش‌های مدل).
         val = str(body["value"]).strip()
         if val == "":
             row = AppSetting.query.get(body["key"])
@@ -3573,9 +3650,9 @@ def admin_update_settings():
         try:
             version = int(val)
         except (TypeError, ValueError):
-            return jsonify({"error": "min_app_version_code must be an integer"}), 400
+            return jsonify({"error": f"{body['key']} must be an integer"}), 400
         if version < 0:
-            return jsonify({"error": "min_app_version_code must be >= 0"}), 400
+            return jsonify({"error": f"{body['key']} must be >= 0"}), 400
         body["value"] = str(version)
     row = AppSetting.query.get(body["key"])
     if row:

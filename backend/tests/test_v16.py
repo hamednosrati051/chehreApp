@@ -340,6 +340,12 @@ def main():
         check("pending other user: no credit", balance() == 100)
 
         # --- (c) store در لاگین ذخیره می‌شود؛ نامعتبر نادیده گرفته می‌شود ---
+        # v19: ورود با بازار در مایکت به‌تنظیم خودش بستگی دارد؛ برای تست
+        # ذخیره‌ی store، تاگل را روشن می‌کنیم (پیش‌فرض خاموش است).
+        db.session.add(
+            AppSetting(key="myket_bazaar_login_disabled", value="0")
+        )
+        db.session.commit()
         r = client.post(
             "/api/v1/auth/bazaar",
             json={"account_id": "bazaar-acct-1", "store": "myket"},
