@@ -94,40 +94,6 @@ def _secondary_gift_model(gen):
     return m
 
 
-def _secondary_paid_model(gen):
-    """مدل پولی دوم (fallback) برای نسل‌های پولی: فقط وقتی نسل پولی است
-    (در دفتر سکه سطر spend دارد) و تنظیم main_image_model_id_2 به یک مدل
-    ویرایش تصویر فعالِ متفاوت از مدل فعلی اشاره می‌کند. نسل‌های هدیه
-    fallback پولی ندارند (به مدل پولی نمی‌روند)."""
-    from .models import AppCoinLedger, AppModel, AppSetting
-
-    if gen.kind != "image":
-        return None
-    spent = (
-        AppCoinLedger.query.filter_by(
-            user_id=gen.user_id,
-            ref_type="generation",
-            ref_id=gen.id,
-            reason="spend",
-        ).first()
-    )
-    if spent is None:
-        return None
-    row = AppSetting.query.get("main_image_model_id_2")
-    if row is None:
-        return None
-    try:
-        mid = int(str(row.value).strip())
-    except (TypeError, ValueError):
-        return None
-    if mid == gen.model_id:
-        return None
-    m = AppModel.query.get(mid)
-    if not m or m.kind != "image" or m.capability != "edit_image" or not m.is_active:
-        return None
-    return m
-
-
 @celery_app.task(name="app.worker.process_image_job")
 def process_image_job(generation_id):
     from app import create_app
@@ -152,10 +118,9 @@ def process_image_job(generation_id):
                 try:
                     out = image_svc.edit_image(model, local, world.hidden_prompt)
                 except Exception:
-                    # اگر مدل اول خطا داد، مدل جایگزین را امتحان کن:
-                    # نسل هدیه → مدل رایگان دوم، نسل پولی → مدل پولی دوم.
-                    # اگر جایگزینی تعریف نشده باشد، نسل ناموفق می‌شود (مثل قبل).
-                    fallback = _secondary_gift_model(gen) or _secondary_paid_model(gen)
+                    # هدیه: اگر مدل رایگان اول خطا داد، مدل رایگان دوم را
+                    # امتحان کن؛ اگر آن هم نشد، نسل ناموفق می‌شود (مثل قبل).
+                    fallback = _secondary_gift_model(gen)
                     if fallback is None:
                         raise
                     gen.model_id = fallback.id

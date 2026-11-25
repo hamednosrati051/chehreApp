@@ -3611,7 +3611,6 @@ def admin_update_settings():
         return jsonify({"error": "key and value required"}), 400
     if body["key"] in (
         "main_image_model_id",
-        "main_image_model_id_2",
         "gift_image_model_id",
         "gift_image_model_id_2",
     ):
