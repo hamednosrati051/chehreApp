@@ -1,7 +1,7 @@
 """ایدم‌پوتنسی برگشت رزرو (۲۰۲۶-۱۱-۲۲، باگ نسل ۲۳۹۵):
 
 نسل ۲۳۹۵ (کاربر ۳۳۰) یک بار -۱۰ شارژ شد ولی دو بار +۱۰ برگشت خورد:
-سوئیپر (گیرکرده >۱۲۰ ثانیه) و ورکر (خطای provider) هر دو با یک شیء
+سوئیپر (گیرکرده >۲۵۰ ثانیه) و ورکر (خطای provider) هر دو با یک شیء
 قدیمی در حافظه charged=True می‌دیدند و هر دو برگشت می‌زدند.
 رفع: refund_reservation حالا ادعای اتمیک می‌کند — یک UPDATE مشروط روی
 سطر دیتابیس (charged True → False)؛ فقط وقتی rowcount=1 باشد ادامه
@@ -161,7 +161,7 @@ def main():
 
         # --- ۲) توالی دقیق ۲۳۹۵: سوئیپر اول، بعد ورکر با شیء قدیمی ---
         u2 = make_user(balance=50)
-        g2 = make_gen(u2, age_s=200)  # گیرکرده >۱۲۰ ثانیه
+        g2 = make_gen(u2, age_s=300)  # گیرکرده >۲۵۰ ثانیه
         check(
             "reserve coins (2395)",
             coins_svc.reserve_for_generation(u2, "image", 10, g2.id)
@@ -184,7 +184,7 @@ def main():
 
         # --- ۳) ترتیب برعکس: ورکر اول، بعد سوئیپر ---
         u3 = make_user(balance=50)
-        g3 = make_gen(u3, age_s=200)
+        g3 = make_gen(u3, age_s=300)
         coins_svc.reserve_for_generation(u3, "image", 10, g3.id)
         coins_svc.refund_reservation(_fresh_user(u3.id), g3)
         check("one refund after worker", _refund_rows(g3.id) == 1)
@@ -239,7 +239,7 @@ def main():
         )
         # سوئیپر اول برای هدیه
         u7 = make_user(balance=0, gift_image=1)
-        g8 = make_gen(u7, age_s=200)
+        g8 = make_gen(u7, age_s=300)
         coins_svc.reserve_for_generation(u7, "image", 10, g8.id)
         fail_stale_generations()
         check(

@@ -396,9 +396,9 @@ def reconcile_zibal_purchases():
     return checked, settled
 
 
-STALE_GENERATION_SECONDS = 120
+STALE_GENERATION_SECONDS = 250
 
-STALE_GENERATION_ERROR = "generation timed out (stale for more than 120s)"
+STALE_GENERATION_ERROR = "generation timed out (stale for more than 250s)"
 
 
 def fail_stale_generations(older_than_s=STALE_GENERATION_SECONDS):

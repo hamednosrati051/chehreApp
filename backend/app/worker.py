@@ -94,6 +94,55 @@ def _secondary_gift_model(gen):
     return m
 
 
+def _swept_by_cleaner(gen):
+    """وضعیتِ تازه‌ی ردیف را مستقیم از دیتابیس بخوان (بدون autoflush، تا
+    تغییراتِ هنوز-کامیت‌نشده‌ی سشن روی آن نوشته نشود). True یعنی کرونِ
+    تولیدهای کهنه این نسل را قبلاً ناموفق زده و رزرو را برگردانده است —
+    نتیجه‌ی ورکر باید دور انداخته شود، نه تحویل داده شود."""
+    from sqlalchemy import text
+
+    from .extensions import db
+
+    session = db.session()
+    with session.no_autoflush:
+        row = session.execute(
+            text("SELECT status FROM app_generations WHERE id = :id"),
+            {"id": gen.id},
+        ).first()
+    return bool(row) and row[0] == "failed"
+
+
+def _finalize_delivery(gen):
+    """تحویل نتیجه‌ی ورکر. True یعنی عکس تحویل داده شد؛ False یعنی تحویل
+    داده نشد (یا کرون قبلاً نسل را کهنه کرده بود، یا کسر موقع تحویل
+    ناموفق بود) و نسل ناموفق می‌ماند تا کاربر دوباره بزند."""
+    from .extensions import db
+    from .services import coins as coins_svc
+
+    if _swept_by_cleaner(gen):
+        from .services.cleanup import STALE_GENERATION_ERROR
+
+        gen.status = "failed"
+        gen.output_url = None
+        gen.error_message = STALE_GENERATION_ERROR
+        return False
+    gen.status = "done"
+    if not gen.charged:
+        # Jobهای ثبت‌شده قبل از تغییر رزرو: شارژ موقع تحویل مثل قبل.
+        from .models import AppUser
+
+        user = AppUser.query.get(gen.user_id)
+        gen.charged = coins_svc.spend_for_generation(user, gen)
+        if not gen.charged:
+            # کسر موقع تحویل ناموفق (موجودی کم، اعتبار هدیه نیست): عکس را
+            # مجانی تحویل نده؛ ناموفق بماند تا کاربر دوباره بزند.
+            gen.status = "failed"
+            gen.error_message = "insufficient balance at delivery"
+            gen.output_url = None
+            return False
+    return True
+
+
 @celery_app.task(name="app.worker.process_image_job")
 def process_image_job(generation_id):
     from app import create_app
@@ -129,6 +178,12 @@ def process_image_job(generation_id):
                     )
             finally:
                 os.unlink(local)
+            # کرونِ تولیدهای کهنه ممکن است وسط تماسِ کند با پرووایدر این
+            # نسل را ناموفق زده و رزرو را برگردانده باشد؛ در آن صورت نتیجه
+            # را دور بنداز — کاربر پولش را پس گرفته و نباید عکس ببیند.
+            # (ردیف در دیتابیس از قبل failed است؛ بدون commit برمی‌گردیم.)
+            if _swept_by_cleaner(gen):
+                return
             from .services import storage as storage_svc
 
             if out.get("url"):
@@ -157,11 +212,7 @@ def process_image_job(generation_id):
             if out.get("usage"):
                 gen.usage_json = out["usage"]
                 gen.cost_usd = _cost_usd_from_usage(out["usage"])
-            gen.status = "done"
-            if not gen.charged:
-                # Jobهای ثبت‌شده قبل از تغییر رزرو: شارژ موقع تحویل مثل قبل.
-                user = AppUser.query.get(gen.user_id)
-                gen.charged = coins_svc.spend_for_generation(user, gen)
+            _finalize_delivery(gen)
         except Exception as exc:  # noqa: BLE001 — خطا در ردیف ذخیره می‌شود
             gen.status = "failed"
             gen.error_message = str(exc)[:500]
