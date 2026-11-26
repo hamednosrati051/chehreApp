@@ -3,6 +3,7 @@
 
 import os
 import tempfile
+import time
 
 import requests
 from celery import Celery
@@ -16,9 +17,30 @@ celery_app = Celery(
 )
 
 
+# تلاش مجدد دانلود نتیجه‌ی provider (رفع ۲۰۲۶-۱۱-۲۷ — تایم‌اوت خواندن OVH):
+# GapGPT نتیجه را روی باکت OVH خودش می‌گذارد و _download_to_temp آن را
+# می‌گیرد؛ اتصال گاهی ساکت می‌ماند و کل تولید می‌مرد (۵ بار در ۲۰۲۶-۱۱-۲۶،
+# همه مدل ۶). حالا حداکثر ۳ تلاش با فاصله‌ی ۲ و ۵ ثانیه؛ هر تلاش ۲۰ ثانیه
+# مهلت دارد (دانلود سالم چند ثانیه است؛ بدترین حالت دانلود ۲۰+۲+۲۰+۵+۲۰ =
+# ۶۷ ثانیه، زیر سقف ۲۵۰ ثانیه‌ای سویپر).
+DOWNLOAD_ATTEMPTS = 3
+DOWNLOAD_BACKOFFS = (2, 5)
+DOWNLOAD_TIMEOUT = 20
+
+
 def _download_to_temp(url):
-    resp = requests.get(url, timeout=60)
-    resp.raise_for_status()
+    last_exc = None
+    for attempt in range(DOWNLOAD_ATTEMPTS):
+        try:
+            resp = requests.get(url, timeout=DOWNLOAD_TIMEOUT)
+            resp.raise_for_status()
+            break
+        except requests.RequestException as exc:
+            last_exc = exc
+            if attempt < DOWNLOAD_ATTEMPTS - 1:
+                time.sleep(DOWNLOAD_BACKOFFS[attempt])
+    else:
+        raise last_exc
     # پسوند واقعی فایل را نگه دار (قبلاً .bin بود و AvalAI نام/فرمت
     # فایل را نمی‌دید)؛ پیش‌فرض jpg است چون سلفی‌های اپ jpg هستند.
     from urllib.parse import urlparse
