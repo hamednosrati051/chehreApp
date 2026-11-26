@@ -9,10 +9,20 @@
 """
 
 import os
+import time
 import uuid
 from urllib.parse import urlparse
 
 from flask import current_app
+
+# تلاش مجدد آپلود S3 (رفع ۲۰۲۶-۱۱-۲۶ — تایم‌اوت خواندن OVH):
+# put_object گاهی با Read timed out می‌مرد و کل تولید ناموفق می‌شد، در
+# حالی که عکس ساخته شده بود. حالا حداکثر ۳ تلاش با فاصله‌ی ۲ و ۵ ثانیه؛
+# هر تلاش حداکثر ۶۰ ثانیه طول می‌کشد (در بدترین حالت ~۳ دقیقه، زیر سقف
+# ۲۵۰ ثانیه‌ای سویپر). retry داخلی boto3 خاموش است تا همین حلقه تنها
+# مرجع تلاش‌ها باشد (قابل پیش‌بینی: دقیقاً ۳ تلاش).
+S3_UPLOAD_ATTEMPTS = 3
+S3_UPLOAD_BACKOFFS = (2, 5)
 
 
 def _s3_enabled():
@@ -21,13 +31,34 @@ def _s3_enabled():
 
 def _s3_client():
     import boto3
+    from botocore.config import Config as BotoConfig
 
     return boto3.client(
         "s3",
         endpoint_url=current_app.config.get("S3_ENDPOINT"),
         aws_access_key_id=current_app.config.get("S3_ACCESS_KEY"),
         aws_secret_access_key=current_app.config.get("S3_SECRET_KEY"),
+        config=BotoConfig(
+            connect_timeout=10,
+            read_timeout=60,
+            retries={"max_attempts": 1},
+        ),
     )
+
+
+def _put_object_with_retry(client, **kwargs):
+    """put_object با حداکثر S3_UPLOAD_ATTEMPTS تلاش؛ خطای آخر را raise می‌کند."""
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    last_exc = None
+    for attempt in range(S3_UPLOAD_ATTEMPTS):
+        try:
+            return client.put_object(**kwargs)
+        except (BotoCoreError, ClientError) as exc:
+            last_exc = exc
+            if attempt < S3_UPLOAD_ATTEMPTS - 1:
+                time.sleep(S3_UPLOAD_BACKOFFS[attempt])
+    raise last_exc
 
 
 def _local_dir():
@@ -46,7 +77,9 @@ def upload_bytes(data: bytes, filename: str) -> str:
     if _s3_enabled():
         bucket = current_app.config["S3_BUCKET"]
         key = f"app/{uuid.uuid4().hex}-{filename}"
-        _s3_client().put_object(Bucket=bucket, Key=key, Body=data)
+        _put_object_with_retry(
+            _s3_client(), Bucket=bucket, Key=key, Body=data
+        )
         base = current_app.config.get("S3_PUBLIC_BASE") or current_app.config.get(
             "S3_ENDPOINT", ""
         )
